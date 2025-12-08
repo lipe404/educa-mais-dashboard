@@ -11,18 +11,25 @@ from io import StringIO
 import os
 from dotenv import load_dotenv
 import pydeck as pdk
+from geocoding_service import GeocodingService
 
 st.set_page_config(page_title="Educa Mais Dashboard", layout="wide")
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 
+
 @st.cache_data(show_spinner=False)
 def load_sheet(sheet_id: str, sheet_name: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-    r = requests.get(url)
-    r.raise_for_status()
-    df = pd.read_csv(StringIO(r.text))
-    return df
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        df = pd.read_csv(StringIO(r.text))
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar aba '{sheet_name}': {e}")
+        return pd.DataFrame()
+
 
 def parse_datetime_any(s: str) -> datetime | None:
     if pd.isna(s):
@@ -35,11 +42,13 @@ def parse_datetime_any(s: str) -> datetime | None:
         except Exception:
             return None
 
+
 def to_float_any(x) -> float:
     try:
-        return float(str(x).replace(',', '.'))
+        return float(str(x).replace(",", "."))
     except Exception:
-        return 0.0
+        return float("nan")
+
 
 @st.cache_data(show_spinner=False)
 def get_dados(sheet_id: str) -> pd.DataFrame:
@@ -70,6 +79,7 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
         df["_cep"] = ""
     return df
 
+
 @st.cache_data(show_spinner=False)
 def get_faturamento(sheet_id: str) -> pd.DataFrame:
     df = load_sheet(sheet_id, "FATURAMENTO")
@@ -86,6 +96,7 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
     else:
         df["_data"] = None
     return df
+
 
 ESTADO_REGIAO = {
     "AC": "Norte",
@@ -117,22 +128,26 @@ ESTADO_REGIAO = {
     "TO": "Norte",
 }
 
-@lru_cache(maxsize=2048)
-def geocode_city_state(city: str, state: str) -> tuple[float | None, float | None]:
-    geolocator = Nominatim(user_agent="educa-mais-dashboard")
-    q = f"{city}, {state}, Brasil"
-    try:
-        loc = geolocator.geocode(q, timeout=10)
-        if loc:
-            return loc.latitude, loc.longitude
-        return None, None
-    except Exception:
-        return None, None
+# Geocoding agora é tratado via serviço dedicado
+geo_service = GeocodingService()
+
 
 def gauge_chart(value: float, target: float, title: str) -> go.Figure:
-    fig = go.Figure(go.Indicator(mode="gauge+number", value=value, title={"text": title}, gauge={"axis": {"range": [0, target]}, "bar": {"color": "#ff2d95"}, "bgcolor": "#0b1437"}))
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=value,
+            title={"text": title},
+            gauge={
+                "axis": {"range": [0, target]},
+                "bar": {"color": "#ff2d95"},
+                "bgcolor": "#0b1437",
+            },
+        )
+    )
     fig.update_layout(height=250, margin=dict(l=10, r=10, t=40, b=10))
     return fig
+
 
 st.sidebar.title("Educa Mais Dashboard")
 dados = get_dados(DEFAULT_SHEET_ID)
@@ -148,27 +163,42 @@ if "_dt" in dados.columns:
     max_dt_candidates.append(dados["_dt"].dropna().max())
 if "_data" in faturamento.columns:
     max_dt_candidates.append(faturamento["_data"].dropna().max())
-default_start = (min_dt_candidates[0] if len(min_dt_candidates) else pd.Timestamp(date.today())).date()
-default_end = (max_dt_candidates[0] if len(max_dt_candidates) else pd.Timestamp(date.today())).date()
-date_range = st.sidebar.date_input("Intervalo de datas", value=(default_start, default_end))
+default_start = (
+    min_dt_candidates[0] if len(min_dt_candidates) else pd.Timestamp(date.today())
+).date()
+default_end = (
+    max_dt_candidates[0] if len(max_dt_candidates) else pd.Timestamp(date.today())
+).date()
+date_range = st.sidebar.date_input(
+    "Intervalo de datas", value=(default_start, default_end)
+)
 if isinstance(date_range, tuple):
     start_date, end_date = date_range
 else:
     start_date, end_date = date_range, date_range
-months_available = sorted(dados.dropna(subset=["_dt"])['_dt'].dt.month.unique())
+months_available = sorted(dados.dropna(subset=["_dt"])["_dt"].dt.month.unique())
 month_label_options = ["Todos"] + [f"{m:02d}" for m in months_available]
-month_label = st.sidebar.selectbox("Filtrar por mês", options=month_label_options, index=0)
+month_label = st.sidebar.selectbox(
+    "Filtrar por mês", options=month_label_options, index=0
+)
 selected_month = None if month_label == "Todos" else int(month_label)
 
 dados_base = dados.dropna(subset=["_dt"]).copy()
-dados_base = dados_base[(dados_base["_dt"].dt.date >= start_date) & (dados_base["_dt"].dt.date <= end_date)]
+dados_base = dados_base[
+    (dados_base["_dt"].dt.date >= start_date) & (dados_base["_dt"].dt.date <= end_date)
+]
 if selected_month is not None:
     dados_base = dados_base[dados_base["_dt"].dt.month == selected_month]
 
 faturamento_base = faturamento.dropna(subset=["_data"]).copy()
-faturamento_base = faturamento_base[(faturamento_base["_data"].dt.date >= start_date) & (faturamento_base["_data"].dt.date <= end_date)]
+faturamento_base = faturamento_base[
+    (faturamento_base["_data"].dt.date >= start_date)
+    & (faturamento_base["_data"].dt.date <= end_date)
+]
 if selected_month is not None:
-    faturamento_base = faturamento_base[faturamento_base["_data"].dt.month == selected_month]
+    faturamento_base = faturamento_base[
+        faturamento_base["_data"].dt.month == selected_month
+    ]
 
 tabs = st.tabs(["Contratos", "Mapa", "Faturamento"])
 
@@ -182,25 +212,63 @@ with tabs[0]:
     focus_year = end_date.year if isinstance(end_date, date) else now.year
     focus_month = selected_month if selected_month is not None else now.month
     dados_signed = dados_base[dados_base["_status"] == "ASSINADO"].copy()
-    month_count = int(dados_signed[(dados_signed["_dt"].dt.year == (focus_year if selected_month is not None else now.year)) & (dados_signed["_dt"].dt.month == focus_month)].shape[0])
+    month_count = int(
+        dados_signed[
+            (
+                dados_signed["_dt"].dt.year
+                == (focus_year if selected_month is not None else now.year)
+            )
+            & (dados_signed["_dt"].dt.month == focus_month)
+        ].shape[0]
+    )
     q_start = ((focus_month - 1) // 3) * 3 + 1
-    quarterly_mask = (dados_signed["_dt"].dt.year == focus_year) & (dados_signed["_dt"].dt.month >= q_start) & (dados_signed["_dt"].dt.month <= q_start + 2)
+    quarterly_mask = (
+        (dados_signed["_dt"].dt.year == focus_year)
+        & (dados_signed["_dt"].dt.month >= q_start)
+        & (dados_signed["_dt"].dt.month <= q_start + 2)
+    )
     quarterly_count = int(dados_signed[quarterly_mask].shape[0])
     sem_start = 1 if focus_month <= 6 else 7
-    semestral_mask = (dados_signed["_dt"].dt.year == focus_year) & (dados_signed["_dt"].dt.month >= sem_start) & (dados_signed["_dt"].dt.month <= sem_start + 5)
+    semestral_mask = (
+        (dados_signed["_dt"].dt.year == focus_year)
+        & (dados_signed["_dt"].dt.month >= sem_start)
+        & (dados_signed["_dt"].dt.month <= sem_start + 5)
+    )
     semiannual_count = int(dados_signed[semestral_mask].shape[0])
     g1, g2, g3 = st.columns([1, 1, 1])
-    g1.plotly_chart(gauge_chart(month_count, 30, "Meta mensal 30"), width='stretch')
-    g2.plotly_chart(gauge_chart(quarterly_count, 90, "Meta trimestral 90"), width='stretch')
-    g3.plotly_chart(gauge_chart(semiannual_count, 180, "Meta semestral 180"), width='stretch')
+    g1.plotly_chart(gauge_chart(month_count, 30, "Meta mensal 30"), width="stretch")
+    g2.plotly_chart(
+        gauge_chart(quarterly_count, 90, "Meta trimestral 90"), width="stretch"
+    )
+    g3.plotly_chart(
+        gauge_chart(semiannual_count, 180, "Meta semestral 180"), width="stretch"
+    )
     by_captador = dados_base["_captador"].value_counts().reset_index()
     by_captador.columns = ["Captador", "Contratos"]
-    pie_fig = px.pie(by_captador, names="Captador", values="Contratos", title="Contratos por captador", color_discrete_sequence=px.colors.sequential.Pinkyl)
-    st.plotly_chart(pie_fig, width='stretch')
-    status_counts = dados_base["_status"].value_counts().reindex(["ASSINADO", "AGUARDANDO", "CANCELADO"], fill_value=0).reset_index()
+    pie_fig = px.pie(
+        by_captador,
+        names="Captador",
+        values="Contratos",
+        title="Contratos por captador",
+        color_discrete_sequence=px.colors.sequential.Pinkyl,
+    )
+    st.plotly_chart(pie_fig, width="stretch")
+    status_counts = (
+        dados_base["_status"]
+        .value_counts()
+        .reindex(["ASSINADO", "AGUARDANDO", "CANCELADO"], fill_value=0)
+        .reset_index()
+    )
     status_counts.columns = ["Status", "Quantidade"]
-    bar_fig = px.bar(status_counts[status_counts["Status"].isin(["ASSINADO", "AGUARDANDO"])], x="Status", y="Quantidade", title="Assinados vs Aguardando", color="Status", color_discrete_map={"ASSINADO": "#2d9fff", "AGUARDANDO": "#ff2d95"})
-    st.plotly_chart(bar_fig, width='stretch')
+    bar_fig = px.bar(
+        status_counts[status_counts["Status"].isin(["ASSINADO", "AGUARDANDO"])],
+        x="Status",
+        y="Quantidade",
+        title="Assinados vs Aguardando",
+        color="Status",
+        color_discrete_map={"ASSINADO": "#2d9fff", "AGUARDANDO": "#ff2d95"},
+    )
+    st.plotly_chart(bar_fig, width="stretch")
 
 with tabs[1]:
     signed = dados_base[dados_base["_status"] == "ASSINADO"].copy()
@@ -215,31 +283,46 @@ with tabs[1]:
         city = row.get("_cidade", "")
         state = row.get("_estado", "")
         if city and state:
-            lat, lon = geocode_city_state(city, state)
+            lat, lon = geo_service.get_coords(city, state)
             if lat is not None and lon is not None:
-                geo_rows.append({"lat": lat, "lon": lon, "cidade": city, "estado": state})
+                geo_rows.append(
+                    {"lat": lat, "lon": lon, "cidade": city, "estado": state}
+                )
     if len(geo_rows) > 0:
         geo_df = pd.DataFrame(geo_rows)
         layer = pdk.Layer(
             "ScatterplotLayer",
             data=geo_df,
-            get_position='[lon, lat]',
+            get_position="[lon, lat]",
             get_radius=4000,
             get_fill_color=[255, 45, 149],
             pickable=True,
         )
         view_state = pdk.ViewState(latitude=-14.235, longitude=-51.9253, zoom=3.5)
-        deck = pdk.Deck(layers=[layer], initial_view_state=view_state, map_style="mapbox://styles/mapbox/dark-v9")
+        deck = pdk.Deck(
+            layers=[layer],
+            initial_view_state=view_state,
+            map_style="mapbox://styles/mapbox/dark-v9",
+        )
         st.pydeck_chart(deck)
     by_state = signed["_estado"].value_counts().reset_index()
     by_state.columns = ["Estado", "Parceiros"]
-    st.plotly_chart(px.bar(by_state, x="Estado", y="Parceiros", title="Parceiros por estado"), width='stretch')
+    st.plotly_chart(
+        px.bar(by_state, x="Estado", y="Parceiros", title="Parceiros por estado"),
+        width="stretch",
+    )
     by_city = signed["_cidade"].value_counts().reset_index()
     by_city.columns = ["Cidade", "Parceiros"]
-    st.plotly_chart(px.bar(by_city, x="Cidade", y="Parceiros", title="Parceiros por cidade"), width='stretch')
+    st.plotly_chart(
+        px.bar(by_city, x="Cidade", y="Parceiros", title="Parceiros por cidade"),
+        width="stretch",
+    )
     by_region = signed["_regiao"].value_counts().reset_index()
     by_region.columns = ["Região", "Parceiros"]
-    st.plotly_chart(px.bar(by_region, x="Região", y="Parceiros", title="Parceiros por região"), width='stretch')
+    st.plotly_chart(
+        px.bar(by_region, x="Região", y="Parceiros", title="Parceiros por região"),
+        width="stretch",
+    )
 
 with tabs[2]:
     total = faturamento_base["_valor"].sum()
@@ -254,11 +337,16 @@ with tabs[2]:
     faturamento_valid = faturamento_base.copy()
     faturamento_valid["ano"] = faturamento_valid["_data"].dt.year
     faturamento_valid["mes"] = faturamento_valid["_data"].dt.month
-    daily = faturamento_valid.groupby(faturamento_valid["_data"].dt.date)["_valor"].sum().reset_index()
+    daily = (
+        faturamento_valid.groupby(faturamento_valid["_data"].dt.date)["_valor"]
+        .sum()
+        .reset_index()
+    )
     monthly = faturamento_valid.groupby(["ano", "mes"])["_valor"].sum().reset_index()
     daily_fig = px.line(daily, x="_data", y="_valor", title="Faturamento diário")
-    st.plotly_chart(daily_fig, width='stretch')
-    monthly["label"] = monthly["mes"].astype(str).str.zfill(2) + "/" + monthly["ano"].astype(str)
+    st.plotly_chart(daily_fig, width="stretch")
+    monthly["label"] = (
+        monthly["mes"].astype(str).str.zfill(2) + "/" + monthly["ano"].astype(str)
+    )
     monthly_fig = px.line(monthly, x="label", y="_valor", title="Faturamento mensal")
-    st.plotly_chart(monthly_fig, width='stretch')
-
+    st.plotly_chart(monthly_fig, width="stretch")
