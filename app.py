@@ -135,44 +135,75 @@ def gauge_chart(value: float, target: float, title: str) -> go.Figure:
     return fig
 
 st.sidebar.title("Educa Mais Dashboard")
-sheet_id = st.sidebar.text_input("Google Sheet ID", value=DEFAULT_SHEET_ID)
-st.sidebar.write("Sheets: Dados, FATURAMENTO")
+dados = get_dados(DEFAULT_SHEET_ID)
+faturamento = get_faturamento(DEFAULT_SHEET_ID)
 
-dados = get_dados(sheet_id)
-faturamento = get_faturamento(sheet_id)
+min_dt_candidates = []
+if "_dt" in dados.columns:
+    min_dt_candidates.append(dados["_dt"].dropna().min())
+if "_data" in faturamento.columns:
+    min_dt_candidates.append(faturamento["_data"].dropna().min())
+max_dt_candidates = []
+if "_dt" in dados.columns:
+    max_dt_candidates.append(dados["_dt"].dropna().max())
+if "_data" in faturamento.columns:
+    max_dt_candidates.append(faturamento["_data"].dropna().max())
+default_start = (min_dt_candidates[0] if len(min_dt_candidates) else pd.Timestamp(date.today())).date()
+default_end = (max_dt_candidates[0] if len(max_dt_candidates) else pd.Timestamp(date.today())).date()
+date_range = st.sidebar.date_input("Intervalo de datas", value=(default_start, default_end))
+if isinstance(date_range, tuple):
+    start_date, end_date = date_range
+else:
+    start_date, end_date = date_range, date_range
+months_available = sorted(dados.dropna(subset=["_dt"])['_dt'].dt.month.unique())
+month_label_options = ["Todos"] + [f"{m:02d}" for m in months_available]
+month_label = st.sidebar.selectbox("Filtrar por mês", options=month_label_options, index=0)
+selected_month = None if month_label == "Todos" else int(month_label)
+
+dados_base = dados.dropna(subset=["_dt"]).copy()
+dados_base = dados_base[(dados_base["_dt"].dt.date >= start_date) & (dados_base["_dt"].dt.date <= end_date)]
+if selected_month is not None:
+    dados_base = dados_base[dados_base["_dt"].dt.month == selected_month]
+
+faturamento_base = faturamento.dropna(subset=["_data"]).copy()
+faturamento_base = faturamento_base[(faturamento_base["_data"].dt.date >= start_date) & (faturamento_base["_data"].dt.date <= end_date)]
+if selected_month is not None:
+    faturamento_base = faturamento_base[faturamento_base["_data"].dt.month == selected_month]
 
 tabs = st.tabs(["Contratos", "Mapa", "Faturamento"])
 
 with tabs[0]:
     col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-    signed_count = int((dados["_status"] == "ASSINADO").sum())
-    waiting_count = int((dados["_status"] == "AGUARDANDO").sum())
+    signed_count = int((dados_base["_status"] == "ASSINADO").sum())
+    waiting_count = int((dados_base["_status"] == "AGUARDANDO").sum())
     col_a.metric("Contratos assinados", signed_count)
     col_b.metric("Contratos aguardando", waiting_count)
     now = date.today()
-    dados_valid = dados.dropna(subset=["_dt"]).copy()
-    dados_valid["_ym"] = dados_valid["_dt"].dt.to_period("M")
-    current_month = pd.Period(f"{now.year}-{now.month:02d}")
-    month_count = int((dados_valid["_ym"] == current_month).sum())
-    last3 = dados_valid[dados_valid["_dt"].dt.to_period("M") >= current_month - 2]
-    last6 = dados_valid[dados_valid["_dt"].dt.to_period("M") >= current_month - 5]
-    quarterly_count = int(len(last3))
-    semiannual_count = int(len(last6))
+    focus_year = end_date.year if isinstance(end_date, date) else now.year
+    focus_month = selected_month if selected_month is not None else now.month
+    dados_signed = dados_base[dados_base["_status"] == "ASSINADO"].copy()
+    month_count = int(dados_signed[(dados_signed["_dt"].dt.year == (focus_year if selected_month is not None else now.year)) & (dados_signed["_dt"].dt.month == focus_month)].shape[0])
+    q_start = ((focus_month - 1) // 3) * 3 + 1
+    quarterly_mask = (dados_signed["_dt"].dt.year == focus_year) & (dados_signed["_dt"].dt.month >= q_start) & (dados_signed["_dt"].dt.month <= q_start + 2)
+    quarterly_count = int(dados_signed[quarterly_mask].shape[0])
+    sem_start = 1 if focus_month <= 6 else 7
+    semestral_mask = (dados_signed["_dt"].dt.year == focus_year) & (dados_signed["_dt"].dt.month >= sem_start) & (dados_signed["_dt"].dt.month <= sem_start + 5)
+    semiannual_count = int(dados_signed[semestral_mask].shape[0])
     g1, g2, g3 = st.columns([1, 1, 1])
     g1.plotly_chart(gauge_chart(month_count, 30, "Meta mensal 30"), width='stretch')
     g2.plotly_chart(gauge_chart(quarterly_count, 90, "Meta trimestral 90"), width='stretch')
     g3.plotly_chart(gauge_chart(semiannual_count, 180, "Meta semestral 180"), width='stretch')
-    by_captador = dados["_captador"].value_counts().reset_index()
+    by_captador = dados_base["_captador"].value_counts().reset_index()
     by_captador.columns = ["Captador", "Contratos"]
     pie_fig = px.pie(by_captador, names="Captador", values="Contratos", title="Contratos por captador", color_discrete_sequence=px.colors.sequential.Pinkyl)
     st.plotly_chart(pie_fig, width='stretch')
-    status_counts = dados["_status"].value_counts().reindex(["ASSINADO", "AGUARDANDO", "CANCELADO"], fill_value=0).reset_index()
+    status_counts = dados_base["_status"].value_counts().reindex(["ASSINADO", "AGUARDANDO", "CANCELADO"], fill_value=0).reset_index()
     status_counts.columns = ["Status", "Quantidade"]
     bar_fig = px.bar(status_counts[status_counts["Status"].isin(["ASSINADO", "AGUARDANDO"])], x="Status", y="Quantidade", title="Assinados vs Aguardando", color="Status", color_discrete_map={"ASSINADO": "#2d9fff", "AGUARDANDO": "#ff2d95"})
     st.plotly_chart(bar_fig, width='stretch')
 
 with tabs[1]:
-    signed = dados[dados["_status"] == "ASSINADO"].copy()
+    signed = dados_base[dados_base["_status"] == "ASSINADO"].copy()
     signed["_regiao"] = signed["_estado"].map(ESTADO_REGIAO).fillna("")
     states_present = signed["_estado"].replace("", pd.NA).dropna().nunique()
     cities_present = signed["_cidade"].replace("", pd.NA).dropna().nunique()
@@ -211,8 +242,8 @@ with tabs[1]:
     st.plotly_chart(px.bar(by_region, x="Região", y="Parceiros", title="Parceiros por região"), width='stretch')
 
 with tabs[2]:
-    total = faturamento["_valor"].sum()
-    parceiros = (faturamento["_valor"] * faturamento["_comissao"]).sum()
+    total = faturamento_base["_valor"].sum()
+    parceiros = (faturamento_base["_valor"] * faturamento_base["_comissao"]).sum()
     equipe = 0.13 * (total - parceiros)
     liquido = total - parceiros - equipe
     c1, c2, c3, c4 = st.columns(4)
@@ -220,14 +251,11 @@ with tabs[2]:
     c2.metric("Comissão parceiros", f"R$ {parceiros:,.2f}")
     c3.metric("Comissão equipe (13%)", f"R$ {equipe:,.2f}")
     c4.metric("Líquido empresa", f"R$ {liquido:,.2f}")
-    faturamento_valid = faturamento.dropna(subset=["_data"]).copy()
+    faturamento_valid = faturamento_base.copy()
     faturamento_valid["ano"] = faturamento_valid["_data"].dt.year
     faturamento_valid["mes"] = faturamento_valid["_data"].dt.month
-    months = sorted(faturamento_valid["mes"].unique())
-    sel_months = st.multiselect("Meses", options=months, default=months)
-    filt = faturamento_valid[faturamento_valid["mes"].isin(sel_months)]
-    daily = filt.groupby(filt["_data"].dt.date)["_valor"].sum().reset_index()
-    monthly = filt.groupby(["ano", "mes"])["_valor"].sum().reset_index()
+    daily = faturamento_valid.groupby(faturamento_valid["_data"].dt.date)["_valor"].sum().reset_index()
+    monthly = faturamento_valid.groupby(["ano", "mes"])["_valor"].sum().reset_index()
     daily_fig = px.line(daily, x="_data", y="_valor", title="Faturamento diário")
     st.plotly_chart(daily_fig, width='stretch')
     monthly["label"] = monthly["mes"].astype(str).str.zfill(2) + "/" + monthly["ano"].astype(str)
