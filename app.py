@@ -11,6 +11,7 @@ import logging
 from dotenv import load_dotenv
 
 from geocoding_service import GeocodingService
+import forecasting
 import constants as C
 
 # Setup Logging
@@ -340,9 +341,91 @@ def render_financial_tab(df: pd.DataFrame):
     )
 
 
-# -----------------------------------------------------------------------------
-# Main App Logic
-# -----------------------------------------------------------------------------
+def render_forecast_tab(df: pd.DataFrame):
+    import forecasting  # Late import or move to top? Python allows it. I'll move to top later or implicitly here.
+
+    st.markdown("### Previsão de Contratos")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        algo = st.selectbox(
+            "Algoritmo",
+            [
+                "Prophet (Facebook AI)",
+                "Holt-Winters (Sazonal)",
+            ],
+        )
+    with c2:
+        horizon_label = st.selectbox(
+            "Horizonte",
+            [
+                "1 Semana",
+                "2 Semanas",
+                "3 Semanas",
+                "1 Mês",
+                "3 Meses",
+                "6 Meses",
+                "1 Ano",
+            ],
+        )
+
+    horizon_map = {
+        "1 Semana": 7,
+        "2 Semanas": 14,
+        "3 Semanas": 21,
+        "1 Mês": 30,
+        "3 Meses": 90,
+        "6 Meses": 180,
+        "1 Ano": 365,
+    }
+    days = horizon_map[horizon_label]
+
+    # Prepare data for forecast (Count 1 per row)
+    df_input = df.copy()
+    df_input["Contratos"] = 1
+
+    # Generate
+    try:
+        final_df = forecasting.generate_forecast(
+            df_input, C.COL_INT_DT, "Contratos", algo, days
+        )
+
+        # Calculate Total Predicted
+        future_mask = final_df["Type"] == "Previsão"
+        total_predicted = int(final_df[future_mask]["Contratos"].sum())
+
+        # Display Metric
+        st.metric(label=f"Contratos Previstos ({horizon_label})", value=total_predicted)
+
+        # Plot
+        fig = px.line(
+            final_df,
+            x=C.COL_INT_DT,
+            y="Contratos",
+            color="Type",
+            title=f"Previsão de Novos Contratos Diários - {algo}",
+            color_discrete_map={
+                "Histórico": C.COLOR_PRIMARY,
+                "Previsão": C.COLOR_FORECAST,
+            },
+        )
+        st.plotly_chart(fig, width="stretch")
+
+        # AI Insights
+        st.markdown("---")
+        insights = forecasting.generate_smart_insights(
+            df_input, C.COL_INT_DT, "Contratos", final_df
+        )
+        st.info(insights)
+
+    except Exception as e:
+        logger.error(f"Forecast error: {e}")
+        st.error(f"Erro ao gerar previsão: {e}")
+        if "não instalada" in str(e):
+            st.warning(
+                "Dica: Verifique se as bibliotecas 'prophet' e 'statsmodels' estão instaladas."
+            )
+
 
 st.sidebar.title("Educa Mais Dashboard")
 dados = get_dados(DEFAULT_SHEET_ID)
@@ -384,7 +467,7 @@ if selected_month:
 fat_filtered = faturamento[mask_fat].copy()
 
 # Render Tabs
-t1, t2, t3 = st.tabs(["Contratos", "Mapa", "Faturamento"])
+t1, t2, t3, t4 = st.tabs(["Contratos", "Mapa", "Faturamento", "Previsões"])
 
 with t1:
     render_contracts_tab(dados_filtered, end_date, selected_month)
@@ -392,3 +475,5 @@ with t2:
     render_map_tab(dados_filtered)
 with t3:
     render_financial_tab(fat_filtered)
+with t4:
+    render_forecast_tab(dados_filtered)

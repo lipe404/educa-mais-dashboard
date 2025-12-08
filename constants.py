@@ -30,6 +30,7 @@ STATUS_CANCELADO = "CANCELADO"
 COLOR_PRIMARY = "#2d9fff"
 COLOR_SECONDARY = "#ff2d95"
 COLOR_BG_DARK = "#0b1437"
+COLOR_FORECAST = "#00ff7f"  # Spring Green for forecast
 
 # Map Configuration
 MAP_ZOOM_DEFAULT = 3.5
