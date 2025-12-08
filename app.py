@@ -18,7 +18,7 @@ load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def load_sheet(sheet_id: str, sheet_name: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     try:
@@ -50,7 +50,7 @@ def to_float_any(x) -> float:
         return float("nan")
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def get_dados(sheet_id: str) -> pd.DataFrame:
     df = load_sheet(sheet_id, "Dados")
     if "TIMESTAMP" in df.columns:
@@ -80,7 +80,7 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def get_faturamento(sheet_id: str) -> pd.DataFrame:
     df = load_sheet(sheet_id, "FATURAMENTO")
     if "VALOR" in df.columns:
@@ -204,8 +204,14 @@ tabs = st.tabs(["Contratos", "Mapa", "Faturamento"])
 
 with tabs[0]:
     col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-    signed_count = int((dados_base["_status"] == "ASSINADO").sum())
-    waiting_count = int((dados_base["_status"] == "AGUARDANDO").sum())
+
+    # -------------------------------------------------------------------------
+    # OPTIMIZATION: Calc status counts once
+    # -------------------------------------------------------------------------
+    status_counts_series = dados_base["_status"].value_counts()
+    signed_count = int(status_counts_series.get("ASSINADO", 0))
+    waiting_count = int(status_counts_series.get("AGUARDANDO", 0))
+
     col_a.metric("Contratos assinados", signed_count)
     col_b.metric("Contratos aguardando", waiting_count)
     now = date.today()
@@ -253,12 +259,9 @@ with tabs[0]:
         color_discrete_sequence=px.colors.sequential.Pinkyl,
     )
     st.plotly_chart(pie_fig, width="stretch")
-    status_counts = (
-        dados_base["_status"]
-        .value_counts()
-        .reindex(["ASSINADO", "AGUARDANDO", "CANCELADO"], fill_value=0)
-        .reset_index()
-    )
+    status_counts = status_counts_series.reindex(
+        ["ASSINADO", "AGUARDANDO", "CANCELADO"], fill_value=0
+    ).reset_index()
     status_counts.columns = ["Status", "Quantidade"]
     bar_fig = px.bar(
         status_counts[status_counts["Status"].isin(["ASSINADO", "AGUARDANDO"])],
@@ -279,15 +282,38 @@ with tabs[1]:
     k1.metric("Estados presentes", int(states_present))
     k2.metric("Cidades presentes", int(cities_present))
     geo_rows = []
+
+    # -------------------------------------------------------------------------
+    # OPTIMIZATION: Geocode ONLY unique (city, state) pairs first
+    # -------------------------------------------------------------------------
+    # Extract unique pairs
+    unique_locations = signed[["_cidade", "_estado"]].drop_duplicates()
+
+    # Pre-fetch/cache results
+    location_map = {}
+    for _, row in unique_locations.iterrows():
+        c, s = row["_cidade"], row["_estado"]
+        if c and s:
+            # This will hit local SQLite cache or API
+            lat, lon = geo_service.get_coords(c, s)
+            if lat is not None and lon is not None:
+                location_map[(c, s)] = (lat, lon)
+
+    # Build list using lookup
+    # Iterate original SIGNED frame to render one point per contract?
+    # Actually, usually map shows density or markers.
+    # If we want 1 marker per contract, we iterate signed.
+    # If we want 1 marker per city, we use unique_locations.
+    # The original loop iterated 'signed', implying 1 dot per contract
+    # (multiple dots on top of each other if same city).
+    # We will keep behavior: 1 row in geo_df = 1 contract.
+
     for _, row in signed.iterrows():
         city = row.get("_cidade", "")
         state = row.get("_estado", "")
-        if city and state:
-            lat, lon = geo_service.get_coords(city, state)
-            if lat is not None and lon is not None:
-                geo_rows.append(
-                    {"lat": lat, "lon": lon, "cidade": city, "estado": state}
-                )
+        if (city, state) in location_map:
+            lat, lon = location_map[(city, state)]
+            geo_rows.append({"lat": lat, "lon": lon, "cidade": city, "estado": state})
     if len(geo_rows) > 0:
         geo_df = pd.DataFrame(geo_rows)
         layer = pdk.Layer(
