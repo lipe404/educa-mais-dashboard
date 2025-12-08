@@ -356,7 +356,7 @@ else:
 
 months = sorted(dados[C.COL_INT_DT].dt.month.dropna().unique())
 month_label = st.sidebar.selectbox(
-    "Filtrar por mês", ["Todos"] + [f"{m:02d}" for m in months]
+    "Filtrar por mês", ["Todos"] + [f"{int(m):02d}" for m in months]
 )
 selected_month = int(month_label) if month_label != "Todos" else None
 
