@@ -35,6 +35,7 @@ COLOR_BG_DARK = "#0b1437"
 MAP_ZOOM_DEFAULT = 3.5
 MAP_LAT_DEFAULT = -14.235
 MAP_LON_DEFAULT = -51.9253
+MAP_STYLE = "mapbox://styles/mapbox/streets-v12"
 
 # Regional Data
 ESTADO_REGIAO = {

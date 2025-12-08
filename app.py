@@ -283,7 +283,7 @@ def render_map_tab(df: pd.DataFrame):
                 longitude=C.MAP_LON_DEFAULT,
                 zoom=C.MAP_ZOOM_DEFAULT,
             ),
-            map_style="mapbox://styles/mapbox/dark-v9",
+            map_style=C.MAP_STYLE,
         )
         st.pydeck_chart(deck)
 
