@@ -118,6 +118,27 @@ def generate_forecast(
             # Apply lift
             forecast_values = forecast_values + lift
 
+    # ---------------------------------------------------------
+    # SUSTAINABILITY & ORGANIC VARIABILITY (FIXES)
+    # ---------------------------------------------------------
+
+    # 1. Sustainability Floor: Prevent trend to zero in long horizons.
+    if recent_avg > 0:
+        # Floor = 40% of recent average. usage: max(forecast, floor).
+        floor = recent_avg * 0.4
+        forecast_values = np.maximum(forecast_values, floor)
+
+    # 2. Organic Noise: Break rigid repeating patterns.
+    if len(recent_history) > 1:
+        # Use 30% of historical std dev as noise scale.
+        noise_scale = recent_history.std() * 0.3
+        # Generate noise
+        noise = np.random.normal(0, noise_scale, size=len(forecast_values))
+        forecast_values = forecast_values + noise
+
+    # Final cleanup: Ensure no negatives
+    forecast_values = np.maximum(forecast_values, 0)
+
     # Final cleanup: Ensure no negatives
     forecast_values = np.maximum(forecast_values, 0)
 
