@@ -9,7 +9,7 @@ from io import StringIO
 import os
 import logging
 from dotenv import load_dotenv
-import pydeck as pdk
+
 from geocoding_service import GeocodingService
 import constants as C
 
@@ -264,28 +264,35 @@ def render_map_tab(df: pd.DataFrame):
         k = (row.get(C.COL_INT_CITY, ""), row.get(C.COL_INT_STATE, ""))
         if k in location_map:
             lat, lon = location_map[k]
-            geo_rows.append({"lat": lat, "lon": lon})
+            geo_rows.append(
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "cidade": row.get(C.COL_INT_CITY, ""),
+                    "estado": row.get(C.COL_INT_STATE, ""),
+                }
+            )
 
     if geo_rows:
-        deck = pdk.Deck(
-            layers=[
-                pdk.Layer(
-                    "ScatterplotLayer",
-                    data=pd.DataFrame(geo_rows),
-                    get_position="[lon, lat]",
-                    get_radius=4000,
-                    get_fill_color=[255, 45, 149],
-                    pickable=True,
-                )
-            ],
-            initial_view_state=pdk.ViewState(
-                latitude=C.MAP_LAT_DEFAULT,
-                longitude=C.MAP_LON_DEFAULT,
-                zoom=C.MAP_ZOOM_DEFAULT,
-            ),
-            map_style=C.MAP_STYLE,
+        geo_df = pd.DataFrame(geo_rows)
+        # Using Plotly Scatter Mapbox for better visibility and reliability (no token needed for open-street-map)
+        fig_map = px.scatter_mapbox(
+            geo_df,
+            lat="lat",
+            lon="lon",
+            hover_name="cidade",
+            hover_data={"estado": True, "lat": False, "lon": False},
+            color_discrete_sequence=[C.COLOR_SECONDARY],
+            zoom=3,
+            center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+            title="Distribuição Geográfica de Contratos Assinados",
         )
-        st.pydeck_chart(deck)
+        fig_map.update_layout(
+            mapbox_style="open-street-map",
+            height=600,
+            margin={"r": 0, "t": 30, "l": 0, "b": 0},
+        )
+        st.plotly_chart(fig_map, width="stretch")
 
     # Charts with explicit column naming to avoid Plotly errors
     # State
