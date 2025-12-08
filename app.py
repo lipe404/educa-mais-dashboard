@@ -287,40 +287,28 @@ def render_map_tab(df: pd.DataFrame):
         )
         st.pydeck_chart(deck)
 
+    # Charts with explicit column naming to avoid Plotly errors
+    # State
+    counts_state = signed[C.COL_INT_STATE].value_counts().reset_index()
+    counts_state.columns = ["Estado", "Parceiros"]
     st.plotly_chart(
-        px.bar(
-            signed[C.COL_INT_STATE]
-            .value_counts()
-            .reset_index(name="Parceiros")
-            .rename(columns={"index": "Estado"}),
-            x="Estado",
-            y="Parceiros",
-            title="Parceiros por estado",
-        ),
+        px.bar(counts_state, x="Estado", y="Parceiros", title="Parceiros por estado"),
         width="stretch",
     )
+
+    # City
+    counts_city = signed[C.COL_INT_CITY].value_counts().reset_index()
+    counts_city.columns = ["Cidade", "Parceiros"]
     st.plotly_chart(
-        px.bar(
-            signed[C.COL_INT_CITY]
-            .value_counts()
-            .reset_index(name="Parceiros")
-            .rename(columns={"index": "Cidade"}),
-            x="Cidade",
-            y="Parceiros",
-            title="Parceiros por cidade",
-        ),
+        px.bar(counts_city, x="Cidade", y="Parceiros", title="Parceiros por cidade"),
         width="stretch",
     )
+
+    # Region
+    counts_region = signed[C.COL_INT_REGION].value_counts().reset_index()
+    counts_region.columns = ["Região", "Parceiros"]
     st.plotly_chart(
-        px.bar(
-            signed[C.COL_INT_REGION]
-            .value_counts()
-            .reset_index(name="Parceiros")
-            .rename(columns={"index": "Região"}),
-            x="Região",
-            y="Parceiros",
-            title="Parceiros por região",
-        ),
+        px.bar(counts_region, x="Região", y="Parceiros", title="Parceiros por região"),
         width="stretch",
     )
 
@@ -338,6 +326,7 @@ def render_financial_tab(df: pd.DataFrame):
     c4.metric("Líquido empresa", f"R$ {liquido:,.2f}")
 
     daily = df.groupby(df[C.COL_INT_DATA].dt.date)[C.COL_INT_VALOR].sum().reset_index()
+    daily.columns = [C.COL_INT_DATA, C.COL_INT_VALOR]
     st.plotly_chart(
         px.line(daily, x=C.COL_INT_DATA, y=C.COL_INT_VALOR, title="Faturamento diário"),
         width="stretch",
