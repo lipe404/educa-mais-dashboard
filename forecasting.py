@@ -103,13 +103,17 @@ def generate_forecast(
     recent_history = daily[value_col].tail(30)  # Last 30 days
     if not recent_history.empty and len(forecast_values) > 0:
         recent_avg = recent_history.mean()
-        forecast_avg = np.mean(forecast_values)
 
-        # If forecast is too conservative (below recent avg), apply lift
-        if forecast_avg < recent_avg:
+        # Compare with the start of the forecast (max 30 days) to align trend entry
+        validation_len = min(len(forecast_values), 30)
+        forecast_start_avg = np.mean(forecast_values[:validation_len])
+
+        # If the model's starting point is lower than recent history, lift it.
+        # We apply a constant offset so the *start* matches recent history + small optimism.
+        if forecast_start_avg < recent_avg:
             # Target is recent_avg + 5% boost
             target_mean = recent_avg * 1.05
-            lift = target_mean - forecast_avg
+            lift = target_mean - forecast_start_avg
 
             # Apply lift
             forecast_values = forecast_values + lift

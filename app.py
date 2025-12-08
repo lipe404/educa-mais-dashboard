@@ -380,8 +380,12 @@ def render_forecast_tab(df: pd.DataFrame):
     }
     days = horizon_map[horizon_label]
 
+    # Filter for ONLY Signed Contracts
+    # Essential to avoid inflating numbers with "Aguardando"/"Cancelado"
+    signed_df = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
+
     # Prepare data for forecast (Count 1 per row)
-    df_input = df.copy()
+    df_input = signed_df.copy()
     df_input["Contratos"] = 1
 
     # Generate
@@ -394,8 +398,19 @@ def render_forecast_tab(df: pd.DataFrame):
         future_mask = final_df["Type"] == "Previsão"
         total_predicted = int(final_df[future_mask]["Contratos"].sum())
 
-        # Display Metric
-        st.metric(label=f"Contratos Previstos ({horizon_label})", value=total_predicted)
+        # Calculate Total (Historical + Predicted)
+        # We count rows in the original filtered df for "Contratos Assinados"
+        total_historical = len(signed_df)
+        total_final = total_historical + total_predicted
+
+        # Display Metrics in Columns
+        m1, m2 = st.columns(2)
+        m1.metric(label=f"Novos Contratos ({horizon_label})", value=total_predicted)
+        m2.metric(
+            label="Total Final Esperado",
+            value=total_final,
+            delta=f"+{total_predicted} novos",
+        )
 
         # Plot
         fig = px.line(
