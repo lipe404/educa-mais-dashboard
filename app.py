@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dateutil import parser
 from io import StringIO
 import os
@@ -156,7 +156,7 @@ def gauge_chart(value: float, target: float, title: str) -> go.Figure:
 
 
 def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int | None):
-    col_a, col_b, _, _ = st.columns([1, 1, 1, 1])
+    col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
 
     status_counts = df[C.COL_INT_STATUS].value_counts()
     signed_count = int(status_counts.get(C.STATUS_ASSINADO, 0))
@@ -172,11 +172,20 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     # Filter for signed
     signed_df = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO]
 
-    # Monthly
     month_mask = (signed_df[C.COL_INT_DT].dt.year == focus_year) & (
         signed_df[C.COL_INT_DT].dt.month == focus_month
     )
     month_count = signed_df[month_mask].shape[0]
+
+    week_end_date = end_date if isinstance(end_date, date) else date.today()
+    week_start_date = week_end_date - timedelta(days=week_end_date.weekday())
+    week_mask = (signed_df[C.COL_INT_DT].dt.date >= week_start_date) & (
+        signed_df[C.COL_INT_DT].dt.date <= (week_start_date + timedelta(days=6))
+    )
+    week_count = signed_df[week_mask].shape[0]
+
+    col_c.metric("Assinados este mês", month_count)
+    col_d.metric("Assinados esta semana", week_count)
 
     # Quarterly
     q_start = ((focus_month - 1) // 3) * 3 + 1
@@ -234,6 +243,41 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
         },
     )
     st.plotly_chart(bar_fig, width="stretch")
+
+    signed_only = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
+    signed_only = signed_only.dropna(subset=[C.COL_INT_DT])
+    signed_only["_ano"] = signed_only[C.COL_INT_DT].dt.year
+    signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
+    monthly = (
+        signed_only.groupby(["_ano", "_mes"]).size().reset_index(name="Contratos")
+    )
+    pt_months = {
+        1: "Janeiro",
+        2: "Fevereiro",
+        3: "Março",
+        4: "Abril",
+        5: "Maio",
+        6: "Junho",
+        7: "Julho",
+        8: "Agosto",
+        9: "Setembro",
+        10: "Outubro",
+        11: "Novembro",
+        12: "Dezembro",
+    }
+    monthly["Mês"] = monthly.apply(
+        lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+        axis=1,
+    )
+    monthly = monthly.sort_values(["_ano", "_mes"]) 
+    fig_month = px.bar(
+        monthly,
+        x="Mês",
+        y="Contratos",
+        title="Contratos assinados por mês",
+        color_discrete_sequence=[C.COLOR_PRIMARY],
+    )
+    st.plotly_chart(fig_month, width="stretch")
 
 
 def render_map_tab(df: pd.DataFrame):
