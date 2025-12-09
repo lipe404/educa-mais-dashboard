@@ -397,6 +397,18 @@ def render_map_tab(df: pd.DataFrame):
         width="stretch",
     )
 
+    all_states = sorted(list(C.ESTADO_REGIAO.keys()))
+    present_states = signed[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
+    present_states = [s for s in present_states if s in C.ESTADO_REGIAO]
+    missing_states = [s for s in all_states if s not in set(present_states)]
+    if missing_states:
+        df_missing = pd.DataFrame({
+            "Estado": missing_states,
+            "Região": [C.ESTADO_REGIAO[s] for s in missing_states],
+        })
+        st.markdown("### Estados sem parceiros")
+        st.table(df_missing)
+
 
 def render_financial_tab(df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None):
     total = df[C.COL_INT_VALOR].sum()
