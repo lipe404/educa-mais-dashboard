@@ -121,6 +121,20 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
         0.0,
     )
     process_column(df, C.COL_SRC_DATA, C.COL_INT_DATA, parse_datetime_any, None)
+    process_column(
+        df,
+        C.COL_SRC_FINANCIAL_TYPE,
+        C.COL_INT_FINANCIAL_TYPE,
+        lambda x: str(x).strip().upper(),
+        "",
+    )
+    process_column(
+        df,
+        C.COL_SRC_CONTRACT_TYPE,
+        C.COL_INT_CONTRACT_TYPE,
+        lambda x: str(x).strip(),
+        "",
+    )
 
     if C.COL_INT_DATA in df.columns:
         df[C.COL_INT_DATA] = pd.to_datetime(df[C.COL_INT_DATA], errors="coerce")

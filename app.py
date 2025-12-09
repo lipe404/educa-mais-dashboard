@@ -801,6 +801,12 @@ mask_fat = (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (
 )
 if selected_month:
     mask_fat &= faturamento[C.COL_INT_DATA].dt.month == selected_month
+
+if selected_contract_type == "Técnico (Normal + 50%)":
+    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == "TECNICO"
+elif selected_contract_type == "Pós-Graduação":
+    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == "POS"
+
 fat_filtered = faturamento[mask_fat].copy()
 
 # Render Tabs

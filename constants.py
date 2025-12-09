@@ -9,6 +9,7 @@ COL_SRC_VALOR = "VALOR"
 COL_SRC_COMISSAO = "COMISSÃO"
 COL_SRC_DATA = "DATA"
 COL_SRC_CONTRACT_TYPE = "CONTRACT_TYPE"
+COL_SRC_FINANCIAL_TYPE = "TIPO"
 
 # Column Names (Internal)
 COL_INT_DT = "_dt"
@@ -23,6 +24,7 @@ COL_INT_DATA = "_data"
 COL_INT_REGION = "_regiao"
 COL_INT_CONTRACT_TYPE = "_contract_type"
 COL_INT_PARTNER = "_partner"
+COL_INT_FINANCIAL_TYPE = "_financial_type"
 
 # Status Values
 STATUS_ASSINADO = "ASSINADO"
