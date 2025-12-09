@@ -736,4 +736,4 @@ with t2:
 with t3:
     financial_tab.render(fat_filtered, faturamento, end_date, selected_month)
 with t4:
-    forecast_tab.render(dados_filtered)
+    forecast_tab.render(dados_filtered, fat_filtered)
