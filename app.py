@@ -384,6 +384,40 @@ def render_financial_tab(df: pd.DataFrame):
         width="stretch",
     )
 
+    m = df.dropna(subset=[C.COL_INT_DATA]).copy()
+    m["_ano"] = m[C.COL_INT_DATA].dt.year
+    m["_mes"] = m[C.COL_INT_DATA].dt.month
+    monthly = m.groupby(["_ano", "_mes"])[C.COL_INT_VALOR].sum().reset_index()
+    pt_months = {
+        1: "Janeiro",
+        2: "Fevereiro",
+        3: "Março",
+        4: "Abril",
+        5: "Maio",
+        6: "Junho",
+        7: "Julho",
+        8: "Agosto",
+        9: "Setembro",
+        10: "Outubro",
+        11: "Novembro",
+        12: "Dezembro",
+    }
+    monthly["Mês"] = monthly.apply(
+        lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+        axis=1,
+    )
+    monthly = monthly.sort_values(["_ano", "_mes"]) 
+    st.plotly_chart(
+        px.bar(
+            monthly,
+            x="Mês",
+            y=C.COL_INT_VALOR,
+            title="Faturamento por mês",
+            color_discrete_sequence=[C.COLOR_PRIMARY],
+        ),
+        width="stretch",
+    )
+
 
 def render_forecast_tab(df: pd.DataFrame):
     import forecasting  # Late import or move to top? Python allows it. I'll move to top later or implicitly here.
@@ -487,6 +521,9 @@ def render_forecast_tab(df: pd.DataFrame):
 
 
 st.sidebar.title("Educa Mais Dashboard")
+if st.sidebar.button("Recarregar dados"):
+    st.cache_data.clear()
+    st.rerun()
 dados = get_dados(DEFAULT_SHEET_ID)
 faturamento = get_faturamento(DEFAULT_SHEET_ID)
 
