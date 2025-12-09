@@ -101,6 +101,15 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
         df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(x).strip().upper(), ""
     )
     process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY, lambda x: str(x).strip(), "")
+    process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP, lambda x: str(x).strip(), "")
+    process_column(
+        df, C.COL_SRC_CONTRACT_TYPE, C.COL_INT_CONTRACT_TYPE, lambda x: str(x).strip(), ""
+    )
+
+    try:
+        df[C.COL_INT_PARTNER] = df.iloc[:, 0].astype(str).str.strip()
+    except Exception:
+        df[C.COL_INT_PARTNER] = ""
 
     # Set Temporal Index for faster filtering
     # We keep '_dt' generic column too but index helps
@@ -159,7 +168,22 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
 
     status_counts = df[C.COL_INT_STATUS].value_counts()
-    signed_count = int(status_counts.get(C.STATUS_ASSINADO, 0))
+    signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
+    signed_df_full["_pid"] = signed_df_full[C.COL_INT_PARTNER].astype(str).str.strip()
+    signed_df_full["_pid"] = signed_df_full["_pid"].where(
+        signed_df_full["_pid"] != "",
+        signed_df_full[C.COL_INT_CEP].astype(str).str.strip(),
+    )
+    signed_df_full["_pid"] = signed_df_full["_pid"].where(
+        signed_df_full["_pid"] != "",
+        signed_df_full[C.COL_INT_CITY].astype(str).str.strip()
+        + "|"
+        + signed_df_full[C.COL_INT_STATE].astype(str).str.strip(),
+    )
+    signed_count = (
+        signed_df_full.drop_duplicates(subset=["_pid"])
+        .shape[0]
+    )
     waiting_count = int(status_counts.get(C.STATUS_AGUARDANDO, 0))
 
     col_a.metric("Contratos assinados", signed_count)
@@ -316,19 +340,31 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
 def render_map_tab(df: pd.DataFrame):
     signed = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
     signed[C.COL_INT_REGION] = signed[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna("")
+    signed["_pid"] = signed[C.COL_INT_PARTNER].astype(str).str.strip()
+    signed["_pid"] = signed["_pid"].where(
+        signed["_pid"] != "",
+        signed[C.COL_INT_CEP].astype(str).str.strip(),
+    )
+    signed["_pid"] = signed["_pid"].where(
+        signed["_pid"] != "",
+        signed[C.COL_INT_CITY].astype(str).str.strip()
+        + "|"
+        + signed[C.COL_INT_STATE].astype(str).str.strip(),
+    )
+    signed_unique = signed.drop_duplicates(subset=["_pid"]).copy()
 
     k1, k2 = st.columns([1, 1])
     k1.metric(
         "Estados presentes",
-        signed[C.COL_INT_STATE].replace("", pd.NA).dropna().nunique(),
+        signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().nunique(),
     )
     k2.metric(
         "Cidades presentes",
-        signed[C.COL_INT_CITY].replace("", pd.NA).dropna().nunique(),
+        signed_unique[C.COL_INT_CITY].replace("", pd.NA).dropna().nunique(),
     )
 
     # Optimized Geocoding
-    unique_locations = signed[[C.COL_INT_CITY, C.COL_INT_STATE]].drop_duplicates()
+    unique_locations = signed_unique[[C.COL_INT_CITY, C.COL_INT_STATE]].drop_duplicates()
     location_map = {}
     for _, row in unique_locations.iterrows():
         c, s = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
@@ -338,7 +374,7 @@ def render_map_tab(df: pd.DataFrame):
                 location_map[(c, s)] = (lat, lon)
 
     geo_rows = []
-    for _, row in signed.iterrows():
+    for _, row in signed_unique.iterrows():
         k = (row.get(C.COL_INT_CITY, ""), row.get(C.COL_INT_STATE, ""))
         if k in location_map:
             lat, lon = location_map[k]
@@ -374,7 +410,7 @@ def render_map_tab(df: pd.DataFrame):
 
     # Charts with explicit column naming to avoid Plotly errors
     # State
-    counts_state = signed[C.COL_INT_STATE].value_counts().reset_index()
+    counts_state = signed_unique[C.COL_INT_STATE].value_counts().reset_index()
     counts_state.columns = ["Estado", "Parceiros"]
     st.plotly_chart(
         px.bar(counts_state, x="Estado", y="Parceiros", title="Parceiros por estado"),
@@ -382,7 +418,7 @@ def render_map_tab(df: pd.DataFrame):
     )
 
     # City
-    counts_city = signed[C.COL_INT_CITY].value_counts().reset_index()
+    counts_city = signed_unique[C.COL_INT_CITY].value_counts().reset_index()
     counts_city.columns = ["Cidade", "Parceiros"]
     st.plotly_chart(
         px.bar(counts_city, x="Cidade", y="Parceiros", title="Parceiros por cidade"),
@@ -390,7 +426,7 @@ def render_map_tab(df: pd.DataFrame):
     )
 
     # Region
-    counts_region = signed[C.COL_INT_REGION].value_counts().reset_index()
+    counts_region = signed_unique[C.COL_INT_REGION].value_counts().reset_index()
     counts_region.columns = ["Região", "Parceiros"]
     st.plotly_chart(
         px.bar(counts_region, x="Região", y="Parceiros", title="Parceiros por região"),
@@ -398,7 +434,7 @@ def render_map_tab(df: pd.DataFrame):
     )
 
     all_states = sorted(list(C.ESTADO_REGIAO.keys()))
-    present_states = signed[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
+    present_states = signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
     present_states = [s for s in present_states if s in C.ESTADO_REGIAO]
     missing_states = [s for s in all_states if s not in set(present_states)]
     if missing_states:

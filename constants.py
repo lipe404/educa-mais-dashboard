@@ -8,6 +8,7 @@ COL_SRC_CEP = "CEP"
 COL_SRC_VALOR = "VALOR"
 COL_SRC_COMISSAO = "COMISSÃO"
 COL_SRC_DATA = "DATA"
+COL_SRC_CONTRACT_TYPE = "CONTRACT_TYPE"
 
 # Column Names (Internal)
 COL_INT_DT = "_dt"
@@ -20,11 +21,18 @@ COL_INT_VALOR = "_valor"
 COL_INT_COMISSAO = "_comissao"
 COL_INT_DATA = "_data"
 COL_INT_REGION = "_regiao"
+COL_INT_CONTRACT_TYPE = "_contract_type"
+COL_INT_PARTNER = "_partner"
 
 # Status Values
 STATUS_ASSINADO = "ASSINADO"
 STATUS_AGUARDANDO = "AGUARDANDO"
 STATUS_CANCELADO = "CANCELADO"
+
+# Contract Types
+CONTRACT_TYPE_NORMAL = "Contrato Normal"
+CONTRACT_TYPE_50 = "Contrato 50%"
+CONTRACT_TYPE_POS = "Contrato Pós-Graduação"
 
 # UI Colors
 COLOR_PRIMARY = "#2d9fff"
