@@ -187,6 +187,39 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     col_c.metric("Assinados este mês", month_count)
     col_d.metric("Assinados esta semana", week_count)
 
+    today_date = end_date if isinstance(end_date, date) else date.today()
+    today_mask = signed_df[C.COL_INT_DT].dt.date == today_date
+    today_count = signed_df[today_mask].shape[0]
+    h1, h2, h3 = st.columns(3)
+    h1.metric("Assinados hoje", today_count)
+
+    last_week_start = week_start_date - timedelta(days=7)
+    last_week_mask = (signed_df[C.COL_INT_DT].dt.date >= last_week_start) & (
+        signed_df[C.COL_INT_DT].dt.date <= (last_week_start + timedelta(days=6))
+    )
+    last_week_count = signed_df[last_week_mask].shape[0]
+    diff_week = week_count - last_week_count
+    progress_pct_week = (week_count / last_week_count * 100.0) if last_week_count > 0 else None
+    h2.metric(
+        "Acima vs semana passada" if diff_week > 0 else "Falta p/ igualar semana passada",
+        abs(diff_week),
+        delta=(f"{progress_pct_week:.1f}%" if progress_pct_week is not None else None),
+    )
+
+    prev_year = focus_year if focus_month > 1 else focus_year - 1
+    prev_month = focus_month - 1 if focus_month > 1 else 12
+    last_month_mask = (signed_df[C.COL_INT_DT].dt.year == prev_year) & (
+        signed_df[C.COL_INT_DT].dt.month == prev_month
+    )
+    last_month_count = signed_df[last_month_mask].shape[0]
+    diff_month = month_count - last_month_count
+    progress_pct_month = (month_count / last_month_count * 100.0) if last_month_count > 0 else None
+    h3.metric(
+        "Acima vs mês passado" if diff_month > 0 else "Falta p/ igualar mês passado",
+        abs(diff_month),
+        delta=(f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None),
+    )
+
     # Quarterly
     q_start = ((focus_month - 1) // 3) * 3 + 1
     quarterly_mask = (
