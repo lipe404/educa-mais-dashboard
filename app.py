@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from geocoding_service import GeocodingService
 import forecasting
 import constants as C
+from services import data as data_service
+from ui import contracts_tab, map_tab, financial_tab, forecast_tab
 
 # Setup Logging
 logging.basicConfig(
@@ -686,10 +688,10 @@ st.sidebar.title("Educa Mais Dashboard")
 if st.sidebar.button("Recarregar dados"):
     st.cache_data.clear()
     st.rerun()
-dados = get_dados(DEFAULT_SHEET_ID)
-faturamento = get_faturamento(DEFAULT_SHEET_ID)
+dados = data_service.get_dados(DEFAULT_SHEET_ID)
+faturamento = data_service.get_faturamento(DEFAULT_SHEET_ID)
 
-if not validate_columns(dados, [C.COL_INT_DT, C.COL_INT_STATUS]):
+if not data_service.validate_columns(dados, [C.COL_INT_DT, C.COL_INT_STATUS]):
     st.stop()
 
 # Date Filtering Logic
@@ -728,10 +730,10 @@ fat_filtered = faturamento[mask_fat].copy()
 t1, t2, t3, t4 = st.tabs(["Contratos", "Mapa", "Faturamento", "Previsões"])
 
 with t1:
-    render_contracts_tab(dados_filtered, end_date, selected_month)
+    contracts_tab.render(dados_filtered, end_date, selected_month)
 with t2:
-    render_map_tab(dados_filtered)
+    map_tab.render(dados_filtered)
 with t3:
-    render_financial_tab(fat_filtered, faturamento, end_date, selected_month)
+    financial_tab.render(fat_filtered, faturamento, end_date, selected_month)
 with t4:
-    render_forecast_tab(dados_filtered)
+    forecast_tab.render(dados_filtered)
