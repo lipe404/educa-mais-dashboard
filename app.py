@@ -105,7 +105,11 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
     process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY, lambda x: str(x).strip(), "")
     process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP, lambda x: str(x).strip(), "")
     process_column(
-        df, C.COL_SRC_CONTRACT_TYPE, C.COL_INT_CONTRACT_TYPE, lambda x: str(x).strip(), ""
+        df,
+        C.COL_SRC_CONTRACT_TYPE,
+        C.COL_INT_CONTRACT_TYPE,
+        lambda x: str(x).strip(),
+        "",
     )
 
     try:
@@ -182,10 +186,7 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
         + "|"
         + signed_df_full[C.COL_INT_STATE].astype(str).str.strip(),
     )
-    signed_count = (
-        signed_df_full.drop_duplicates(subset=["_pid"])
-        .shape[0]
-    )
+    signed_count = signed_df_full.drop_duplicates(subset=["_pid"]).shape[0]
     waiting_count = int(status_counts.get(C.STATUS_AGUARDANDO, 0))
 
     col_a.metric("Contratos assinados", signed_count)
@@ -236,9 +237,15 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     )
     last_week_count = signed_df[last_week_mask].shape[0]
     diff_week = week_count - last_week_count
-    progress_pct_week = (week_count / last_week_count * 100.0) if last_week_count > 0 else None
+    progress_pct_week = (
+        (week_count / last_week_count * 100.0) if last_week_count > 0 else None
+    )
     h2.metric(
-        "Acima vs semana passada" if diff_week > 0 else "Falta p/ igualar semana passada",
+        (
+            "Acima vs semana passada"
+            if diff_week > 0
+            else "Falta p/ igualar semana passada"
+        ),
         abs(diff_week),
         delta=(f"{progress_pct_week:.1f}%" if progress_pct_week is not None else None),
     )
@@ -250,11 +257,15 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     )
     last_month_count = signed_df[last_month_mask].shape[0]
     diff_month = month_count - last_month_count
-    progress_pct_month = (month_count / last_month_count * 100.0) if last_month_count > 0 else None
+    progress_pct_month = (
+        (month_count / last_month_count * 100.0) if last_month_count > 0 else None
+    )
     h3.metric(
         "Acima vs mês passado" if diff_month > 0 else "Falta p/ igualar mês passado",
         abs(diff_month),
-        delta=(f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None),
+        delta=(
+            f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None
+        ),
     )
 
     # Quarterly
@@ -289,9 +300,9 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     )
 
     # Captador Pie
-    by_captador_base = (
-        signed_df_full.drop_duplicates(subset=["_pid"])[[C.COL_INT_CAPTADOR, "_pid"]]
-    )
+    by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[
+        [C.COL_INT_CAPTADOR, "_pid"]
+    ]
     by_captador = by_captador_base[C.COL_INT_CAPTADOR].value_counts().reset_index()
     by_captador.columns = ["Captador", "Parceiros"]
     pie_fig = px.pie(
@@ -354,9 +365,7 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
     )
     signed_only["_ano"] = signed_only[C.COL_INT_DT].dt.year
     signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
-    monthly = (
-        signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
-    )
+    monthly = signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
     monthly = monthly.rename(columns={"_pid": "Contratos"})
     pt_months = {
         1: "Janeiro",
@@ -376,7 +385,7 @@ def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int |
         lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
         axis=1,
     )
-    monthly = monthly.sort_values(["_ano", "_mes"]) 
+    monthly = monthly.sort_values(["_ano", "_mes"])
     fig_month = px.bar(
         monthly,
         x="Mês",
@@ -414,7 +423,9 @@ def render_map_tab(df: pd.DataFrame):
     )
 
     # Optimized Geocoding
-    unique_locations = signed_unique[[C.COL_INT_CITY, C.COL_INT_STATE]].drop_duplicates()
+    unique_locations = signed_unique[
+        [C.COL_INT_CITY, C.COL_INT_STATE]
+    ].drop_duplicates()
     location_map = {}
     for _, row in unique_locations.iterrows():
         c, s = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
@@ -484,19 +495,25 @@ def render_map_tab(df: pd.DataFrame):
     )
 
     all_states = sorted(list(C.ESTADO_REGIAO.keys()))
-    present_states = signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
+    present_states = (
+        signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
+    )
     present_states = [s for s in present_states if s in C.ESTADO_REGIAO]
     missing_states = [s for s in all_states if s not in set(present_states)]
     if missing_states:
-        df_missing = pd.DataFrame({
-            "Estado": missing_states,
-            "Região": [C.ESTADO_REGIAO[s] for s in missing_states],
-        })
+        df_missing = pd.DataFrame(
+            {
+                "Estado": missing_states,
+                "Região": [C.ESTADO_REGIAO[s] for s in missing_states],
+            }
+        )
         st.markdown("### Estados sem parceiros")
         st.table(df_missing)
 
 
-def render_financial_tab(df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None):
+def render_financial_tab(
+    df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None
+):
     total = df[C.COL_INT_VALOR].sum()
     parceiros = (df[C.COL_INT_VALOR] * df[C.COL_INT_COMISSAO]).sum()
     equipe = 0.13 * (total - parceiros)
@@ -537,7 +554,7 @@ def render_financial_tab(df: pd.DataFrame, full_df: pd.DataFrame, end_date: date
         lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
         axis=1,
     )
-    monthly = monthly.sort_values(["_ano", "_mes"]) 
+    monthly = monthly.sort_values(["_ano", "_mes"])
     st.plotly_chart(
         px.bar(
             monthly,
@@ -554,19 +571,31 @@ def render_financial_tab(df: pd.DataFrame, full_df: pd.DataFrame, end_date: date
     focus_month = selected_month if selected_month is not None else now.month
     prev_year = focus_year if focus_month > 1 else focus_year - 1
     prev_month = focus_month - 1 if focus_month > 1 else 12
-    cur_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (full_df[C.COL_INT_DATA].dt.month == focus_month)
-    prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (full_df[C.COL_INT_DATA].dt.month == prev_month)
+    cur_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (
+        full_df[C.COL_INT_DATA].dt.month == focus_month
+    )
+    prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (
+        full_df[C.COL_INT_DATA].dt.month == prev_month
+    )
     cur_total_month = float(full_df.loc[cur_mask, C.COL_INT_VALOR].sum())
     prev_total_month = float(full_df.loc[prev_mask, C.COL_INT_VALOR].sum())
     diff = cur_total_month - prev_total_month
-    progress_pct = (cur_total_month / prev_total_month * 100.0) if prev_total_month > 0 else None
+    progress_pct = (
+        (cur_total_month / prev_total_month * 100.0) if prev_total_month > 0 else None
+    )
     k1, k2, k3 = st.columns(3)
     k1.metric("Faturamento mês atual", f"R$ {cur_total_month:,.2f}")
     k2.metric("Meta mês passado", f"R$ {prev_total_month:,.2f}")
-    k3.metric("Acima do mês passado" if diff > 0 else "Falta para igualar mês passado", f"R$ {abs(diff):,.2f}", delta=(f"{progress_pct:.1f}%" if progress_pct is not None else None))
+    k3.metric(
+        "Acima do mês passado" if diff > 0 else "Falta para igualar mês passado",
+        f"R$ {abs(diff):,.2f}",
+        delta=(f"{progress_pct:.1f}%" if progress_pct is not None else None),
+    )
 
     st.markdown("### Simulador de faturamento adicional")
-    sim_add = st.number_input("Valor adicional (R$)", min_value=0.0, step=100.0, value=0.0)
+    sim_add = st.number_input(
+        "Valor adicional (R$)", min_value=0.0, step=100.0, value=0.0
+    )
     avg_comissao = (parceiros / total) if total > 0 else 0.0
     sim_total = total + sim_add
     sim_parceiros = parceiros + sim_add * avg_comissao
@@ -579,8 +608,20 @@ def render_financial_tab(df: pd.DataFrame, full_df: pd.DataFrame, end_date: date
     s4.metric("Líquido empresa (simulado)", f"R$ {sim_liquido:,.2f}")
     cur_total_month_sim = cur_total_month + sim_add
     diff_sim = cur_total_month_sim - prev_total_month
-    progress_pct_sim = (cur_total_month_sim / prev_total_month * 100.0) if prev_total_month > 0 else None
-    st.metric("Acima do mês passado (simulado)" if diff_sim > 0 else "Falta p/ igualar mês passado (simulado)", f"R$ {abs(diff_sim):,.2f}", delta=(f"{progress_pct_sim:.1f}%" if progress_pct_sim is not None else None))
+    progress_pct_sim = (
+        (cur_total_month_sim / prev_total_month * 100.0)
+        if prev_total_month > 0
+        else None
+    )
+    st.metric(
+        (
+            "Acima do mês passado (simulado)"
+            if diff_sim > 0
+            else "Falta p/ igualar mês passado (simulado)"
+        ),
+        f"R$ {abs(diff_sim):,.2f}",
+        delta=(f"{progress_pct_sim:.1f}%" if progress_pct_sim is not None else None),
+    )
 
 
 def render_forecast_tab(df: pd.DataFrame):
@@ -710,6 +751,28 @@ month_label = st.sidebar.selectbox(
 )
 selected_month = int(month_label) if month_label != "Todos" else None
 
+# Contract Type Filter
+contract_type_options = ["Todos", "Técnico (Normal + 50%)", "Pós-Graduação"]
+selected_contract_type = st.sidebar.radio("Tipo de Contrato", contract_type_options)
+
+# Geographic Filters
+unique_regions = sorted([r for r in dados[C.COL_INT_REGION].unique() if r])
+selected_regions = st.sidebar.multiselect("Filtrar por Região", unique_regions)
+
+# State Filter (dependent on Region)
+if selected_regions:
+    available_states = sorted(
+        [
+            s
+            for s in dados[C.COL_INT_STATE].unique()
+            if s and C.ESTADO_REGIAO.get(s) in selected_regions
+        ]
+    )
+else:
+    available_states = sorted([s for s in dados[C.COL_INT_STATE].unique() if s])
+
+selected_states = st.sidebar.multiselect("Filtrar por Estado", available_states)
+
 # Apply Filters
 # Using standard masking since index optimization requires more complex setup for two distinct frames
 mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
@@ -717,6 +780,20 @@ mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
 )
 if selected_month:
     mask_dados &= dados[C.COL_INT_DT].dt.month == selected_month
+
+if selected_contract_type == "Técnico (Normal + 50%)":
+    mask_dados &= dados[C.COL_INT_CONTRACT_TYPE].isin(
+        [C.CONTRACT_TYPE_NORMAL, C.CONTRACT_TYPE_50]
+    )
+elif selected_contract_type == "Pós-Graduação":
+    mask_dados &= dados[C.COL_INT_CONTRACT_TYPE] == C.CONTRACT_TYPE_POS
+
+if selected_regions:
+    mask_dados &= dados[C.COL_INT_REGION].isin(selected_regions)
+
+if selected_states:
+    mask_dados &= dados[C.COL_INT_STATE].isin(selected_states)
+
 dados_filtered = dados[mask_dados].copy()
 
 mask_fat = (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (

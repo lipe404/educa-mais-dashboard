@@ -6,7 +6,9 @@ from io import StringIO
 import logging
 import constants as C
 
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 
@@ -70,12 +72,24 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
         return df
 
     process_column(df, C.COL_SRC_TIMESTAMP, C.COL_INT_DT, parse_datetime_any)
-    process_column(df, C.COL_SRC_STATUS, C.COL_INT_STATUS, lambda x: str(x).strip().upper(), "")
-    process_column(df, C.COL_SRC_CAPTADOR, C.COL_INT_CAPTADOR, lambda x: str(x).strip(), "")
-    process_column(df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(x).strip().upper(), "")
+    process_column(
+        df, C.COL_SRC_STATUS, C.COL_INT_STATUS, lambda x: str(x).strip().upper(), ""
+    )
+    process_column(
+        df, C.COL_SRC_CAPTADOR, C.COL_INT_CAPTADOR, lambda x: str(x).strip(), ""
+    )
+    process_column(
+        df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(x).strip().upper(), ""
+    )
     process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY, lambda x: str(x).strip(), "")
     process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP, lambda x: str(x).strip(), "")
-    process_column(df, C.COL_SRC_CONTRACT_TYPE, C.COL_INT_CONTRACT_TYPE, lambda x: str(x).strip(), "")
+    process_column(
+        df,
+        C.COL_SRC_CONTRACT_TYPE,
+        C.COL_INT_CONTRACT_TYPE,
+        lambda x: str(x).strip(),
+        "",
+    )
 
     try:
         df[C.COL_INT_PARTNER] = df.iloc[:, 0].astype(str).str.strip()
@@ -84,6 +98,10 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
 
     if C.COL_INT_DT in df.columns:
         df[C.COL_INT_DT] = pd.to_datetime(df[C.COL_INT_DT], errors="coerce")
+
+    # Map Regions
+    if C.COL_INT_STATE in df.columns:
+        df[C.COL_INT_REGION] = df[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna("Outros")
 
     return df
 
@@ -95,11 +113,16 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
         return df
 
     process_column(df, C.COL_SRC_VALOR, C.COL_INT_VALOR, to_float_any, 0.0)
-    process_column(df, C.COL_SRC_COMISSAO, C.COL_INT_COMISSAO, lambda x: to_float_any(x) / 100.0, 0.0)
+    process_column(
+        df,
+        C.COL_SRC_COMISSAO,
+        C.COL_INT_COMISSAO,
+        lambda x: to_float_any(x) / 100.0,
+        0.0,
+    )
     process_column(df, C.COL_SRC_DATA, C.COL_INT_DATA, parse_datetime_any, None)
 
     if C.COL_INT_DATA in df.columns:
         df[C.COL_INT_DATA] = pd.to_datetime(df[C.COL_INT_DATA], errors="coerce")
 
     return df
-
