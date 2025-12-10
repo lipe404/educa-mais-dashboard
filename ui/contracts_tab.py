@@ -70,11 +70,19 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     last_week_mask = (signed_df[C.COL_INT_DT].dt.date >= last_week_start) & (
         signed_df[C.COL_INT_DT].dt.date <= (last_week_start + timedelta(days=6))
     )
-    last_week_count = signed_df[last_week_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    last_week_count = (
+        signed_df[last_week_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    )
     diff_week = week_count - last_week_count
-    progress_pct_week = (week_count / last_week_count * 100.0) if last_week_count > 0 else None
+    progress_pct_week = (
+        (week_count / last_week_count * 100.0) if last_week_count > 0 else None
+    )
     h2.metric(
-        "Acima vs semana passada" if diff_week > 0 else "Falta p/ igualar semana passada",
+        (
+            "Acima vs semana passada"
+            if diff_week > 0
+            else "Falta p/ igualar semana passada"
+        ),
         abs(diff_week),
         delta=(f"{progress_pct_week:.1f}%" if progress_pct_week is not None else None),
     )
@@ -84,13 +92,19 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     last_month_mask = (signed_df[C.COL_INT_DT].dt.year == prev_year) & (
         signed_df[C.COL_INT_DT].dt.month == prev_month
     )
-    last_month_count = signed_df[last_month_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    last_month_count = (
+        signed_df[last_month_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    )
     diff_month = month_count - last_month_count
-    progress_pct_month = (month_count / last_month_count * 100.0) if last_month_count > 0 else None
+    progress_pct_month = (
+        (month_count / last_month_count * 100.0) if last_month_count > 0 else None
+    )
     h3.metric(
         "Acima vs mês passado" if diff_month > 0 else "Falta p/ igualar mês passado",
         abs(diff_month),
-        delta=(f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None),
+        delta=(
+            f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None
+        ),
     )
 
     q_start = ((focus_month - 1) // 3) * 3 + 1
@@ -99,7 +113,9 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         & (signed_df[C.COL_INT_DT].dt.month >= q_start)
         & (signed_df[C.COL_INT_DT].dt.month <= q_start + 2)
     )
-    quarterly_count = signed_df[quarterly_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    quarterly_count = (
+        signed_df[quarterly_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    )
 
     sem_start = 1 if focus_month <= 6 else 7
     semestral_mask = (
@@ -107,14 +123,22 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         & (signed_df[C.COL_INT_DT].dt.month >= sem_start)
         & (signed_df[C.COL_INT_DT].dt.month <= sem_start + 5)
     )
-    semiannual_count = signed_df[semestral_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    semiannual_count = (
+        signed_df[semestral_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    )
 
     g1, g2, g3 = st.columns([1, 1, 1])
     g1.plotly_chart(gauge_chart(month_count, 30, "Meta mensal 30"), width="stretch")
-    g2.plotly_chart(gauge_chart(quarterly_count, 90, "Meta trimestral 90"), width="stretch")
-    g3.plotly_chart(gauge_chart(semiannual_count, 180, "Meta semestral 180"), width="stretch")
+    g2.plotly_chart(
+        gauge_chart(quarterly_count, 90, "Meta trimestral 90"), width="stretch"
+    )
+    g3.plotly_chart(
+        gauge_chart(semiannual_count, 180, "Meta semestral 180"), width="stretch"
+    )
 
-    by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[[C.COL_INT_CAPTADOR, "_pid"]]
+    by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[
+        [C.COL_INT_CAPTADOR, "_pid"]
+    ]
     by_captador = by_captador_base[C.COL_INT_CAPTADOR].value_counts().reset_index()
     by_captador.columns = ["Captador", "Parceiros"]
     pie_fig = px.pie(
@@ -140,7 +164,9 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     )
     rank_map = {C.STATUS_ASSINADO: 2, C.STATUS_AGUARDANDO: 1, C.STATUS_CANCELADO: 0}
     df_status["_rank"] = df_status[C.COL_INT_STATUS].map(rank_map).fillna(-1)
-    df_partner = df_status.sort_values("_rank", ascending=False).drop_duplicates(subset=["_pid"])
+    df_partner = df_status.sort_values("_rank", ascending=False).drop_duplicates(
+        subset=["_pid"]
+    )
     status_counts_dedup = df_partner[C.COL_INT_STATUS].value_counts()
     status_df = status_counts_dedup.reindex(
         [C.STATUS_ASSINADO, C.STATUS_AGUARDANDO, C.STATUS_CANCELADO], fill_value=0
@@ -152,7 +178,10 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         y="Quantidade",
         title="Assinados vs Aguardando",
         color="Status",
-        color_discrete_map={C.STATUS_ASSINADO: C.COLOR_PRIMARY, C.STATUS_AGUARDANDO: C.COLOR_SECONDARY},
+        color_discrete_map={
+            C.STATUS_ASSINADO: C.COLOR_PRIMARY,
+            C.STATUS_AGUARDANDO: C.COLOR_SECONDARY,
+        },
     )
     st.plotly_chart(bar_fig, width="stretch")
 
@@ -163,7 +192,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         signed_only["_pid"] != "",
         signed_only[C.COL_INT_CEP].astype(str).str.strip(),
     )
-    signed_only["_pid"] = signed_only["_pid"] .where(
+    signed_only["_pid"] = signed_only["_pid"].where(
         signed_only["_pid"] != "",
         signed_only[C.COL_INT_CITY].astype(str).str.strip()
         + "|"
@@ -173,9 +202,30 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
     monthly = signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
     monthly = monthly.rename(columns={"_pid": "Contratos"})
-    pt_months = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
-    monthly["Mês"] = monthly.apply(lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}", axis=1)
-    monthly = monthly.sort_values(["_ano", "_mes"]) 
-    fig_month = px.bar(monthly, x="Mês", y="Contratos", title="Contratos assinados por mês", color_discrete_sequence=[C.COLOR_PRIMARY])
+    pt_months = {
+        1: "Janeiro",
+        2: "Fevereiro",
+        3: "Março",
+        4: "Abril",
+        5: "Maio",
+        6: "Junho",
+        7: "Julho",
+        8: "Agosto",
+        9: "Setembro",
+        10: "Outubro",
+        11: "Novembro",
+        12: "Dezembro",
+    }
+    monthly["Mês"] = monthly.apply(
+        lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+        axis=1,
+    )
+    monthly = monthly.sort_values(["_ano", "_mes"])
+    fig_month = px.bar(
+        monthly,
+        x="Mês",
+        y="Contratos",
+        title="Contratos assinados por mês",
+        color_discrete_sequence=[C.COLOR_PRIMARY],
+    )
     st.plotly_chart(fig_month, width="stretch")
-

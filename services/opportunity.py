@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 from typing import List, Dict
 import streamlit as st
+
 try:
     import constants as C
 except Exception:
@@ -45,7 +46,12 @@ def get_populacao_2022_municipios(ids: List[str]) -> pd.DataFrame:
             r.raise_for_status()
             j = r.json()
             for row in j[1:]:
-                batch.append({"id": str(row.get("D1C", "")), "pop_2022": int(float(row.get("V", 0)))})
+                batch.append(
+                    {
+                        "id": str(row.get("D1C", "")),
+                        "pop_2022": int(float(row.get("V", 0))),
+                    }
+                )
         except Exception:
             for mid in batch_ids:
                 try:
@@ -54,7 +60,12 @@ def get_populacao_2022_municipios(ids: List[str]) -> pd.DataFrame:
                     rr.raise_for_status()
                     jj = rr.json()
                     for row in jj[1:]:
-                        batch.append({"id": str(row.get("D1C", "")), "pop_2022": int(float(row.get("V", 0)))})
+                        batch.append(
+                            {
+                                "id": str(row.get("D1C", "")),
+                                "pop_2022": int(float(row.get("V", 0))),
+                            }
+                        )
                 except Exception:
                     continue
     return pd.DataFrame(batch)
@@ -68,7 +79,9 @@ def get_populacao_2022_all() -> pd.DataFrame:
         j = r.json()
         rows = []
         for row in j[1:]:
-            rows.append({"id": str(row.get("D1C", "")), "pop_2022": int(float(row.get("V", 0)))})
+            rows.append(
+                {"id": str(row.get("D1C", "")), "pop_2022": int(float(row.get("V", 0)))}
+            )
         return pd.DataFrame(rows)
     except Exception:
         return pd.DataFrame(columns=["id", "pop_2022"])
@@ -95,11 +108,17 @@ def get_municipios_por_uf_simple(uf: str) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["id", "nome", "uf", "regiao"])
 
 
-def build_oportunidade_por_uf(dados_df: pd.DataFrame, selected_ufs: List[str]) -> pd.DataFrame:
+def build_oportunidade_por_uf(
+    dados_df: pd.DataFrame, selected_ufs: List[str]
+) -> pd.DataFrame:
     presentes = (
         dados_df[["_cidade", "_estado"]]
         .dropna()
-        .assign(key=lambda d: d["_cidade"].astype(str).str.strip().str.upper() + "|" + d["_estado"].astype(str).str.strip().str.upper())
+        .assign(
+            key=lambda d: d["_cidade"].astype(str).str.strip().str.upper()
+            + "|"
+            + d["_estado"].astype(str).str.strip().str.upper()
+        )
     )
     presentes_keys = set(presentes["key"].unique().tolist())
 
@@ -117,10 +136,21 @@ def build_oportunidade_por_uf(dados_df: pd.DataFrame, selected_ufs: List[str]) -
             df = mun.merge(pop, on="id", how="left")
         df["pop_2022"] = df["pop_2022"].fillna(0).astype(int)
         df["presenca"] = df.apply(
-            lambda r: 1 if (str(r["nome"]).strip().upper() + "|" + str(r["uf"]).strip().upper()) in presentes_keys else 0,
+            lambda r: (
+                1
+                if (str(r["nome"]).strip().upper() + "|" + str(r["uf"]).strip().upper())
+                in presentes_keys
+                else 0
+            ),
             axis=1,
         )
-        df["score"] = df["pop_2022"].astype(float) * (1 - df["presenca"])  
+        df["score"] = df["pop_2022"].astype(float) * (1 - df["presenca"])
         frames.append(df)
-    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["id", "nome", "uf", "regiao", "pop_2022", "presenca", "score"])
+    out = (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(
+            columns=["id", "nome", "uf", "regiao", "pop_2022", "presenca", "score"]
+        )
+    )
     return out.sort_values(["uf", "score"], ascending=[True, False])

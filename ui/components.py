@@ -17,4 +17,3 @@ def gauge_chart(value: float, target: float, title: str) -> go.Figure:
     )
     fig.update_layout(height=250, margin=dict(l=10, r=10, t=40, b=10))
     return fig
-

@@ -810,7 +810,9 @@ elif selected_contract_type == "Pós-Graduação":
 fat_filtered = faturamento[mask_fat].copy()
 
 # Render Tabs
-t1, t2, t3, t4, t5 = st.tabs(["Contratos", "Mapa", "Faturamento", "Previsões", "Análise de Oportunidade"])
+t1, t2, t3, t4, t5 = st.tabs(
+    ["Contratos", "Mapa", "Faturamento", "Previsões", "Análise de Oportunidade"]
+)
 
 with t1:
     contracts_tab.render(dados_filtered, end_date, selected_month)
