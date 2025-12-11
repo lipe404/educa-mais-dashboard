@@ -10,7 +10,7 @@ from services.opportunity import build_oportunidade_por_uf
 from services.industry import get_unidades_locais, get_cnae_sections
 
 load_dotenv()
-API_KEY = os.getenv("KEY_API") or "@educamais@123"
+API_KEY = os.getenv("KEY_API")
 geo_service = GeocodingService()
 
 COURSES = {

@@ -112,6 +112,12 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
     if df.empty:
         return df
 
+    # Process partner column (assuming it's in column A, index 0)
+    try:
+        df[C.COL_INT_PARTNER] = df.iloc[:, 0].astype(str).str.strip()
+    except Exception:
+        df[C.COL_INT_PARTNER] = ""
+
     process_column(df, C.COL_SRC_VALOR, C.COL_INT_VALOR, to_float_any, 0.0)
     process_column(
         df,

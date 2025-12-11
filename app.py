@@ -14,7 +14,7 @@ from geocoding_service import GeocodingService
 import forecasting
 import constants as C
 from services import data as data_service
-from ui import contracts_tab, map_tab, financial_tab, forecast_tab, opportunity_tab
+from ui import contracts_tab, map_tab, financial_tab, forecast_tab, opportunity_tab, partners_tab
 
 # Setup Logging
 logging.basicConfig(
@@ -810,8 +810,8 @@ elif selected_contract_type == "Pós-Graduação":
 fat_filtered = faturamento[mask_fat].copy()
 
 # Render Tabs
-t1, t2, t3, t4, t5 = st.tabs(
-    ["Contratos", "Mapa", "Faturamento", "Previsões", "Análise de Oportunidade"]
+t1, t2, t3, t4, t5, t6 = st.tabs(
+    ["Contratos", "Mapa", "Faturamento", "Previsões", "Análise de Oportunidade", "Parceiros"]
 )
 
 with t1:
@@ -824,3 +824,5 @@ with t4:
     forecast_tab.render(dados_filtered, fat_filtered)
 with t5:
     opportunity_tab.render(dados_filtered)
+with t6:
+    partners_tab.render(fat_filtered)
