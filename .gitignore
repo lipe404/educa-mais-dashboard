@@ -1,3 +1,5 @@
 .env
 # Colocar tudo dentro da pasta __pycache__ e ignorar
 __pycache__/
+
+analise.md

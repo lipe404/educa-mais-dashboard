@@ -1,7 +1,10 @@
+
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date
+import datetime
 import constants as C
 
 
@@ -12,6 +15,20 @@ def render(
     parceiros = (df[C.COL_INT_VALOR] * df[C.COL_INT_COMISSAO]).sum()
     equipe = 0.13 * (total - parceiros)
     liquido = total - parceiros - equipe
+
+    # Novos KPIs
+    today = date.today()
+    fat_hoje = df[df[C.COL_INT_DATA].dt.date == today][C.COL_INT_VALOR].sum()
+    start_of_week = today - datetime.timedelta(days=today.weekday())
+    end_of_week = start_of_week + datetime.timedelta(days=6)
+    fat_semana = df[(df[C.COL_INT_DATA].dt.date >= start_of_week) & (df[C.COL_INT_DATA].dt.date <= end_of_week)][C.COL_INT_VALOR].sum()
+    start_of_month = today.replace(day=1)
+    fat_mes = df[df[C.COL_INT_DATA].dt.date >= start_of_month][C.COL_INT_VALOR].sum()
+
+    new_k1, new_k2, new_k3 = st.columns(3)
+    new_k1.metric("Faturamento hoje", f"R$ {fat_hoje:,.2f}")
+    new_k2.metric("Faturamento essa semana", f"R$ {fat_semana:,.2f}")
+    new_k3.metric("Faturamento este mês", f"R$ {fat_mes:,.2f}")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Faturamento total", f"R$ {total:,.2f}")
