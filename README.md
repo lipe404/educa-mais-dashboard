@@ -1,15 +1,17 @@
-# Educa Mais Dashboard 🚀📊
+# Educa Mais Dashboard
 
 Dashboard em `Streamlit` para acompanhar contratos, mapa de parceiros, faturamento e previsões, com estrutura modular e deduplicação por parceiro para métricas consistentes.
 
-## ✨ Visão Geral
+## Visão Geral
+
 - Origem dos dados via Google Sheets (CSV export) usando `DEFAULT_SHEET_ID`.
 - Abas: `Contratos`, `Mapa`, `Faturamento`, `Previsões`.
 - Cache de dados e geocodificação (SQLite) para performance estável.
 - Visualizações com `Plotly`, KPIs e simuladores.
 - Botão de `Recarregar dados` no menu lateral para limpar cache e recarregar.
 
-## 🧩 Principais Funcionalidades
+## Principais Funcionalidades
+
 - `Contratos`
   - Métricas: `Contratos assinados`, `Contratos aguardando`, `Assinados hoje`, `Assinados este mês`, `Assinados esta semana`.
   - Metas: indicadores `mensal`, `trimestral`, `semestral` com dedup por parceiro.
@@ -26,7 +28,8 @@ Dashboard em `Streamlit` para acompanhar contratos, mapa de parceiros, faturamen
   - Modelos: `Prophet (Facebook AI)` e `Holt-Winters (Sazonal)`.
   - Horizonte configurável (1 semana a 1 ano), insights automáticos e ajustes de sustentabilidade.
 
-## 🗂️ Estrutura Modular
+## Estrutura Modular
+
 ```
 app.py                        # Orquestra as abas e filtros
 constants.py                  # Constantes de colunas, cores e mapas
@@ -47,7 +50,8 @@ requirements.txt              # Dependências
 verify_advanced_forecast.py   # Verificação rápida de libs de previsão
 ```
 
-## 🧾 Modelo de Dados
+## Modelo de Dados
+
 - Aba `Dados` (→ Interno):
   - `TIMESTAMP` → `'_dt'` (datetime)
   - `CONTRATO ASSINADO` → `'_status'` (`ASSINADO`/`AGUARDANDO`/`CANCELADO`)
@@ -63,7 +67,8 @@ verify_advanced_forecast.py   # Verificação rápida de libs de previsão
   - `VALOR` → `'_valor'` (float)
   - `COMISSÃO` → `'_comissao'` (fração, ex.: 10% → 0.10)
 
-## 🔧 Instalação
+## Instalação
+
 1. Criar ambiente virtual
    ```bash
    python -m venv venv
@@ -77,50 +82,62 @@ verify_advanced_forecast.py   # Verificação rápida de libs de previsão
    pip install -r requirements.txt
    ```
 
-## ⚙️ Configuração
+## Configuração
+
 - Criar `.env` na raiz:
   ```env
   DEFAULT_SHEET_ID=<ID_da_sua_planilha_google>
   ```
 - Geocodificação: `Nominatim` (OpenStreetMap) com cache `geocache.db` (~1 req/s).
 
-## ▶️ Execução
+## Execução
+
 ```bash
 streamlit run app.py
 ```
+
 - Abra `http://localhost:8501`.
 
-## 🧭 Filtros e Lógica Temporal
+## Filtros e Lógica Temporal
+
 - Menu lateral: intervalo de datas e, opcionalmente, mês (ex.: `10`, `11`, `12`).
 - Botão `Recarregar dados`: limpa cache e recarrega todas as abas.
 - Semana considera `segunda–domingo` ancorado em `end_date`.
 
-## 📈 Previsões
+## Previsões
+
 - Séries diárias agregadas, geração de horizontes e insights.
 - Ajustes: viés moderado (+5%), piso de sustentabilidade (~40%) e ruído orgânico.
 
-## 🛡️ Boas Práticas
+## Boas Práticas
+
 - Não versionar segredos; use `.env`.
 - Verificar datas inconsistentes; respeitar limites da Nominatim.
 
-## 🧪 Verificação Rápida
+## Verificação Rápida
+
 ```bash
 python verify_advanced_forecast.py
 ```
 
-## 📍 Cores e Mapa
+## Cores e Mapa
+
 - Paleta principal: `constants.py` (`COLOR_PRIMARY`, `COLOR_SECONDARY`).
 - Mapa `open-street-map` sem token.
 
-## 🗺️ Regiões do Brasil
+## Regiões do Brasil
+
 - UF → Região em `constants.py` (`ESTADO_REGIAO`).
 
-## 🗓️ Notas sobre Datas
+## Notas sobre Datas
+
 - Parser tolerante a `dd/mm/aaaa HH:MM:SS`.
 - Datas fora de faixa podem ser saneadas conforme `todo.md`.
 
-## 📚 Roadmap
+## Roadmap
+
 - Consulte `todo.md` para evolução e otimizações.
 
 ---
+
 Feito com ❤️ para acelerar decisões e dar visibilidade ao desempenho comercial.
