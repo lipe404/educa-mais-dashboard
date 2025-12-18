@@ -2,6 +2,7 @@ import pandas as pd
 import forecasting
 from datetime import datetime
 import numpy as np
+import constants as C
 
 
 def test_advanced_forecast():
@@ -29,9 +30,9 @@ def test_advanced_forecast():
     if forecasting.PROPHET_AVAILABLE:
         try:
             forecast = forecasting.generate_forecast(
-                df, "Date", "Value", "Prophet (Facebook AI)", 14
+                df, "Date", "Value", C.ALGORITHM_PROPHET, 14
             )
-            future = forecast[forecast["Type"] == "Previsão"]
+            future = forecast[forecast[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST]
             if len(future) == 14:
                 print("✅ Prophet generated 14 days forecast.")
             else:
@@ -46,9 +47,9 @@ def test_advanced_forecast():
     if forecasting.STATSMODELS_AVAILABLE:
         try:
             forecast = forecasting.generate_forecast(
-                df, "Date", "Value", "Holt-Winters (Sazonal)", 14
+                df, "Date", "Value", C.ALGORITHM_HOLT_WINTERS, 14
             )
-            future = forecast[forecast["Type"] == "Previsão"]
+            future = forecast[forecast[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST]
             if len(future) == 14:
                 print("✅ Holt-Winters generated 14 days forecast.")
             else:
@@ -59,7 +60,7 @@ def test_advanced_forecast():
     # Test Insights
     print("\nTesting Insights...")
     dummy_forecast = df.copy()  # Just for shape
-    dummy_forecast["Type"] = "Previsão"
+    dummy_forecast[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_FORECAST
     insights = forecasting.generate_smart_insights(df, "Date", "Value", dummy_forecast)
     if "Análise Inteligente" in insights:
         print("✅ Insights generated.")

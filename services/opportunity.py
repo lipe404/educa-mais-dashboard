@@ -10,9 +10,9 @@ except Exception:
 import constants as C
 
 
-IBGE_MUNICIPIOS_UF = "https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios?orderBy=nome"
-SIDRA_POP_2022 = "https://apisidra.ibge.gov.br/values/t/6579/n6/{ids}/v/9324/p/last"
-SIDRA_POP_2022_ALL = "https://apisidra.ibge.gov.br/values/t/6579/n6/all/v/9324/p/last"
+IBGE_MUNICIPIOS_UF = C.API_URL_IBGE_MUNICIPIOS_UF
+SIDRA_POP_2022 = C.API_URL_SIDRA_POP_2022
+SIDRA_POP_2022_ALL = C.API_URL_SIDRA_POP_2022_ALL
 
 
 @st.cache_data(ttl=86400, show_spinner=False)

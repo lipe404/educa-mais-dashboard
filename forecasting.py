@@ -3,6 +3,7 @@ import numpy as np
 from datetime import timedelta, date
 import logging
 import math
+import constants as C
 
 try:
     from prophet import Prophet
@@ -55,9 +56,9 @@ def generate_forecast(
     # ALGORITHMS
     # ---------------------------------------------------------
 
-    if algorithm == "Prophet (Facebook AI)":
+    if algorithm == C.ALGORITHM_PROPHET:
         if not PROPHET_AVAILABLE:
-            raise ImportError("Biblioteca Prophet não instalada.")
+            raise ImportError(C.ERR_MSG_PROPHET_NOT_INSTALLED)
 
         # Prepare Data for Prophet (ds, y)
         p_df = daily.rename(columns={date_col: "ds", value_col: "y"})
@@ -71,9 +72,9 @@ def generate_forecast(
         # Extract only future part
         forecast_values = forecast.tail(full_horizon_days)["yhat"].values
 
-    elif algorithm == "Holt-Winters (Sazonal)":
+    elif algorithm == C.ALGORITHM_HOLT_WINTERS:
         if not STATSMODELS_AVAILABLE:
-            raise ImportError("Biblioteca statsmodels não instalada.")
+            raise ImportError(C.ERR_MSG_STATSMODELS_NOT_INSTALLED)
 
         # Add small constant to avoid zero issues if multiplicative
         series = daily[value_col] + 1e-6
@@ -139,14 +140,11 @@ def generate_forecast(
     # Final cleanup: Ensure no negatives
     forecast_values = np.maximum(forecast_values, 0)
 
-    # Final cleanup: Ensure no negatives
-    forecast_values = np.maximum(forecast_values, 0)
-
     future_df[value_col] = forecast_values
-    future_df["Type"] = "Previsão"
+    future_df[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_FORECAST
 
     # Combine
-    daily["Type"] = "Histórico"
+    daily[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_HISTORY
     if "days_from_start" in daily.columns:
         daily = daily.drop(columns=["days_from_start"])
 
@@ -155,7 +153,12 @@ def generate_forecast(
 
 
 def generate_smart_insights(
-    df: pd.DataFrame, date_col: str, value_col: str, forecast_df: pd.DataFrame
+    df: pd.DataFrame,
+    date_col: str,
+    value_col: str,
+    forecast_df: pd.DataFrame,
+    unit_label: str = C.LABEL_NEW_CONTRACTS,
+    is_currency: bool = False,
 ) -> str:
     """
     Generates text analysis of the historical and forecast data.
@@ -163,7 +166,7 @@ def generate_smart_insights(
     # 1. Historical Analysis
     daily = df.groupby(df[date_col].dt.date)[value_col].sum().sort_index()
     if len(daily) < 14:
-        return "Dados insuficientes para análise detalhada (mínimo 2 semanas)."
+        return C.MSG_INSUFFICIENT_DATA
 
     recent_avg = daily.tail(7).mean()
     prev_avg = daily.iloc[-14:-7].mean()
@@ -173,39 +176,44 @@ def generate_smart_insights(
         trend_pct = ((recent_avg - prev_avg) / prev_avg) * 100
 
     # 2. Forecast Analysis
-    future_only = forecast_df[forecast_df["Type"] == "Previsão"]
+    future_only = forecast_df[forecast_df[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST]
     future_sum = future_only[value_col].sum()
     future_daily_avg = future_only[value_col].mean()
 
     horizon_days = len(future_only)
 
     # 3. Construct Text
-    text = f"### 🧠 Análise Inteligente\n\n"
+    text = C.MSG_SMART_ANALYSIS_TITLE
 
     # Trend
     if trend_pct > 5:
         emoji = "🚀"
-        trend_desc = "Crescimento acelerado"
+        trend_desc = C.INSIGHT_GROWTH
     elif trend_pct < -5:
         emoji = "⚠️"
-        trend_desc = "Desaceleração recente"
+        trend_desc = C.INSIGHT_SLOWDOWN
     else:
         emoji = "⚖️"
-        trend_desc = "Estabilidade"
+        trend_desc = C.INSIGHT_STABLE
 
     text += (
-        f"**Tendência Recente (7 dias):** {trend_desc} ({trend_pct:+.1f}%) {emoji}\n\n"
+        f"{C.MSG_RECENT_TREND} {trend_desc} ({trend_pct:+.1f}%) {emoji}\n\n"
     )
 
-    text += f"**Previsão para os próximos {horizon_days} dias:**\n"
-    text += f"- **Total estimado:** {int(future_sum)} novos contratos\n"
-    text += f"- **Média diária esperada:** {future_daily_avg:.1f} contratos/dia\n\n"
+    text += C.MSG_FORECAST_NEXT_DAYS.format(horizon_days=horizon_days)
+
+    if is_currency:
+        text += f"- {C.MSG_ESTIMATED_TOTAL} R$ {future_sum:,.2f}\n"
+        text += f"- {C.MSG_EXPECTED_DAILY_AVG} R$ {future_daily_avg:,.2f}/dia\n\n"
+    else:
+        text += f"- {C.MSG_ESTIMATED_TOTAL} {int(future_sum)} {unit_label}\n"
+        text += f"- {C.MSG_EXPECTED_DAILY_AVG} {future_daily_avg:.1f} {unit_label}/dia\n\n"
 
     if future_daily_avg > recent_avg * 1.05:
-        text += "> **Insight:** O modelo (ajustado com otimismo) prevê uma performance sólida para o período."
+        text += f"{C.MSG_INSIGHT_PREFIX} {C.INSIGHT_POSITIVE}"
     elif future_daily_avg < recent_avg * 0.9:
-        text += "> **Insight:** O modelo prevê uma leve queda. Verifique campanhas ou sazonalidade."
+        text += f"{C.MSG_INSIGHT_PREFIX} {C.INSIGHT_NEGATIVE}"
     else:
-        text += "> **Insight:** A previsão indica manutenção do ritmo atual de vendas."
+        text += f"{C.MSG_INSIGHT_PREFIX} {C.INSIGHT_NEUTRAL}"
 
     return text

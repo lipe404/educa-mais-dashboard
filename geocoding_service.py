@@ -3,13 +3,14 @@ import time
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 import os
+import constants as C
 
 
 class GeocodingService:
-    def __init__(self, db_path="geocache.db"):
+    def __init__(self, db_path=C.GEO_DB_PATH):
         self.db_path = db_path
         self._init_db()
-        self.geolocator = Nominatim(user_agent="educa-mais-dashboard-v2")
+        self.geolocator = Nominatim(user_agent=C.GEO_USER_AGENT)
 
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -42,7 +43,7 @@ class GeocodingService:
                 return row[0], row[1]
 
         # Fetch from API
-        query = f"{city}, {state}, Brasil"
+        query = f"{city}, {state}, {C.GEO_COUNTRY}"
         try:
             # Respect rate limit of Nominatim (1 req/sec)
             # We can't easily sync this across processes without a lock file or server,

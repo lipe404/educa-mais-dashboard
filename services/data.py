@@ -35,7 +35,7 @@ def validate_columns(df: pd.DataFrame, required: list[str]) -> bool:
     missing = [c for c in required if c not in df.columns]
     if missing:
         logger.error(f"Missing columns: {missing}")
-        st.error(f"Erro: Colunas faltando na planilha: {', '.join(missing)}")
+        st.error(C.ERR_MSG_MISSING_COLUMNS.format(columns=', '.join(missing)))
         return False
     return True
 
@@ -61,13 +61,13 @@ def load_sheet(sheet_id: str, sheet_name: str) -> pd.DataFrame:
         return df
     except Exception as e:
         logger.error(f"Error loading {sheet_name}: {e}")
-        st.error(f"Erro ao carregar aba '{sheet_name}': {e}")
+        st.error(C.ERR_MSG_LOADING_SHEET.format(sheet_name=sheet_name, error=e))
         return pd.DataFrame()
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_dados(sheet_id: str) -> pd.DataFrame:
-    df = load_sheet(sheet_id, "Dados")
+    df = load_sheet(sheet_id, C.SHEET_NAME_DATA)
     if df.empty:
         return df
 
@@ -101,14 +101,14 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
 
     # Map Regions
     if C.COL_INT_STATE in df.columns:
-        df[C.COL_INT_REGION] = df[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna("Outros")
+        df[C.COL_INT_REGION] = df[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
 
     return df
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
 def get_faturamento(sheet_id: str) -> pd.DataFrame:
-    df = load_sheet(sheet_id, "FATURAMENTO")
+    df = load_sheet(sheet_id, C.SHEET_NAME_FINANCIAL)
     if df.empty:
         return df
 

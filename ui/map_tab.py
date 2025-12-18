@@ -25,11 +25,11 @@ def render(df: pd.DataFrame):
 
     k1, k2 = st.columns([1, 1])
     k1.metric(
-        "Estados presentes",
+        C.UI_LABEL_STATES_PRESENT,
         signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().nunique(),
     )
     k2.metric(
-        "Cidades presentes",
+        C.UI_LABEL_CITIES_PRESENT,
         signed_unique[C.COL_INT_CITY].replace("", pd.NA).dropna().nunique(),
     )
 
@@ -69,7 +69,7 @@ def render(df: pd.DataFrame):
             color_discrete_sequence=[C.COLOR_SECONDARY],
             zoom=3,
             center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
-            title="Distribuição Geográfica de Contratos Assinados",
+            title=C.UI_LABEL_MAP_DISTRIBUTION_TITLE,
         )
         fig_map.update_layout(
             mapbox_style="open-street-map",
@@ -79,23 +79,23 @@ def render(df: pd.DataFrame):
         st.plotly_chart(fig_map, width="stretch")
 
     counts_state = signed_unique[C.COL_INT_STATE].value_counts().reset_index()
-    counts_state.columns = ["Estado", "Parceiros"]
+    counts_state.columns = [C.UI_LABEL_COL_STATE, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
-        px.bar(counts_state, x="Estado", y="Parceiros", title="Parceiros por estado"),
+        px.bar(counts_state, x=C.UI_LABEL_COL_STATE, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_STATE),
         width="stretch",
     )
 
     counts_city = signed_unique[C.COL_INT_CITY].value_counts().reset_index()
-    counts_city.columns = ["Cidade", "Parceiros"]
+    counts_city.columns = [C.UI_LABEL_COL_CITY, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
-        px.bar(counts_city, x="Cidade", y="Parceiros", title="Parceiros por cidade"),
+        px.bar(counts_city, x=C.UI_LABEL_COL_CITY, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_CITY),
         width="stretch",
     )
 
     counts_region = signed_unique[C.COL_INT_REGION].value_counts().reset_index()
-    counts_region.columns = ["Região", "Parceiros"]
+    counts_region.columns = [C.UI_LABEL_COL_REGION, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
-        px.bar(counts_region, x="Região", y="Parceiros", title="Parceiros por região"),
+        px.bar(counts_region, x=C.UI_LABEL_COL_REGION, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_REGION),
         width="stretch",
     )
 
@@ -108,9 +108,9 @@ def render(df: pd.DataFrame):
     if missing_states:
         df_missing = pd.DataFrame(
             {
-                "Estado": missing_states,
-                "Região": [C.ESTADO_REGIAO[s] for s in missing_states],
+                C.UI_LABEL_COL_STATE: missing_states,
+                C.UI_LABEL_COL_REGION: [C.ESTADO_REGIAO[s] for s in missing_states],
             }
         )
-        st.markdown("### Estados sem parceiros")
+        st.markdown(C.UI_LABEL_STATES_WITHOUT_PARTNERS)
         st.table(df_missing)

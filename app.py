@@ -1,17 +1,10 @@
 import streamlit as st
 import pandas as pd
-import requests
-import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime, date, timedelta
-from dateutil import parser
-from io import StringIO
 import os
 import logging
+from datetime import date
 from dotenv import load_dotenv
 
-from geocoding_service import GeocodingService
-import forecasting
 import constants as C
 from services import data as data_service
 from ui import contracts_tab, map_tab, financial_tab, forecast_tab, opportunity_tab, partners_tab
@@ -22,713 +15,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="Educa Mais Dashboard", layout="wide")
+st.set_page_config(page_title=C.APP_TITLE, layout="wide")
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
-geo_service = GeocodingService()
 
 # -----------------------------------------------------------------------------
-# Helpers
+# Main App Logic
 # -----------------------------------------------------------------------------
 
-
-def parse_datetime_any(s: str) -> datetime | None:
-    if pd.isna(s):
-        return None
-    try:
-        return parser.parse(str(s), dayfirst=True)
-    except Exception:
-        try:
-            return parser.parse(str(s), dayfirst=False)
-        except Exception:
-            return None
-
-
-def to_float_any(x) -> float:
-    try:
-        return float(str(x).replace(",", "."))
-    except Exception:
-        return float("nan")
-
-
-def validate_columns(df: pd.DataFrame, required: list[str]) -> bool:
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        logger.error(f"Missing columns: {missing}")
-        st.error(f"Erro: Colunas faltando na planilha: {', '.join(missing)}")
-        return False
-    return True
-
-
-def process_column(df: pd.DataFrame, src: str, dest: str, func=None, default=None):
-    if src in df.columns:
-        if func:
-            df[dest] = df[src].apply(func)
-        else:
-            df[dest] = df[src]
-    else:
-        df[dest] = default
-
-
-@st.cache_data(show_spinner=False, ttl=3600)
-def load_sheet(sheet_id: str, sheet_name: str) -> pd.DataFrame:
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-    try:
-        logger.info(f"Loading sheet: {sheet_name}")
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        df = pd.read_csv(StringIO(r.text))
-        return df
-    except Exception as e:
-        logger.error(f"Error loading {sheet_name}: {e}")
-        st.error(f"Erro ao carregar aba '{sheet_name}': {e}")
-        return pd.DataFrame()
-
-
-@st.cache_data(show_spinner=False, ttl=3600)
-def get_dados(sheet_id: str) -> pd.DataFrame:
-    df = load_sheet(sheet_id, "Dados")
-    if df.empty:
-        return df
-
-    # Data Processing
-    process_column(df, C.COL_SRC_TIMESTAMP, C.COL_INT_DT, parse_datetime_any)
-    process_column(
-        df, C.COL_SRC_STATUS, C.COL_INT_STATUS, lambda x: str(x).strip().upper(), ""
-    )
-    process_column(
-        df, C.COL_SRC_CAPTADOR, C.COL_INT_CAPTADOR, lambda x: str(x).strip(), ""
-    )
-    process_column(
-        df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(x).strip().upper(), ""
-    )
-    process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY, lambda x: str(x).strip(), "")
-    process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP, lambda x: str(x).strip(), "")
-    process_column(
-        df,
-        C.COL_SRC_CONTRACT_TYPE,
-        C.COL_INT_CONTRACT_TYPE,
-        lambda x: str(x).strip(),
-        "",
-    )
-
-    try:
-        df[C.COL_INT_PARTNER] = df.iloc[:, 0].astype(str).str.strip()
-    except Exception:
-        df[C.COL_INT_PARTNER] = ""
-
-    # Set Temporal Index for faster filtering
-    # We keep '_dt' generic column too but index helps
-    if C.COL_INT_DT in df.columns:
-        # Ensure datetime type
-        df[C.COL_INT_DT] = pd.to_datetime(df[C.COL_INT_DT], errors="coerce")
-
-    return df
-
-
-@st.cache_data(show_spinner=False, ttl=3600)
-def get_faturamento(sheet_id: str) -> pd.DataFrame:
-    df = load_sheet(sheet_id, "FATURAMENTO")
-    if df.empty:
-        return df
-
-    process_column(df, C.COL_SRC_VALOR, C.COL_INT_VALOR, to_float_any, 0.0)
-    process_column(
-        df,
-        C.COL_SRC_COMISSAO,
-        C.COL_INT_COMISSAO,
-        lambda x: to_float_any(x) / 100.0,
-        0.0,
-    )
-    process_column(df, C.COL_SRC_DATA, C.COL_INT_DATA, parse_datetime_any, None)
-
-    if C.COL_INT_DATA in df.columns:
-        df[C.COL_INT_DATA] = pd.to_datetime(df[C.COL_INT_DATA], errors="coerce")
-
-    return df
-
-
-# -----------------------------------------------------------------------------
-# UI Components
-# -----------------------------------------------------------------------------
-
-
-def gauge_chart(value: float, target: float, title: str) -> go.Figure:
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=value,
-            title={"text": title},
-            gauge={
-                "axis": {"range": [0, target]},
-                "bar": {"color": C.COLOR_SECONDARY},
-                "bgcolor": C.COLOR_BG_DARK,
-            },
-        )
-    )
-    fig.update_layout(height=250, margin=dict(l=10, r=10, t=40, b=10))
-    return fig
-
-
-def render_contracts_tab(df: pd.DataFrame, end_date: date, selected_month: int | None):
-    col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-
-    status_counts = df[C.COL_INT_STATUS].value_counts()
-    signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed_df_full["_pid"] = signed_df_full[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed_df_full["_pid"] = signed_df_full["_pid"].where(
-        signed_df_full["_pid"] != "",
-        signed_df_full[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    signed_df_full["_pid"] = signed_df_full["_pid"].where(
-        signed_df_full["_pid"] != "",
-        signed_df_full[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + signed_df_full[C.COL_INT_STATE].astype(str).str.strip(),
-    )
-    signed_count = signed_df_full.drop_duplicates(subset=["_pid"]).shape[0]
-    waiting_count = int(status_counts.get(C.STATUS_AGUARDANDO, 0))
-
-    col_a.metric("Contratos assinados", signed_count)
-    col_b.metric("Contratos aguardando", waiting_count)
-
-    now = date.today()
-    focus_year = end_date.year if isinstance(end_date, date) else now.year
-    focus_month = selected_month if selected_month is not None else now.month
-
-    # Filter for signed
-    signed_df = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed_df["_pid"] = signed_df[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed_df["_pid"] = signed_df["_pid"].where(
-        signed_df["_pid"] != "",
-        signed_df[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    signed_df["_pid"] = signed_df["_pid"].where(
-        signed_df["_pid"] != "",
-        signed_df[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + signed_df[C.COL_INT_STATE].astype(str).str.strip(),
-    )
-
-    month_mask = (signed_df[C.COL_INT_DT].dt.year == focus_year) & (
-        signed_df[C.COL_INT_DT].dt.month == focus_month
-    )
-    month_count = signed_df[month_mask].drop_duplicates(subset=["_pid"]).shape[0]
-
-    week_end_date = end_date if isinstance(end_date, date) else date.today()
-    week_start_date = week_end_date - timedelta(days=week_end_date.weekday())
-    week_mask = (signed_df[C.COL_INT_DT].dt.date >= week_start_date) & (
-        signed_df[C.COL_INT_DT].dt.date <= (week_start_date + timedelta(days=6))
-    )
-    week_count = signed_df[week_mask].drop_duplicates(subset=["_pid"]).shape[0]
-
-    col_c.metric("Assinados este mês", month_count)
-    col_d.metric("Assinados esta semana", week_count)
-
-    today_date = end_date if isinstance(end_date, date) else date.today()
-    today_mask = signed_df[C.COL_INT_DT].dt.date == today_date
-    today_count = signed_df[today_mask].drop_duplicates(subset=["_pid"]).shape[0]
-    h1, h2, h3 = st.columns(3)
-    h1.metric("Assinados hoje", today_count)
-
-    last_week_start = week_start_date - timedelta(days=7)
-    last_week_mask = (signed_df[C.COL_INT_DT].dt.date >= last_week_start) & (
-        signed_df[C.COL_INT_DT].dt.date <= (last_week_start + timedelta(days=6))
-    )
-    last_week_count = signed_df[last_week_mask].shape[0]
-    diff_week = week_count - last_week_count
-    progress_pct_week = (
-        (week_count / last_week_count * 100.0) if last_week_count > 0 else None
-    )
-    h2.metric(
-        (
-            "Acima vs semana passada"
-            if diff_week > 0
-            else "Falta p/ igualar semana passada"
-        ),
-        abs(diff_week),
-        delta=(f"{progress_pct_week:.1f}%" if progress_pct_week is not None else None),
-    )
-
-    prev_year = focus_year if focus_month > 1 else focus_year - 1
-    prev_month = focus_month - 1 if focus_month > 1 else 12
-    last_month_mask = (signed_df[C.COL_INT_DT].dt.year == prev_year) & (
-        signed_df[C.COL_INT_DT].dt.month == prev_month
-    )
-    last_month_count = signed_df[last_month_mask].shape[0]
-    diff_month = month_count - last_month_count
-    progress_pct_month = (
-        (month_count / last_month_count * 100.0) if last_month_count > 0 else None
-    )
-    h3.metric(
-        "Acima vs mês passado" if diff_month > 0 else "Falta p/ igualar mês passado",
-        abs(diff_month),
-        delta=(
-            f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None
-        ),
-    )
-
-    # Quarterly
-    q_start = ((focus_month - 1) // 3) * 3 + 1
-    quarterly_mask = (
-        (signed_df[C.COL_INT_DT].dt.year == focus_year)
-        & (signed_df[C.COL_INT_DT].dt.month >= q_start)
-        & (signed_df[C.COL_INT_DT].dt.month <= q_start + 2)
-    )
-    quarterly_count = (
-        signed_df[quarterly_mask].drop_duplicates(subset=["_pid"]).shape[0]
-    )
-
-    # Semestral
-    sem_start = 1 if focus_month <= 6 else 7
-    semestral_mask = (
-        (signed_df[C.COL_INT_DT].dt.year == focus_year)
-        & (signed_df[C.COL_INT_DT].dt.month >= sem_start)
-        & (signed_df[C.COL_INT_DT].dt.month <= sem_start + 5)
-    )
-    semiannual_count = (
-        signed_df[semestral_mask].drop_duplicates(subset=["_pid"]).shape[0]
-    )
-
-    g1, g2, g3 = st.columns([1, 1, 1])
-    g1.plotly_chart(gauge_chart(month_count, 30, "Meta mensal 30"), width="stretch")
-    g2.plotly_chart(
-        gauge_chart(quarterly_count, 90, "Meta trimestral 90"), width="stretch"
-    )
-    g3.plotly_chart(
-        gauge_chart(semiannual_count, 180, "Meta semestral 180"), width="stretch"
-    )
-
-    # Captador Pie
-    by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[
-        [C.COL_INT_CAPTADOR, "_pid"]
-    ]
-    by_captador = by_captador_base[C.COL_INT_CAPTADOR].value_counts().reset_index()
-    by_captador.columns = ["Captador", "Parceiros"]
-    pie_fig = px.pie(
-        by_captador,
-        names="Captador",
-        values="Parceiros",
-        title="Contratos por captador",
-        color_discrete_sequence=px.colors.sequential.Pinkyl,
-    )
-    st.plotly_chart(pie_fig, width="stretch")
-
-    # Status Bar
-    df_status = df.copy()
-    df_status["_pid"] = df_status[C.COL_INT_PARTNER].astype(str).str.strip()
-    df_status["_pid"] = df_status["_pid"].where(
-        df_status["_pid"] != "",
-        df_status[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    df_status["_pid"] = df_status["_pid"].where(
-        df_status["_pid"] != "",
-        df_status[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + df_status[C.COL_INT_STATE].astype(str).str.strip(),
-    )
-    rank_map = {C.STATUS_ASSINADO: 2, C.STATUS_AGUARDANDO: 1, C.STATUS_CANCELADO: 0}
-    df_status["_rank"] = df_status[C.COL_INT_STATUS].map(rank_map).fillna(-1)
-    df_partner = df_status.sort_values("_rank", ascending=False).drop_duplicates(
-        subset=["_pid"]
-    )
-    status_counts_dedup = df_partner[C.COL_INT_STATUS].value_counts()
-    status_df = status_counts_dedup.reindex(
-        [C.STATUS_ASSINADO, C.STATUS_AGUARDANDO, C.STATUS_CANCELADO], fill_value=0
-    ).reset_index()
-    status_df.columns = ["Status", "Quantidade"]
-    bar_fig = px.bar(
-        status_df[status_df["Status"].isin([C.STATUS_ASSINADO, C.STATUS_AGUARDANDO])],
-        x="Status",
-        y="Quantidade",
-        title="Assinados vs Aguardando",
-        color="Status",
-        color_discrete_map={
-            C.STATUS_ASSINADO: C.COLOR_PRIMARY,
-            C.STATUS_AGUARDANDO: C.COLOR_SECONDARY,
-        },
-    )
-    st.plotly_chart(bar_fig, width="stretch")
-
-    signed_only = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed_only = signed_only.dropna(subset=[C.COL_INT_DT])
-    signed_only["_pid"] = signed_only[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed_only["_pid"] = signed_only["_pid"].where(
-        signed_only["_pid"] != "",
-        signed_only[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    signed_only["_pid"] = signed_only["_pid"].where(
-        signed_only["_pid"] != "",
-        signed_only[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + signed_only[C.COL_INT_STATE].astype(str).str.strip(),
-    )
-    signed_only["_ano"] = signed_only[C.COL_INT_DT].dt.year
-    signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
-    monthly = signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
-    monthly = monthly.rename(columns={"_pid": "Contratos"})
-    pt_months = {
-        1: "Janeiro",
-        2: "Fevereiro",
-        3: "Março",
-        4: "Abril",
-        5: "Maio",
-        6: "Junho",
-        7: "Julho",
-        8: "Agosto",
-        9: "Setembro",
-        10: "Outubro",
-        11: "Novembro",
-        12: "Dezembro",
-    }
-    monthly["Mês"] = monthly.apply(
-        lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
-        axis=1,
-    )
-    monthly = monthly.sort_values(["_ano", "_mes"])
-    fig_month = px.bar(
-        monthly,
-        x="Mês",
-        y="Contratos",
-        title="Contratos assinados por mês",
-        color_discrete_sequence=[C.COLOR_PRIMARY],
-    )
-    st.plotly_chart(fig_month, width="stretch")
-
-
-def render_map_tab(df: pd.DataFrame):
-    signed = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed[C.COL_INT_REGION] = signed[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna("")
-    signed["_pid"] = signed[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed["_pid"] = signed["_pid"].where(
-        signed["_pid"] != "",
-        signed[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    signed["_pid"] = signed["_pid"].where(
-        signed["_pid"] != "",
-        signed[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + signed[C.COL_INT_STATE].astype(str).str.strip(),
-    )
-    signed_unique = signed.drop_duplicates(subset=["_pid"]).copy()
-
-    k1, k2 = st.columns([1, 1])
-    k1.metric(
-        "Estados presentes",
-        signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().nunique(),
-    )
-    k2.metric(
-        "Cidades presentes",
-        signed_unique[C.COL_INT_CITY].replace("", pd.NA).dropna().nunique(),
-    )
-
-    # Optimized Geocoding
-    unique_locations = signed_unique[
-        [C.COL_INT_CITY, C.COL_INT_STATE]
-    ].drop_duplicates()
-    location_map = {}
-    for _, row in unique_locations.iterrows():
-        c, s = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
-        if c and s:
-            lat, lon = geo_service.get_coords(c, s)
-            if lat is not None and lon is not None:
-                location_map[(c, s)] = (lat, lon)
-
-    geo_rows = []
-    for _, row in signed_unique.iterrows():
-        k = (row.get(C.COL_INT_CITY, ""), row.get(C.COL_INT_STATE, ""))
-        if k in location_map:
-            lat, lon = location_map[k]
-            geo_rows.append(
-                {
-                    "lat": lat,
-                    "lon": lon,
-                    "cidade": row.get(C.COL_INT_CITY, ""),
-                    "estado": row.get(C.COL_INT_STATE, ""),
-                }
-            )
-
-    if geo_rows:
-        geo_df = pd.DataFrame(geo_rows)
-        # Using Plotly Scatter Mapbox for better visibility and reliability (no token needed for open-street-map)
-        fig_map = px.scatter_mapbox(
-            geo_df,
-            lat="lat",
-            lon="lon",
-            hover_name="cidade",
-            hover_data={"estado": True, "lat": False, "lon": False},
-            color_discrete_sequence=[C.COLOR_SECONDARY],
-            zoom=3,
-            center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
-            title="Distribuição Geográfica de Contratos Assinados",
-        )
-        fig_map.update_layout(
-            mapbox_style="open-street-map",
-            height=600,
-            margin={"r": 0, "t": 30, "l": 0, "b": 0},
-        )
-        st.plotly_chart(fig_map, width="stretch")
-
-    # Charts with explicit column naming to avoid Plotly errors
-    # State
-    counts_state = signed_unique[C.COL_INT_STATE].value_counts().reset_index()
-    counts_state.columns = ["Estado", "Parceiros"]
-    st.plotly_chart(
-        px.bar(counts_state, x="Estado", y="Parceiros", title="Parceiros por estado"),
-        width="stretch",
-    )
-
-    # City
-    counts_city = signed_unique[C.COL_INT_CITY].value_counts().reset_index()
-    counts_city.columns = ["Cidade", "Parceiros"]
-    st.plotly_chart(
-        px.bar(counts_city, x="Cidade", y="Parceiros", title="Parceiros por cidade"),
-        width="stretch",
-    )
-
-    # Region
-    counts_region = signed_unique[C.COL_INT_REGION].value_counts().reset_index()
-    counts_region.columns = ["Região", "Parceiros"]
-    st.plotly_chart(
-        px.bar(counts_region, x="Região", y="Parceiros", title="Parceiros por região"),
-        width="stretch",
-    )
-
-    all_states = sorted(list(C.ESTADO_REGIAO.keys()))
-    present_states = (
-        signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
-    )
-    present_states = [s for s in present_states if s in C.ESTADO_REGIAO]
-    missing_states = [s for s in all_states if s not in set(present_states)]
-    if missing_states:
-        df_missing = pd.DataFrame(
-            {
-                "Estado": missing_states,
-                "Região": [C.ESTADO_REGIAO[s] for s in missing_states],
-            }
-        )
-        st.markdown("### Estados sem parceiros")
-        st.table(df_missing)
-
-
-def render_financial_tab(
-    df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None
-):
-    total = df[C.COL_INT_VALOR].sum()
-    parceiros = (df[C.COL_INT_VALOR] * df[C.COL_INT_COMISSAO]).sum()
-    equipe = 0.13 * (total - parceiros)
-    liquido = total - parceiros - equipe
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Faturamento total", f"R$ {total:,.2f}")
-    c2.metric("Comissão parceiros", f"R$ {parceiros:,.2f}")
-    c3.metric("Comissão equipe (13%)", f"R$ {equipe:,.2f}")
-    c4.metric("Líquido empresa", f"R$ {liquido:,.2f}")
-
-    daily = df.groupby(df[C.COL_INT_DATA].dt.date)[C.COL_INT_VALOR].sum().reset_index()
-    daily.columns = [C.COL_INT_DATA, C.COL_INT_VALOR]
-    st.plotly_chart(
-        px.line(daily, x=C.COL_INT_DATA, y=C.COL_INT_VALOR, title="Faturamento diário"),
-        width="stretch",
-    )
-
-    m = df.dropna(subset=[C.COL_INT_DATA]).copy()
-    m["_ano"] = m[C.COL_INT_DATA].dt.year
-    m["_mes"] = m[C.COL_INT_DATA].dt.month
-    monthly = m.groupby(["_ano", "_mes"])[C.COL_INT_VALOR].sum().reset_index()
-    pt_months = {
-        1: "Janeiro",
-        2: "Fevereiro",
-        3: "Março",
-        4: "Abril",
-        5: "Maio",
-        6: "Junho",
-        7: "Julho",
-        8: "Agosto",
-        9: "Setembro",
-        10: "Outubro",
-        11: "Novembro",
-        12: "Dezembro",
-    }
-    monthly["Mês"] = monthly.apply(
-        lambda r: f"{pt_months.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
-        axis=1,
-    )
-    monthly = monthly.sort_values(["_ano", "_mes"])
-    st.plotly_chart(
-        px.bar(
-            monthly,
-            x="Mês",
-            y=C.COL_INT_VALOR,
-            title="Faturamento por mês",
-            color_discrete_sequence=[C.COLOR_PRIMARY],
-        ),
-        width="stretch",
-    )
-
-    now = date.today()
-    focus_year = end_date.year if isinstance(end_date, date) else now.year
-    focus_month = selected_month if selected_month is not None else now.month
-    prev_year = focus_year if focus_month > 1 else focus_year - 1
-    prev_month = focus_month - 1 if focus_month > 1 else 12
-    cur_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (
-        full_df[C.COL_INT_DATA].dt.month == focus_month
-    )
-    prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (
-        full_df[C.COL_INT_DATA].dt.month == prev_month
-    )
-    cur_total_month = float(full_df.loc[cur_mask, C.COL_INT_VALOR].sum())
-    prev_total_month = float(full_df.loc[prev_mask, C.COL_INT_VALOR].sum())
-    diff = cur_total_month - prev_total_month
-    progress_pct = (
-        (cur_total_month / prev_total_month * 100.0) if prev_total_month > 0 else None
-    )
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Faturamento mês atual", f"R$ {cur_total_month:,.2f}")
-    k2.metric("Meta mês passado", f"R$ {prev_total_month:,.2f}")
-    k3.metric(
-        "Acima do mês passado" if diff > 0 else "Falta para igualar mês passado",
-        f"R$ {abs(diff):,.2f}",
-        delta=(f"{progress_pct:.1f}%" if progress_pct is not None else None),
-    )
-
-    st.markdown("### Simulador de faturamento adicional")
-    sim_add = st.number_input(
-        "Valor adicional (R$)", min_value=0.0, step=100.0, value=0.0
-    )
-    avg_comissao = (parceiros / total) if total > 0 else 0.0
-    sim_total = total + sim_add
-    sim_parceiros = parceiros + sim_add * avg_comissao
-    sim_equipe = 0.13 * (sim_total - sim_parceiros)
-    sim_liquido = sim_total - sim_parceiros - sim_equipe
-    s1, s2, s3, s4 = st.columns(4)
-    s1.metric("Faturamento total (simulado)", f"R$ {sim_total:,.2f}")
-    s2.metric("Comissão parceiros (simulado)", f"R$ {sim_parceiros:,.2f}")
-    s3.metric("Comissão equipe (13%) (simulado)", f"R$ {sim_equipe:,.2f}")
-    s4.metric("Líquido empresa (simulado)", f"R$ {sim_liquido:,.2f}")
-    cur_total_month_sim = cur_total_month + sim_add
-    diff_sim = cur_total_month_sim - prev_total_month
-    progress_pct_sim = (
-        (cur_total_month_sim / prev_total_month * 100.0)
-        if prev_total_month > 0
-        else None
-    )
-    st.metric(
-        (
-            "Acima do mês passado (simulado)"
-            if diff_sim > 0
-            else "Falta p/ igualar mês passado (simulado)"
-        ),
-        f"R$ {abs(diff_sim):,.2f}",
-        delta=(f"{progress_pct_sim:.1f}%" if progress_pct_sim is not None else None),
-    )
-
-
-def render_forecast_tab(df: pd.DataFrame):
-    import forecasting  # Late import or move to top? Python allows it. I'll move to top later or implicitly here.
-
-    st.markdown("### Previsão de Contratos")
-
-    c1, c2 = st.columns(2)
-    with c1:
-        algo = st.selectbox(
-            "Algoritmo",
-            [
-                "Prophet (Facebook AI)",
-                "Holt-Winters (Sazonal)",
-            ],
-        )
-    with c2:
-        horizon_label = st.selectbox(
-            "Horizonte",
-            [
-                "1 Semana",
-                "2 Semanas",
-                "3 Semanas",
-                "1 Mês",
-                "3 Meses",
-                "6 Meses",
-                "1 Ano",
-            ],
-        )
-
-    horizon_map = {
-        "1 Semana": 7,
-        "2 Semanas": 14,
-        "3 Semanas": 21,
-        "1 Mês": 30,
-        "3 Meses": 90,
-        "6 Meses": 180,
-        "1 Ano": 365,
-    }
-    days = horizon_map[horizon_label]
-
-    # Filter for ONLY Signed Contracts
-    # Essential to avoid inflating numbers with "Aguardando"/"Cancelado"
-    signed_df = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-
-    # Prepare data for forecast (Count 1 per row)
-    df_input = signed_df.copy()
-    df_input["Contratos"] = 1
-
-    # Generate
-    try:
-        final_df = forecasting.generate_forecast(
-            df_input, C.COL_INT_DT, "Contratos", algo, days
-        )
-
-        # Calculate Total Predicted
-        future_mask = final_df["Type"] == "Previsão"
-        total_predicted = int(final_df[future_mask]["Contratos"].sum())
-
-        # Calculate Total (Historical + Predicted)
-        # We count rows in the original filtered df for "Contratos Assinados"
-        total_historical = len(signed_df)
-        total_final = total_historical + total_predicted
-
-        # Display Metrics in Columns
-        m1, m2 = st.columns(2)
-        m1.metric(label=f"Novos Contratos ({horizon_label})", value=total_predicted)
-        m2.metric(
-            label="Total Final Esperado",
-            value=total_final,
-            delta=f"+{total_predicted} novos",
-        )
-
-        # Plot
-        fig = px.line(
-            final_df,
-            x=C.COL_INT_DT,
-            y="Contratos",
-            color="Type",
-            title=f"Previsão de Novos Contratos Diários - {algo}",
-            color_discrete_map={
-                "Histórico": C.COLOR_PRIMARY,
-                "Previsão": C.COLOR_FORECAST,
-            },
-        )
-        st.plotly_chart(fig, width="stretch")
-
-        # AI Insights
-        st.markdown("---")
-        insights = forecasting.generate_smart_insights(
-            df_input, C.COL_INT_DT, "Contratos", final_df
-        )
-        st.info(insights)
-
-    except Exception as e:
-        logger.error(f"Forecast error: {e}")
-        st.error(f"Erro ao gerar previsão: {e}")
-        if "não instalada" in str(e):
-            st.warning(
-                "Dica: Verifique se as bibliotecas 'prophet' e 'statsmodels' estão instaladas."
-            )
-
-
-st.sidebar.title("Educa Mais Dashboard")
-if st.sidebar.button("Recarregar dados"):
+st.sidebar.title(C.APP_TITLE)
+if st.sidebar.button(C.UI_LABEL_RELOAD_DATA):
     st.cache_data.clear()
     st.rerun()
+
 dados = data_service.get_dados(DEFAULT_SHEET_ID)
 faturamento = data_service.get_faturamento(DEFAULT_SHEET_ID)
 
@@ -736,28 +35,56 @@ if not data_service.validate_columns(dados, [C.COL_INT_DT, C.COL_INT_STATUS]):
     st.stop()
 
 # Date Filtering Logic
-min_date = min(dados[C.COL_INT_DT].min(), faturamento[C.COL_INT_DATA].min()).date()
-max_date = max(dados[C.COL_INT_DT].max(), faturamento[C.COL_INT_DATA].max()).date()
+# Handle cases where dataframes might be empty or have null dates
+min_dt_dados = dados[C.COL_INT_DT].min()
+min_dt_fat = faturamento[C.COL_INT_DATA].min()
+max_dt_dados = dados[C.COL_INT_DT].max()
+max_dt_fat = faturamento[C.COL_INT_DATA].max()
 
-date_range = st.sidebar.date_input("Intervalo de datas", value=(min_date, max_date))
+# Default to today if no data
+default_date = date.today()
+min_date = default_date
+max_date = default_date
+
+if pd.notna(min_dt_dados) and pd.notna(min_dt_fat):
+    min_date = min(min_dt_dados, min_dt_fat).date()
+elif pd.notna(min_dt_dados):
+    min_date = min_dt_dados.date()
+elif pd.notna(min_dt_fat):
+    min_date = min_dt_fat.date()
+
+if pd.notna(max_dt_dados) and pd.notna(max_dt_fat):
+    max_date = max(max_dt_dados, max_dt_fat).date()
+elif pd.notna(max_dt_dados):
+    max_date = max_dt_dados.date()
+elif pd.notna(max_dt_fat):
+    max_date = max_dt_fat.date()
+
+date_range = st.sidebar.date_input(C.UI_LABEL_DATE_RANGE, value=(min_date, max_date))
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start_date, end_date = date_range
 else:
-    start_date, end_date = date_range[0], date_range[0]  # Fallback
+    # Handle single date selection or invalid range
+    if isinstance(date_range, tuple) and len(date_range) == 1:
+         start_date, end_date = date_range[0], date_range[0]
+    elif not isinstance(date_range, tuple):
+         start_date, end_date = date_range, date_range
+    else:
+         start_date, end_date = min_date, max_date
 
 months = sorted(dados[C.COL_INT_DT].dt.month.dropna().unique())
 month_label = st.sidebar.selectbox(
-    "Filtrar por mês", ["Todos"] + [f"{int(m):02d}" for m in months]
+    C.UI_LABEL_FILTER_MONTH, [C.UI_LABEL_ALL] + [f"{int(m):02d}" for m in months]
 )
-selected_month = int(month_label) if month_label != "Todos" else None
+selected_month = int(month_label) if month_label != C.UI_LABEL_ALL else None
 
 # Contract Type Filter
-contract_type_options = ["Todos", "Técnico (Normal + 50%)", "Pós-Graduação"]
-selected_contract_type = st.sidebar.radio("Tipo de Contrato", contract_type_options)
+contract_type_options = [C.UI_LABEL_ALL, C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS]
+selected_contract_type = st.sidebar.radio(C.UI_LABEL_CONTRACT_TYPE, contract_type_options)
 
 # Geographic Filters
 unique_regions = sorted([r for r in dados[C.COL_INT_REGION].unique() if r])
-selected_regions = st.sidebar.multiselect("Filtrar por Região", unique_regions)
+selected_regions = st.sidebar.multiselect(C.UI_LABEL_FILTER_REGION, unique_regions)
 
 # State Filter (dependent on Region)
 if selected_regions:
@@ -771,7 +98,7 @@ if selected_regions:
 else:
     available_states = sorted([s for s in dados[C.COL_INT_STATE].unique() if s])
 
-selected_states = st.sidebar.multiselect("Filtrar por Estado", available_states)
+selected_states = st.sidebar.multiselect(C.UI_LABEL_FILTER_STATE, available_states)
 
 # Apply Filters
 # Using standard masking since index optimization requires more complex setup for two distinct frames
@@ -781,11 +108,11 @@ mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
 if selected_month:
     mask_dados &= dados[C.COL_INT_DT].dt.month == selected_month
 
-if selected_contract_type == "Técnico (Normal + 50%)":
+if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
     mask_dados &= dados[C.COL_INT_CONTRACT_TYPE].isin(
         [C.CONTRACT_TYPE_NORMAL, C.CONTRACT_TYPE_50]
     )
-elif selected_contract_type == "Pós-Graduação":
+elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
     mask_dados &= dados[C.COL_INT_CONTRACT_TYPE] == C.CONTRACT_TYPE_POS
 
 if selected_regions:
@@ -802,16 +129,16 @@ mask_fat = (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (
 if selected_month:
     mask_fat &= faturamento[C.COL_INT_DATA].dt.month == selected_month
 
-if selected_contract_type == "Técnico (Normal + 50%)":
-    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == "TECNICO"
-elif selected_contract_type == "Pós-Graduação":
-    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == "POS"
+if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
+    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_TECNICO
+elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
+    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
 
 fat_filtered = faturamento[mask_fat].copy()
 
 # Render Tabs
 t1, t2, t3, t4, t5, t6 = st.tabs(
-    ["Contratos", "Mapa", "Faturamento", "Previsões", "Análise de Oportunidade", "Parceiros"]
+    [C.TAB_NAME_CONTRACTS, C.TAB_NAME_MAP, C.TAB_NAME_FINANCIAL, C.TAB_NAME_FORECAST, C.TAB_NAME_OPPORTUNITY, C.TAB_NAME_PARTNERS]
 )
 
 with t1:
