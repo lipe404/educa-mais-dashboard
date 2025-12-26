@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 import constants as C
 from services import data as data_service
-from ui import contracts_tab, map_tab, financial_tab, forecast_tab, opportunity_tab, partners_tab
+from ui import contracts_tab, map_tab, financial_tab, forecast_tab, opportunity_tab, partners_tab, unit_analysis_tab
 
 # Setup Logging
 logging.basicConfig(
@@ -158,8 +158,8 @@ elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
 fat_filtered = faturamento[mask_fat].copy()
 
 # Render Tabs
-t1, t2, t3, t4, t5, t6 = st.tabs(
-    [C.TAB_NAME_CONTRACTS, C.TAB_NAME_MAP, C.TAB_NAME_FINANCIAL, C.TAB_NAME_FORECAST, C.TAB_NAME_OPPORTUNITY, C.TAB_NAME_PARTNERS]
+t1, t2, t3, t4, t5, t6, t7 = st.tabs(
+    [C.TAB_NAME_CONTRACTS, C.TAB_NAME_MAP, C.TAB_NAME_FINANCIAL, C.TAB_NAME_FORECAST, C.TAB_NAME_OPPORTUNITY, C.TAB_NAME_PARTNERS, C.TAB_NAME_UNIT_ANALYSIS]
 )
 
 with t1:
@@ -174,3 +174,5 @@ with t5:
     opportunity_tab.render(dados_filtered)
 with t6:
     partners_tab.render(fat_filtered)
+with t7:
+    unit_analysis_tab.render(dados_filtered)

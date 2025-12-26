@@ -27,7 +27,7 @@ def get_cnae_id_for_area(area: str, sections_map: Dict[str, str]) -> str:
 
 
 def render(dados_df: pd.DataFrame):
-    key = st.text_input(C.UI_LABEL_ACCESS_KEY, type="password")
+    key = st.text_input(C.UI_LABEL_ACCESS_KEY, type="password", key="opp_access_key")
     if key != API_KEY:
         st.warning(C.UI_LABEL_ENTER_KEY_MSG)
         return

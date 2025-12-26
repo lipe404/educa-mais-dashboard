@@ -201,6 +201,7 @@ TAB_NAME_FINANCIAL = "Faturamento"
 TAB_NAME_FORECAST = "Previsões"
 TAB_NAME_OPPORTUNITY = "Análise de Oportunidade"
 TAB_NAME_PARTNERS = "Parceiros"
+TAB_NAME_UNIT_ANALYSIS = "Análise Unitária"
 
 # Contracts Tab UI
 UI_LABEL_CONTRACTS_SIGNED = "Contratos assinados"
@@ -385,4 +386,3 @@ API_URL_SIDRA_POP_2022_ALL = "https://apisidra.ibge.gov.br/values/t/6579/n6/all/
 GEO_DB_PATH = "geocache.db"
 GEO_USER_AGENT = "educa-mais-dashboard-v2"
 GEO_COUNTRY = "Brasil"
-
