@@ -82,6 +82,7 @@ ESTADO_REGIAO = {
 
 # Financial Constants
 COMMISSION_RATE_TEAM = 0.13  # 13% fixed commission for the team
+GOAL_MONTHLY_CONTRACTS = 30  # Default monthly goal for contracts
 
 # Forecasting Algorithms
 ALGORITHM_PROPHET = "Prophet (Facebook AI)"
@@ -225,6 +226,7 @@ UI_LABEL_QUANTITY = "Quantidade"
 UI_LABEL_SIGNED_BY_MONTH = "Contratos assinados por mês"
 UI_LABEL_MONTH = "Mês"
 UI_LABEL_CONTRACTS = "Contratos"
+UI_LABEL_DAILY_SALES = "Vendas Diárias"
 
 # Financial Tab UI
 UI_LABEL_REVENUE_TODAY = "Faturamento hoje"

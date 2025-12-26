@@ -213,5 +213,83 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         y=C.UI_LABEL_CONTRACTS,
         title=C.UI_LABEL_SIGNED_BY_MONTH,
         color_discrete_sequence=[C.COLOR_PRIMARY],
+        custom_data=["_ano", "_mes"],
     )
-    st.plotly_chart(fig_month, width="stretch")
+    
+    # Meta Visual
+    fig_month.add_hline(
+        y=C.GOAL_MONTHLY_CONTRACTS, 
+        line_dash="dash", 
+        line_color="green", 
+        annotation_text="Meta",
+        annotation_position="top right"
+    )
+
+    # Detalhamento Diário (Interativo)
+    event = st.plotly_chart(
+        fig_month, 
+        width="stretch", 
+        on_select="rerun", 
+        selection_mode="points", 
+        key="monthly_chart_click"
+    )
+
+    target_year = None
+    target_month = None
+
+    # Prioridade: 1. Filtro da Sidebar, 2. Clique no Gráfico
+    if selected_month:
+        target_year = focus_year
+        target_month = focus_month
+    elif event and event.selection and event.selection["points"]:
+        point = event.selection["points"][0]
+        
+        # 1. Try Custom Data (Robust)
+        if "customdata" in point:
+            cd = point["customdata"]
+            if isinstance(cd, list) and len(cd) >= 2:
+                target_year = int(cd[0])
+                target_month = int(cd[1])
+            elif isinstance(cd, dict):
+                target_year = int(cd.get("_ano", 0))
+                target_month = int(cd.get("_mes", 0))
+        
+        # 2. Fallback: Parse from X-Axis (e.g., "Outubro 2025")
+        if (target_year == 0 or target_month == 0) and "x" in point:
+            x_val = point["x"]
+            try:
+                # Expected format: "MonthName Year"
+                parts = x_val.split(' ')
+                if len(parts) == 2:
+                    m_name = parts[0]
+                    y_str = parts[1]
+                    target_year = int(y_str)
+                    
+                    # Reverse lookup for month
+                    for k, v in C.MONTH_NAMES.items():
+                        if v == m_name:
+                            target_month = k
+                            break
+            except Exception:
+                pass
+
+    if target_year and target_month:
+        daily_mask = (signed_only["_ano"] == target_year) & (signed_only["_mes"] == target_month)
+        daily_df = signed_only[daily_mask].copy()
+        
+        # Agrupar por dia
+        daily_counts = daily_df.groupby(daily_df[C.COL_INT_DT].dt.day)[C.COL_INT_PARTNER].nunique().reset_index()
+        daily_counts.columns = ["Dia", C.UI_LABEL_CONTRACTS]
+        
+        month_name = C.MONTH_NAMES.get(target_month, str(target_month))
+        
+        fig_daily = px.bar(
+            daily_counts,
+            x="Dia",
+            y=C.UI_LABEL_CONTRACTS,
+            title=f"{C.UI_LABEL_DAILY_SALES} - {month_name}/{target_year}",
+            color_discrete_sequence=[C.COLOR_SECONDARY],
+            text=C.UI_LABEL_CONTRACTS
+        )
+        fig_daily.update_traces(textposition='outside')
+        st.plotly_chart(fig_daily, width="stretch")
