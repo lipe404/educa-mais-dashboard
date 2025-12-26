@@ -322,6 +322,25 @@ UI_LABEL_COL_SCORE = "Score"
 UI_LABEL_MAP_POTENTIAL_TITLE = "Mapa de Potencial: {course}"
 UI_LABEL_GEOCODING_WARNING = "Não foi possível geocodificar as cidades do topo do ranking. Verifique a conexão com o serviço de mapas. ({count} falhas)"
 
+# Geo Clustering
+UI_LABEL_CLUSTERING_TITLE = "### Geo Clustering (DBSCAN)"
+UI_LABEL_CLUSTERING_DESC = "Identificação de 'polos' naturais de oportunidade agrupando cidades próximas com alto potencial."
+UI_LABEL_EPS_KM = "Distância Máxima (km)"
+UI_LABEL_MIN_SAMPLES = "Mínimo de Cidades no Cluster"
+UI_LABEL_RUN_CLUSTERING = "Executar Clustering"
+UI_LABEL_CLUSTERING_MAP_TITLE = "Clusters de Oportunidade"
+UI_LABEL_CLUSTERING_NO_DATA = "Nenhum cluster encontrado com os parâmetros atuais."
+
+# Regression Analysis
+UI_LABEL_REGRESSION_TITLE = "### Análise de Regressão (Fatores de Venda)"
+UI_LABEL_REGRESSION_DESC = "Modelo estatístico para identificar o impacto de População e Empresas no volume de vendas."
+UI_LABEL_REGRESSION_R2 = "R² (Poder Explicativo)"
+UI_LABEL_REGRESSION_COEF_POP = "Impacto População"
+UI_LABEL_REGRESSION_COEF_EMP = "Impacto Empresas"
+UI_LABEL_REGRESSION_SCATTER_TITLE = "Regressão Linear: Vendas Reais vs Previstas"
+UI_LABEL_OPP_TAB_CLUSTERING = "Geo Clustering"
+UI_LABEL_OPP_TAB_REGRESSION = "Análise de Regressão"
+
 # Map Tab UI
 UI_LABEL_STATES_PRESENT = "Estados presentes"
 UI_LABEL_CITIES_PRESENT = "Cidades presentes"

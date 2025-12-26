@@ -103,6 +103,21 @@ else:
 
 selected_states = st.sidebar.multiselect(C.UI_LABEL_FILTER_STATE, available_states)
 
+# City Filter (dependent on State) - Cascading Filter
+if selected_states:
+    available_cities = sorted(
+        [
+            c
+            for c in dados[dados[C.COL_INT_STATE].isin(selected_states)][C.COL_INT_CITY].unique()
+            if c
+        ]
+    )
+else:
+    # If no state selected, show all cities (or maybe none to avoid clutter, but let's show all for now)
+    available_cities = sorted([c for c in dados[C.COL_INT_CITY].unique() if c])
+
+selected_cities = st.sidebar.multiselect("Filtrar por Cidade", available_cities)
+
 # Apply Filters
 # Using standard masking since index optimization requires more complex setup for two distinct frames
 mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
@@ -123,6 +138,9 @@ if selected_regions:
 
 if selected_states:
     mask_dados &= dados[C.COL_INT_STATE].isin(selected_states)
+
+if selected_cities:
+    mask_dados &= dados[C.COL_INT_CITY].isin(selected_cities)
 
 dados_filtered = dados[mask_dados].copy()
 

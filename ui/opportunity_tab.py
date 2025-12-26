@@ -1,9 +1,15 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from typing import List, Dict
 import os
 from dotenv import load_dotenv
+import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+
 import constants as C
 from geocoding_service import GeocodingService
 from services.opportunity import build_oportunidade_por_uf
@@ -26,7 +32,14 @@ def render(dados_df: pd.DataFrame):
         st.warning(C.UI_LABEL_ENTER_KEY_MSG)
         return
 
-    tabs = st.tabs([C.UI_LABEL_OPP_TAB_OVERVIEW, C.UI_LABEL_OPP_TAB_DETAILED, C.UI_LABEL_OPP_TAB_COURSE])
+    # Expanded to 5 tabs
+    tabs = st.tabs([
+        C.UI_LABEL_OPP_TAB_OVERVIEW, 
+        C.UI_LABEL_OPP_TAB_DETAILED, 
+        C.UI_LABEL_OPP_TAB_COURSE,
+        C.UI_LABEL_OPP_TAB_CLUSTERING,
+        C.UI_LABEL_OPP_TAB_REGRESSION
+    ])
 
     # -------------------------------------------------------------------------
     # TAB 1: Visão Geral (Population based)
@@ -298,88 +311,214 @@ def render(dados_df: pd.DataFrame):
                 st.success(reasoning)
 
                 # --- MAP RENDERING ---
-                geo_rows_c = []
-                # Ensure we have coordinates. If geocoding fails, skips row.
-                # Currently we rely on 'geo_service' cache.
-                missing_coords = 0
-                for _, row in ranked_course.iterrows():
+                geo_rows = []
+                # Only map top 20 for clarity
+                for _, row in ranked_course.head(20).iterrows():
                     lat, lon = geo_service.get_coords(
                         row.get("nome", ""), row.get("uf", "")
                     )
                     if lat is not None and lon is not None:
-                        # Normalize size for map visual (min size 5)
-                        size_val = (
-                            row.get("unidades_locais", 10)
-                            if selected_area != "EJA"
-                            else row.get("pop_2022", 100)
-                        )
-                        size_val = max(
-                            5,
-                            (
-                                int(size_val / 100)
-                                if selected_area == "EJA"
-                                else int(size_val)
-                            ),
-                        )
-
-                        geo_rows_c.append(
+                        geo_rows.append(
                             {
                                 "lat": lat,
                                 "lon": lon,
                                 "cidade": row.get("nome", ""),
                                 "estado": row.get("uf", ""),
-                                "potencial": row.get("score_curso", 0),
-                                "empresas": row.get("unidades_locais", 0),
-                                "pop": row.get("pop_2022", 0),
-                                "marker_size": min(size_val, 50),
+                                "score": row.get("score_curso", 0),
                             }
                         )
-                    else:
-                        missing_coords += 1
-
-                if geo_rows_c:
-                    geo_df_c = pd.DataFrame(geo_rows_c)
-                    fig_c = px.scatter_mapbox(
-                        geo_df_c,
+                
+                if geo_rows:
+                    geo_df = pd.DataFrame(geo_rows)
+                    fig = px.scatter_mapbox(
+                        geo_df,
                         lat="lat",
                         lon="lon",
-                        size="marker_size",  # Use controlled size
+                        size="score",
                         hover_name="cidade",
-                        hover_data={
-                            "estado": True,
-                            "empresas": True,
-                            "pop": True,
-                            "lat": False,
-                            "lon": False,
-                        },
-                        color="potencial",
-                        color_continuous_scale=px.colors.sequential.Inferno,
+                        hover_data={"estado": True, "score": True},
+                        color_discrete_sequence=[C.COLOR_PRIMARY],
                         zoom=3,
                         center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
-                        title=C.UI_LABEL_MAP_POTENTIAL_TITLE.format(course=selected_course),
+                        title=f"Top 20 Cidades para {selected_course}",
                     )
-                    fig_c.update_layout(
+                    fig.update_layout(
                         mapbox_style="open-street-map",
-                        height=600,
+                        height=500,
                         margin={"r": 0, "t": 30, "l": 0, "b": 0},
                     )
-                    st.plotly_chart(fig_c, width="stretch")
-                else:
-                    st.warning(
-                        C.UI_LABEL_GEOCODING_WARNING.format(count=missing_coords)
-                    )
+                    st.plotly_chart(fig, width="stretch")
 
-                st.markdown(C.UI_LABEL_TOP_SUGGESTED_CITIES)
-                st.dataframe(
-                    ranked_course[
-                        ["nome", "uf", "pop_2022", "unidades_locais", "score_curso"]
-                    ]
-                    .reset_index(drop=True)
-                    .rename(
-                        columns={
-                            "pop_2022": C.UI_LABEL_COL_POPULATION,
-                            "unidades_locais": C.UI_LABEL_COL_TOTAL_COMPANIES,
-                            "score_curso": C.UI_LABEL_COL_SCORE,
-                        }
+                st.dataframe(ranked_course[["nome", "uf", "pop_2022", "unidades_locais", "score_curso"]].reset_index(drop=True))
+
+    # -------------------------------------------------------------------------
+    # TAB 4: Geo Clustering (DBSCAN)
+    # -------------------------------------------------------------------------
+    with tabs[3]:
+        st.markdown(C.UI_LABEL_CLUSTERING_TITLE)
+        st.write(C.UI_LABEL_CLUSTERING_DESC)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            # Parameters
+            eps_km = st.slider(C.UI_LABEL_EPS_KM, min_value=10, max_value=200, value=50, step=10)
+            min_samples = st.slider(C.UI_LABEL_MIN_SAMPLES, min_value=2, max_value=10, value=3)
+        with col2:
+             ufs_all = sorted(list(C.ESTADO_REGIAO.keys()))
+             ufs_selected_clust: List[str] = st.multiselect(
+                C.UI_LABEL_STATES, ufs_all, default=ufs_all, key="ufs_clust"
+             )
+
+        if st.button(C.UI_LABEL_RUN_CLUSTERING):
+            with st.spinner("Executando DBSCAN..."):
+                # Get opportunities (missing cities)
+                base = build_oportunidade_por_uf(dados_df, ufs_selected_clust)
+                mask = (base["presenca"] == 0) & (base["pop_2022"] > 10000) # Filter small villages
+                candidates = base[mask].copy()
+
+                # Sort by pop to prioritize bigger opportunities
+                candidates = candidates.sort_values("pop_2022", ascending=False).head(200)
+
+                if candidates.empty:
+                    st.warning("Nenhuma cidade candidata encontrada com os filtros atuais.")
+                else:
+                    # Geocode
+                    coords = []
+                    valid_indices = []
+                    
+                    progress_bar = st.progress(0)
+                    total = len(candidates)
+                    
+                    for i, (idx, row) in enumerate(candidates.iterrows()):
+                        lat, lon = geo_service.get_coords(row["nome"], row["uf"])
+                        if lat is not None and lon is not None:
+                            coords.append([lat, lon])
+                            valid_indices.append(idx)
+                        progress_bar.progress((i + 1) / total)
+                    
+                    if not coords:
+                         st.error("Não foi possível obter coordenadas para as cidades selecionadas.")
+                    else:
+                        # Convert to radians for Haversine
+                        coords_rad = np.radians(coords)
+                        
+                        # Earth radius in km approx 6371
+                        kms_per_radian = 6371.0088
+                        eps_rad = eps_km / kms_per_radian
+                        
+                        db = DBSCAN(eps=eps_rad, min_samples=min_samples, metric='haversine', algorithm='ball_tree')
+                        clusters = db.fit_predict(coords_rad)
+                        
+                        # Assign back to dataframe
+                        clustered_df = candidates.loc[valid_indices].copy()
+                        clustered_df["cluster"] = clusters
+                        clustered_df["lat"] = [c[0] for c in coords]
+                        clustered_df["lon"] = [c[1] for c in coords]
+                        
+                        # Filter noise (-1)
+                        real_clusters = clustered_df[clustered_df["cluster"] != -1]
+                        
+                        if real_clusters.empty:
+                             st.info(C.UI_LABEL_CLUSTERING_NO_DATA)
+                        else:
+                             n_clusters = len(real_clusters["cluster"].unique())
+                             st.success(f"Encontrados {n_clusters} clusters de oportunidade!")
+                             
+                             fig = px.scatter_mapbox(
+                                clustered_df, # Show noise too? Maybe just clusters. Let's show all but color noise differently
+                                lat="lat",
+                                lon="lon",
+                                color="cluster",
+                                size="pop_2022",
+                                hover_name="nome",
+                                hover_data={"uf": True, "pop_2022": True, "cluster": True},
+                                zoom=3,
+                                center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+                                title=C.UI_LABEL_CLUSTERING_MAP_TITLE,
+                                color_continuous_scale=px.colors.sequential.Viridis
+                            )
+                             fig.update_layout(mapbox_style="open-street-map", height=600)
+                             st.plotly_chart(fig, width="stretch")
+                             
+                             # Show Cluster Stats
+                             stats = real_clusters.groupby("cluster").agg({
+                                 "nome": "count",
+                                 "pop_2022": "sum"
+                             }).rename(columns={"nome": "Cidades", "pop_2022": "População Total"}).sort_values("População Total", ascending=False)
+                             st.dataframe(stats)
+
+    # -------------------------------------------------------------------------
+    # TAB 5: Regression Analysis
+    # -------------------------------------------------------------------------
+    with tabs[4]:
+        st.markdown(C.UI_LABEL_REGRESSION_TITLE)
+        st.write(C.UI_LABEL_REGRESSION_DESC)
+        
+        if st.button("Executar Análise de Regressão"):
+             with st.spinner("Calculando modelo estatístico..."):
+                 # 1. Prepare Sales Data (Count per City)
+                 sales_data = dados_df.groupby([C.COL_INT_CITY, C.COL_INT_STATE]).size().reset_index(name="vendas")
+                 sales_data["id_match"] = sales_data.apply(lambda x: f"{str(x[C.COL_INT_CITY]).strip().upper()}|{str(x[C.COL_INT_STATE]).strip().upper()}", axis=1)
+                 
+                 # 2. Get Population and Companies Data for ALL cities in selected states (or all states present in sales)
+                 # We need to match names. Best way is to fetch all data for states present in sales
+                 states_in_sales = sales_data[C.COL_INT_STATE].unique().tolist()
+                 base = build_oportunidade_por_uf(dados_df, states_in_sales)
+                 
+                 # Fetch companies
+                 inds = get_unidades_locais(base["id"].astype(str).tolist(), "all")
+                 features = base.merge(inds, on="id", how="left")
+                 
+                 # Create match key
+                 features["id_match"] = features.apply(lambda x: f"{str(x['nome']).strip().upper()}|{str(x['uf']).strip().upper()}", axis=1)
+                 
+                 # 3. Merge Sales with Features
+                 # We use inner join to analyze only where we have sales (to model what drives them)
+                 # Or left join if we assume missing sales = 0.
+                 # User wants to know what impacts sales. Usually done on active markets.
+                 df_reg = pd.merge(sales_data, features, on="id_match", how="inner")
+                 
+                 if len(df_reg) < 10:
+                     st.warning("Dados insuficientes para regressão (mínimo 10 cidades com vendas).")
+                 else:
+                     # Prep Data
+                     df_reg["pop_2022"] = df_reg["pop_2022"].fillna(0)
+                     df_reg["unidades_locais"] = df_reg["unidades_locais"].fillna(0)
+                     
+                     X = df_reg[["pop_2022", "unidades_locais"]]
+                     y = df_reg["vendas"]
+                     
+                     model = LinearRegression()
+                     model.fit(X, y)
+                     y_pred = model.predict(X)
+                     
+                     r2 = r2_score(y, y_pred)
+                     
+                     # Display Metrics
+                     c1, c2, c3 = st.columns(3)
+                     c1.metric(C.UI_LABEL_REGRESSION_R2, f"{r2:.2f}")
+                     c2.metric(C.UI_LABEL_REGRESSION_COEF_POP, f"{model.coef_[0]:.2e}")
+                     c3.metric(C.UI_LABEL_REGRESSION_COEF_EMP, f"{model.coef_[1]:.2e}")
+                     
+                     st.info(f"O modelo explica {r2*100:.1f}% da variação nas vendas. "
+                             f"População tem peso {model.coef_[0]:.5f} e Empresas {model.coef_[1]:.5f}.")
+                     
+                     # Scatter Plot
+                     df_reg["vendas_previstas"] = y_pred
+                     
+                     fig = px.scatter(
+                         df_reg,
+                         x="vendas",
+                         y="vendas_previstas",
+                         hover_data=["nome", "uf", "pop_2022", "unidades_locais"],
+                         labels={"vendas": "Vendas Reais", "vendas_previstas": "Vendas Previstas"},
+                         title=C.UI_LABEL_REGRESSION_SCATTER_TITLE
+                     )
+                     # Add perfect prediction line
+                     fig.add_shape(
+                        type="line",
+                        x0=y.min(), y0=y.min(),
+                        x1=y.max(), y1=y.max(),
+                        line=dict(color="Red", dash="dash")
                     )
-                )
+                     st.plotly_chart(fig, width="stretch")
