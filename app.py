@@ -23,6 +23,9 @@ DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 # Main App Logic
 # -----------------------------------------------------------------------------
 
+# Add Logo to Sidebar
+st.sidebar.image("Ativo 10.png", use_container_width=True)
+
 st.sidebar.title(C.APP_TITLE)
 if st.sidebar.button(C.UI_LABEL_RELOAD_DATA):
     st.cache_data.clear()
