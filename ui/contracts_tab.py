@@ -202,10 +202,15 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
     monthly = signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
     monthly = monthly.rename(columns={"_pid": C.UI_LABEL_CONTRACTS})
-    monthly[C.UI_LABEL_MONTH] = monthly.apply(
-        lambda r: f"{C.MONTH_NAMES.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
-        axis=1,
-    )
+    
+    if not monthly.empty:
+        monthly[C.UI_LABEL_MONTH] = monthly.apply(
+            lambda r: f"{C.MONTH_NAMES.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+            axis=1,
+        )
+    else:
+        monthly[C.UI_LABEL_MONTH] = pd.Series(dtype='string')
+        
     monthly = monthly.sort_values(["_ano", "_mes"])
     fig_month = px.bar(
         monthly,

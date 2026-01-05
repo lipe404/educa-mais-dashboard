@@ -75,11 +75,33 @@ else:
     else:
          start_date, end_date = min_date, max_date
 
-months = sorted(dados[C.COL_INT_DT].dt.month.dropna().unique())
-month_label = st.sidebar.selectbox(
-    C.UI_LABEL_FILTER_MONTH, [C.UI_LABEL_ALL] + [f"{int(m):02d}" for m in months]
+# Year and Month Filters
+all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA]]).dropna()
+years = sorted(all_dates.dt.year.unique(), reverse=True)
+year_label = st.sidebar.selectbox(
+    "Filtrar por Ano", [C.UI_LABEL_ALL] + [str(int(y)) for y in years]
 )
-selected_month = int(month_label) if month_label != C.UI_LABEL_ALL else None
+selected_year = int(year_label) if year_label != C.UI_LABEL_ALL else None
+
+if selected_year:
+    # Filter dates for the selected year from both datasets
+    dates_in_year = all_dates[all_dates.dt.year == selected_year]
+    months_in_year = sorted(dates_in_year.dt.month.unique())
+else:
+    months_in_year = sorted(all_dates.dt.month.unique())
+
+month_options = [C.UI_LABEL_ALL] + [
+    C.MONTH_NAMES.get(int(m), f"{int(m):02d}") for m in months_in_year
+]
+month_label = st.sidebar.selectbox(C.UI_LABEL_FILTER_MONTH, month_options)
+
+selected_month = None
+if month_label != C.UI_LABEL_ALL:
+    # Reverse lookup month number
+    for m_num, m_name in C.MONTH_NAMES.items():
+        if m_name == month_label:
+            selected_month = m_num
+            break
 
 # Contract Type Filter
 contract_type_options = [C.UI_LABEL_ALL, C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS]
@@ -123,6 +145,9 @@ selected_cities = st.sidebar.multiselect("Filtrar por Cidade", available_cities)
 mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
     dados[C.COL_INT_DT].dt.date <= end_date
 )
+if selected_year:
+    mask_dados &= dados[C.COL_INT_DT].dt.year == selected_year
+
 if selected_month:
     mask_dados &= dados[C.COL_INT_DT].dt.month == selected_month
 
@@ -147,6 +172,9 @@ dados_filtered = dados[mask_dados].copy()
 mask_fat = (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (
     faturamento[C.COL_INT_DATA].dt.date <= end_date
 )
+if selected_year:
+    mask_fat &= faturamento[C.COL_INT_DATA].dt.year == selected_year
+
 if selected_month:
     mask_fat &= faturamento[C.COL_INT_DATA].dt.month == selected_month
 

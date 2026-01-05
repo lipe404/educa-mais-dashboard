@@ -51,7 +51,7 @@ def render(
             axis=1,
         )
     else:
-        monthly[C.UI_LABEL_MONTH] = []
+        monthly[C.UI_LABEL_MONTH] = pd.Series(dtype='string')
 
     monthly = monthly.sort_values(["_ano", "_mes"])
     st.plotly_chart(
