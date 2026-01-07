@@ -78,12 +78,68 @@ def render(df: pd.DataFrame):
         )
         st.plotly_chart(fig_map, width="stretch")
 
+    # --- New Feature: City Search ---
+    st.markdown("### Pesquisar Cidade")
+    search_col1, search_col2 = st.columns([2, 1])
+    with search_col1:
+        search_city = st.text_input("Digite o nome da cidade para verificar se há polo parceiro:")
+    
+    if search_city:
+        # Normalize search and data for comparison
+        search_term = search_city.strip().lower()
+        cities_normalized = signed_unique[C.COL_INT_CITY].astype(str).str.strip().str.lower()
+        
+        # Check for exact match (case insensitive)
+        matches = signed_unique[cities_normalized == search_term]
+        
+        if not matches.empty:
+            found_states = matches[C.COL_INT_STATE].unique().tolist()
+            st.success(f"✅ A cidade '{search_city}' possui polo parceiro! (Estado(s): {', '.join(found_states)})")
+        else:
+            # Optional: Partial match suggestion
+            partial_matches = signed_unique[cities_normalized.str.contains(search_term, regex=False)]
+            if not partial_matches.empty:
+                suggestions = partial_matches[C.COL_INT_CITY].unique().tolist()[:5] # Limit to 5
+                st.warning(f"❌ Cidade exata não encontrada. Você quis dizer: {', '.join(suggestions)}?")
+            else:
+                st.error(f"❌ A cidade '{search_city}' não possui polo parceiro registrado.")
+    
+    st.divider()
+    # --------------------------------
+
     counts_state = signed_unique[C.COL_INT_STATE].value_counts().reset_index()
     counts_state.columns = [C.UI_LABEL_COL_STATE, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
         px.bar(counts_state, x=C.UI_LABEL_COL_STATE, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_STATE),
         width="stretch",
     )
+
+    # --- New Feature: Partner Distribution Chart ---
+    # Group by number of partners to see how many states have 1, 2, 3... partners
+    dist_data = counts_state[C.UI_LABEL_COL_PARTNERS].value_counts().reset_index()
+    dist_data.columns = [C.UI_LABEL_COL_PARTNERS, "Qtd Estados"]
+    dist_data = dist_data.sort_values(C.UI_LABEL_COL_PARTNERS)
+    
+    # Add list of states for tooltip
+    state_lists = []
+    for count in dist_data[C.UI_LABEL_COL_PARTNERS]:
+        states = counts_state[counts_state[C.UI_LABEL_COL_PARTNERS] == count][C.UI_LABEL_COL_STATE].tolist()
+        state_lists.append(", ".join(states))
+    dist_data["Estados"] = state_lists
+
+    fig_dist = px.bar(
+        dist_data,
+        x=C.UI_LABEL_COL_PARTNERS,
+        y="Qtd Estados",
+        hover_data={"Estados": True},
+        text="Qtd Estados",
+        title="Distribuição de Parceiros por Estado (Quantos estados têm X parceiros)",
+        labels={C.UI_LABEL_COL_PARTNERS: "Quantidade de Parceiros", "Qtd Estados": "Quantidade de Estados"}
+    )
+    fig_dist.update_traces(textposition='outside')
+    fig_dist.update_xaxes(type='category') # Treat number of partners as categories
+    st.plotly_chart(fig_dist, width="stretch")
+    # -----------------------------------------------
 
     counts_city = signed_unique[C.COL_INT_CITY].value_counts().reset_index()
     counts_city.columns = [C.UI_LABEL_COL_CITY, C.UI_LABEL_COL_PARTNERS]
