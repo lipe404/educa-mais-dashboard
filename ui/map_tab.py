@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import folium
+from streamlit_folium import st_folium
 import constants as C
 from geocoding_service import GeocodingService
+from services import map_service
 
 
 geo_service = GeocodingService()
@@ -36,47 +39,99 @@ def render(df: pd.DataFrame):
     unique_locations = signed_unique[
         [C.COL_INT_CITY, C.COL_INT_STATE]
     ].drop_duplicates()
-    location_map = {}
-    for _, row in unique_locations.iterrows():
-        c, s = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
-        if c and s:
-            lat, lon = geo_service.get_coords(c, s)
-            if lat is not None and lon is not None:
-                location_map[(c, s)] = (lat, lon)
+    
+    # --- Map Toggle ---
+    use_boundary_map = st.toggle("🗺️ Ativar Mapa de Limites (GeoJSON)", value=False, help="Exibe os limites territoriais dos municípios. Pode ser mais lento para carregar.")
+    
+    if use_boundary_map:
+        st.info("Carregando limites territoriais... Isso pode levar alguns segundos na primeira execução.")
+        
+        # Center map on Brazil
+        m = folium.Map(location=[C.MAP_LAT_DEFAULT, C.MAP_LON_DEFAULT], zoom_start=4)
+        
+        # Progress bar
+        prog_bar = st.progress(0, text="Buscando geometrias...")
+        total_cities = len(unique_locations)
+        
+        # Limit to avoid freezing if too many cities
+        LIMIT_CITIES = 100
+        if total_cities > LIMIT_CITIES:
+            st.warning(f"Muitas cidades encontradas ({total_cities}). Exibindo apenas as primeiras {LIMIT_CITIES} para performance.")
+            unique_locations = unique_locations.head(LIMIT_CITIES)
+            total_cities = LIMIT_CITIES
+            
+        success_count = 0
+        
+        for i, (idx, row) in enumerate(unique_locations.iterrows()):
+            city, state = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
+            if city and state:
+                # 1. Get IBGE Code
+                ibge_code = map_service.get_ibge_code(city, state)
+                if ibge_code:
+                    # 2. Get GeoJSON
+                    geo_data = map_service.get_municipality_geojson(ibge_code)
+                    if geo_data:
+                        # 3. Add to Map
+                        folium.GeoJson(
+                            geo_data,
+                            style_function=lambda x: {'fillColor': '#ff2d95', 'color': '#0b1437', 'weight': 1, 'fillOpacity': 0.4},
+                            tooltip=f"{city} - {state}"
+                        ).add_to(m)
+                        success_count += 1
+            
+            # Update progress
+            prog_bar.progress((i + 1) / total_cities, text=f"Carregando {city}...")
+            
+        prog_bar.empty()
+        
+        if success_count == 0:
+            st.warning("Não foi possível carregar os limites dos municípios. Verifique a conexão ou os nomes das cidades.")
+        else:
+            st_folium(m, width="100%", height=600)
+            
+    else:
+        # Standard Plotly Map
+        location_map = {}
+        for _, row in unique_locations.iterrows():
+            c, s = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
+            if c and s:
+                lat, lon = geo_service.get_coords(c, s)
+                if lat is not None and lon is not None:
+                    location_map[(c, s)] = (lat, lon)
 
-    geo_rows = []
-    for _, row in signed_unique.iterrows():
-        k = (row.get(C.COL_INT_CITY, ""), row.get(C.COL_INT_STATE, ""))
-        if k in location_map:
-            lat, lon = location_map[k]
-            geo_rows.append(
-                {
-                    "lat": lat,
-                    "lon": lon,
-                    "cidade": row.get(C.COL_INT_CITY, ""),
-                    "estado": row.get(C.COL_INT_STATE, ""),
-                }
+        geo_rows = []
+        for _, row in signed_unique.iterrows():
+            k = (row.get(C.COL_INT_CITY, ""), row.get(C.COL_INT_STATE, ""))
+            if k in location_map:
+                lat, lon = location_map[k]
+                geo_rows.append(
+                    {
+                        "lat": lat,
+                        "lon": lon,
+                        "cidade": row.get(C.COL_INT_CITY, ""),
+                        "estado": row.get(C.COL_INT_STATE, ""),
+                    }
+                )
+
+        if geo_rows:
+            geo_df = pd.DataFrame(geo_rows)
+            fig_map = px.scatter_mapbox(
+                geo_df,
+                lat="lat",
+                lon="lon",
+                hover_name="cidade",
+                hover_data={"estado": True, "lat": False, "lon": False},
+                color_discrete_sequence=[C.COLOR_SECONDARY],
+                zoom=3,
+                center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+                title=C.UI_LABEL_MAP_DISTRIBUTION_TITLE,
             )
-
-    if geo_rows:
-        geo_df = pd.DataFrame(geo_rows)
-        fig_map = px.scatter_mapbox(
-            geo_df,
-            lat="lat",
-            lon="lon",
-            hover_name="cidade",
-            hover_data={"estado": True, "lat": False, "lon": False},
-            color_discrete_sequence=[C.COLOR_SECONDARY],
-            zoom=3,
-            center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
-            title=C.UI_LABEL_MAP_DISTRIBUTION_TITLE,
-        )
-        fig_map.update_layout(
-            mapbox_style="open-street-map",
-            height=600,
-            margin={"r": 0, "t": 30, "l": 0, "b": 0},
-        )
-        st.plotly_chart(fig_map, width="stretch")
+            fig_map.update_layout(
+                mapbox_style="open-street-map",
+                height=600,
+                margin={"r": 0, "t": 30, "l": 0, "b": 0},
+            )
+            st.plotly_chart(fig_map, width="stretch")
 
     # --- New Feature: City Search ---
     st.markdown("### Pesquisar Cidade")

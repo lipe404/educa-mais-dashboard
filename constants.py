@@ -379,7 +379,9 @@ MSG_EXPECTED_DAILY_AVG = "**Média diária esperada:**"
 MSG_INSIGHT_PREFIX = "> **Insight:**"
 LABEL_NEW_CONTRACTS = "novos contratos"
 
-# External APIs
+# API URLs
+API_URL_IBGE_MUNICIPIOS = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+API_URL_IBGE_MALHA_MUNICIPO = "https://servicodados.ibge.gov.br/api/v3/malhas/municipios/{id}?formato=application/vnd.geo+json"
 API_URL_IBGE_MUNICIPIOS_UF = "https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios?orderBy=nome"
 API_URL_SIDRA_POP_2022 = "https://apisidra.ibge.gov.br/values/t/6579/n6/{ids}/v/9324/p/last"
 API_URL_SIDRA_POP_2022_ALL = "https://apisidra.ibge.gov.br/values/t/6579/n6/all/v/9324/p/last"
