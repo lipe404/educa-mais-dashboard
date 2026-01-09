@@ -87,7 +87,7 @@ def render(df: pd.DataFrame):
         if success_count == 0:
             st.warning("Não foi possível carregar os limites dos municípios. Verifique a conexão ou os nomes das cidades.")
         else:
-            st_folium(m, width="100%", height=600)
+            st_folium(m, width="100%", height=600, returned_objects=[])
             
     else:
         # Standard Plotly Map
