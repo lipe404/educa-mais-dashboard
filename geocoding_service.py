@@ -21,9 +21,12 @@ class GeocodingService:
                     lat REAL,
                     lon REAL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             """
             )
+            # Garantir índice na coluna key para performance (embora PK já crie índice implícito,
+            # isso garante redundância caso o esquema mude)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
 
     def get_coords(self, city: str, state: str) -> tuple[float | None, float | None]:
         if not city or not state:
