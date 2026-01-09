@@ -41,7 +41,7 @@ def render(df: pd.DataFrame):
     ].drop_duplicates()
     
     # --- Map Toggle ---
-    use_boundary_map = st.toggle("🗺️ Ativar Mapa de Limites (GeoJSON)", value=False, help="Exibe os limites territoriais dos municípios. Pode ser mais lento para carregar.")
+    use_boundary_map = st.toggle("Ativar Mapa de Limites (GeoJSON)", value=False, help="Exibe os limites territoriais dos municípios. Pode ser mais lento para carregar.")
     
     if use_boundary_map:
         st.info("Carregando limites territoriais... Isso pode levar alguns segundos na primeira execução.")
