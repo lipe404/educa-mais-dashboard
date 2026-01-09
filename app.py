@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title=C.APP_TITLE, layout="wide")
+st.set_page_config(page_title=C.APP_TITLE, page_icon="icon-blue-to-pink.ico", layout="wide")
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 
