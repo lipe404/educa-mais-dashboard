@@ -99,80 +99,162 @@ def generate_forecast(
         if not STATSMODELS_AVAILABLE:
             raise ImportError(C.ERR_MSG_STATSMODELS_NOT_INSTALLED)
 
-        # Add small constant to avoid zero issues if multiplicative
-        series = daily[value_col] + 1e-6
-
-        # Fit (Triple Exponential Smoothing)
-        # We assume weekly seasonality (7 days)
+        # Ensure numeric type
+        series = daily[value_col].astype(float)
+        
+        # Add small noise to avoid zero errors if needed, but usually not strict for add model
+        # ExponentialSmoothing
+        # Use simple 'add' trend/seasonal for robustness on small data
         model = ExponentialSmoothing(
-            series,
-            seasonal_periods=7,
-            trend="add",
-            seasonal="add",
-            initialization_method="estimated",
-        ).fit()
-
-        forecast_values = model.forecast(full_horizon_days).values
+            series, trend="add", seasonal=None, initialization_method="estimated"
+        )
+        fit = model.fit()
+        forecast_values = fit.forecast(full_horizon_days).values
 
     else:
-        # Default/Fallback
-        forecast_values = np.zeros(full_horizon_days)
+        # Default fallback (Naive average)
+        avg_val = daily[value_col].mean()
+        forecast_values = [avg_val] * full_horizon_days
 
     # ---------------------------------------------------------
-    # OPTIMISTIC BIAS CORRECTION
+    # POST-PROCESSING RULES
     # ---------------------------------------------------------
-    # Check if forecast average is below recent history average.
-    # If so, lift the curve to at least match recent history + 5%.
+    
+    # 1. Optimistic Bias:
+    # If the forecast starts lower than the recent average (last 30 days), 
+    # we lift it slightly to assume growth, not immediate crash.
+    recent_avg = daily.tail(30)[value_col].mean()
+    if pd.isna(recent_avg): 
+        recent_avg = 0
+        
+    first_forecast = forecast_values[0] if len(forecast_values) > 0 else 0
+    
+    bias_percentage = 0.0
+    if first_forecast < recent_avg and first_forecast > 0:
+         # Calculate how much lower it is
+         diff = (recent_avg - first_forecast) / first_forecast
+         # Cap bias at 20% to avoid explosion
+         bias_percentage = min(diff, 0.20)
+    
+    # Apply bias
+    adjusted_forecast = [v * (1 + bias_percentage) for v in forecast_values]
 
-    recent_history = daily[value_col].tail(30)  # Last 30 days
-    if not recent_history.empty and len(forecast_values) > 0:
-        recent_avg = recent_history.mean()
+    # 2. Sustainability Floor:
+    # Ensure no value drops below 40% of the recent average (unless recent average is 0)
+    floor = recent_avg * 0.4
+    adjusted_forecast = [max(v, floor) for v in adjusted_forecast]
 
-        # Compare with the start of the forecast (max 30 days) to align trend entry
-        validation_len = min(len(forecast_values), 30)
-        forecast_start_avg = np.mean(forecast_values[:validation_len])
+    # 3. Organic Noise:
+    # Add random variation based on historical std dev
+    hist_std = daily[value_col].std()
+    if pd.isna(hist_std) or hist_std == 0:
+        hist_std = recent_avg * 0.1 # Default 10% if no std
+        
+    # Generate noise for each day
+    # Use fixed seed for reproducibility within same call if needed, but random is better for "organic" feel
+    noise = np.random.normal(0, hist_std * 0.3, size=len(adjusted_forecast)) 
+    
+    final_values = []
+    for val, n in zip(adjusted_forecast, noise):
+        final_val = val + n
+        # Ensure non-negative
+        final_values.append(max(0, final_val))
 
-        # If the model's starting point is lower than recent history, lift it.
-        # We apply a constant offset so the *start* matches recent history + small optimism.
-        if forecast_start_avg < recent_avg:
-            # Target is recent_avg + 5% boost
-            target_mean = recent_avg * 1.05
-            lift = target_mean - forecast_start_avg
+    # Combine into DataFrame
+    forecast_df = pd.DataFrame(
+        {
+            date_col: future_dates,
+            value_col: final_values,
+            "Type": C.UI_LABEL_FORECAST,
+        }
+    )
 
-            # Apply lift
-            forecast_values = forecast_values + lift
+    daily["Type"] = C.UI_LABEL_HISTORY
+    final_df = pd.concat([daily, forecast_df], ignore_index=True)
 
-    # ---------------------------------------------------------
-    # SUSTAINABILITY & ORGANIC VARIABILITY (FIXES)
-    # ---------------------------------------------------------
-
-    # 1. Sustainability Floor: Prevent trend to zero in long horizons.
-    if recent_avg > 0:
-        # Floor = 40% of recent average. usage: max(forecast, floor).
-        floor = recent_avg * 0.4
-        forecast_values = np.maximum(forecast_values, floor)
-
-    # 2. Organic Noise: Break rigid repeating patterns.
-    if len(recent_history) > 1:
-        # Use 30% of historical std dev as noise scale.
-        noise_scale = recent_history.std() * 0.3
-        # Generate noise
-        noise = np.random.normal(0, noise_scale, size=len(forecast_values))
-        forecast_values = forecast_values + noise
-
-    # Final cleanup: Ensure no negatives
-    forecast_values = np.maximum(forecast_values, 0)
-
-    future_df[value_col] = forecast_values
-    future_df[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_FORECAST
-
-    # Combine
-    daily[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_HISTORY
-    if "days_from_start" in daily.columns:
-        daily = daily.drop(columns=["days_from_start"])
-
-    final_df = pd.concat([daily, future_df], ignore_index=True)
     return final_df
+
+def run_backtest(
+    df: pd.DataFrame,
+    date_col: str,
+    value_col: str,
+    algorithm: str,
+    test_days: int = 30
+) -> dict:
+    """
+    Runs a backtest by splitting data into train/test, training the model,
+    and comparing forecasts against actuals.
+    """
+    # Prepare Data
+    daily = df.groupby(df[date_col].dt.date)[value_col].sum().reset_index()
+    daily[date_col] = pd.to_datetime(daily[date_col])
+    daily = daily.sort_values(date_col)
+    
+    # Fill missing days
+    idx = pd.date_range(daily[date_col].min(), daily[date_col].max())
+    daily = daily.set_index(date_col).reindex(idx, fill_value=0).reset_index()
+    daily = daily.rename(columns={"index": date_col})
+    
+    if len(daily) <= test_days:
+        return {"error": "Dados insuficientes para backtesting."}
+
+    # Split Train/Test
+    train_df = daily.iloc[:-test_days].copy()
+    test_df = daily.iloc[-test_days:].copy()
+    
+    # Forecast
+    # We reuse generate_forecast logic but need to strip the "post-processing" 
+    # if we want raw model accuracy, OR keep it if we want to test OUR pipeline.
+    # Let's keep the pipeline to test "what user sees".
+    
+    # We need to adapt generate_forecast to accept a DF and return just values or DF
+    # But generate_forecast expects raw transaction data usually? 
+    # No, it expects a DF with date_col and value_col. 
+    # train_df is already aggregated. generate_forecast re-aggregates.
+    # That's fine, re-aggregating aggregated data is idempotent (sum of sums).
+    
+    forecast_result = generate_forecast(
+        train_df, date_col, value_col, algorithm, test_days
+    )
+    
+    # Extract forecast part
+    forecast_only = forecast_result[forecast_result["Type"] == C.UI_LABEL_FORECAST].copy()
+    
+    # Align dates
+    # generate_forecast generates dates starting from train_df.max() + 1 day
+    # which matches test_df structure exactly.
+    
+    # Merge for comparison
+    comparison = pd.merge(
+        test_df[[date_col, value_col]], 
+        forecast_only[[date_col, value_col]], 
+        on=date_col, 
+        how="inner",
+        suffixes=("_actual", "_predicted")
+    )
+    
+    # Calculate Metrics
+    y_true = comparison[f"{value_col}_actual"]
+    y_pred = comparison[f"{value_col}_predicted"]
+    
+    mae = np.mean(np.abs(y_true - y_pred))
+    rmse = np.sqrt(np.mean((y_true - y_pred)**2))
+    
+    # MAPE (avoid div by zero)
+    # Add epsilon or filter zeros
+    non_zero = y_true != 0
+    if non_zero.any():
+        mape = np.mean(np.abs((y_true[non_zero] - y_pred[non_zero]) / y_true[non_zero])) * 100
+    else:
+        mape = 0.0
+        
+    return {
+        "mae": mae,
+        "rmse": rmse,
+        "mape": mape,
+        "comparison_df": comparison,
+        "train_last_date": train_df[date_col].max()
+    }
 
 
 def generate_smart_insights(
