@@ -21,10 +21,11 @@ def render(dados_df: pd.DataFrame):
             # Load env vars
             load_dotenv()
             real_key = os.getenv("KEY_API")
-            # Fallback if not in env (dev environment or not loaded)
-            if not real_key:
-                 real_key = "@educamais@123"
             
+            if not real_key:
+                st.error("Erro de configuração: KEY_API não definida no ambiente.")
+                return
+
             if key == real_key:
                 st.session_state["unit_analysis_access"] = True
                 st.rerun()
