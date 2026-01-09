@@ -80,7 +80,7 @@ def render(df: pd.DataFrame):
                         success_count += 1
             
             # Update progress
-            prog_bar.progress((i + 1) / total_cities, text=f"Carregando {city}...")
+            prog_bar.progress(min((i + 1) / total_cities, 1.0), text=f"Carregando {city}...")
             
         prog_bar.empty()
         

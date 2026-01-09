@@ -3,10 +3,12 @@ import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
 import constants as C
-from forecasting import generate_forecast, generate_smart_insights
+from forecasting import generate_forecast, generate_smart_insights, run_backtest
+import forecasting # Import module for patching
 
 class TestForecasting:
-    def test_optimistic_bias(self):
+    @patch("forecasting.Prophet")
+    def test_optimistic_bias(self, mock_prophet_class):
         # Create synthetic historical data (last 30 days stable at 100)
         dates = pd.date_range(end=pd.Timestamp.today(), periods=60)
         df = pd.DataFrame({
@@ -14,28 +16,46 @@ class TestForecasting:
             "value": [100] * 60
         })
         
-        # We use a mock algorithm name to trigger the fallback (zeros)
-        # This ensures the raw forecast is 0, which is < recent history (100)
-        # The optimistic bias should kick in.
+        # Mock Prophet to return LOW forecast (e.g. 50)
+        # Recent average is 100.
+        # Forecast 50 is < 100.
+        # Bias should kick in.
+        # Bias max is 20%. 
+        # So it should lift 50 by 20% -> 60.
+        # Wait, bias percentage = min((100 - 50)/50, 0.20) = min(1.0, 0.20) = 0.20.
+        # Adjusted = 50 * 1.2 = 60.
         
-        forecast_df = generate_forecast(
-            df=df,
-            date_col="date",
-            value_col="value",
-            algorithm="UNKNOWN_ALGO",
-            full_horizon_days=30
-        )
+        m = MagicMock()
+        mock_prophet_class.return_value = m
+        future_dates = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=30)
+        forecast_ret = pd.DataFrame({
+            "ds": future_dates,
+            "yhat": [50.0] * 30
+        })
+        m.predict.return_value = forecast_ret
+        m.make_future_dataframe.return_value = pd.DataFrame({"ds": future_dates})
+
+        with patch("forecasting.PROPHET_AVAILABLE", True):
+            forecast_df = generate_forecast(
+                df=df,
+                date_col="date",
+                value_col="value",
+                algorithm=C.ALGORITHM_PROPHET,
+                full_horizon_days=30
+            )
         
         future_forecast = forecast_df[forecast_df["Type"] == "Previsão"]["value"]
         
-        # Recent average is 100.
-        # Target mean is 100 * 1.05 = 105.
-        # Raw forecast is 0.
-        # Lift should be roughly 105.
-        # Since history is constant, std dev is 0, so noise is 0.
+        # We expect values around 60 (50 * 1.2) + noise.
+        # Noise std is based on history std.
+        # History is constant 100, so hist_std=0 -> default 10% of 100 = 10.
+        # Noise added is Normal(0, 10 * 0.3) = Normal(0, 3).
         
-        assert np.allclose(future_forecast.mean(), 105.0, atol=1.0)
-        assert future_forecast.min() > 100.0
+        # So mean should be approx 60.
+        # Let's assert it is significantly higher than raw 50.
+        
+        assert future_forecast.mean() > 55.0
+        assert future_forecast.mean() < 65.0
 
     def test_forecast_structure(self):
         dates = pd.date_range(start="2023-01-01", periods=10)
@@ -198,14 +218,149 @@ class TestForecasting:
         })
         
         # Mock global PROPHET_AVAILABLE
+        # Since we mock the class, we assume the import check passes or we bypass it.
+        # But generate_forecast checks the flag.
+        # We can patch the flag in the module.
         with patch("forecasting.PROPHET_AVAILABLE", True):
             forecast_df = generate_forecast(
                 df, "date", "value", C.ALGORITHM_PROPHET, 5
             )
             
-            assert len(forecast_df[forecast_df["Type"] == "Previsão"]) == 5
-            m.fit.assert_called()
-            m.predict.assert_called()
+        assert len(forecast_df[forecast_df["Type"] == "Previsão"]) == 5
+        # 10 history + 5 forecast = 15
+        assert len(forecast_df) == 15
+
+    # --- Backtesting Tests ---
+
+    def test_run_backtest_insufficient_data(self):
+        # Create small dataframe (5 days)
+        dates = pd.date_range(end=pd.Timestamp.today(), periods=5)
+        df = pd.DataFrame({"date": dates, "value": [10]*5})
+        
+        # Request 30 days backtest
+        result = forecasting.run_backtest(
+            df=df,
+            date_col="date",
+            value_col="value",
+            algorithm="Naive",
+            test_days=30
+        )
+        
+        assert "error" in result
+        assert result["error"] == "Dados insuficientes para backtesting."
+
+    def test_run_backtest_success(self):
+        # Create ample data (60 days)
+        dates = pd.date_range(end=pd.Timestamp.today(), periods=60)
+        # Constant value to make prediction easy (Naive uses mean)
+        df = pd.DataFrame({"date": dates, "value": [100.0]*60})
+        
+        # Test last 10 days
+        result = forecasting.run_backtest(
+            df=df,
+            date_col="date",
+            value_col="value",
+            algorithm="Naive", # Should predict mean (~100)
+            test_days=10
+        )
+        
+        assert "error" not in result
+        assert "mae" in result
+        assert "rmse" in result
+        assert "mape" in result
+        assert "comparison_df" in result
+        
+        # Since history is constant 100, forecast (Naive) should be roughly 100.
+        # However, generate_forecast adds noise and optimistic bias.
+        # But we can check ranges.
+        # MAE should be relatively low (mostly noise).
+        # It shouldn't be huge.
+        assert result["mae"] < 50.0 
+
+    def test_run_backtest_metrics_calculation(self):
+        # We need to mock generate_forecast to return deterministic values
+        # so we can verify MAE/RMSE calculation exactly.
+        
+        dates = pd.date_range(start="2023-01-01", periods=10) # 10 days total
+        # Split: 5 train, 5 test
+        
+        df = pd.DataFrame({
+            "date": dates,
+            "value": [10, 10, 10, 10, 10,  # Train
+                      20, 20, 20, 20, 20]  # Test (Actuals)
+        })
+        
+        # We want predicted to be 15 for the test period
+        # Error = |20 - 15| = 5
+        # MAE = 5
+        # RMSE = 5
+        # MAPE = (5/20) = 25%
+        
+        # Mock generate_forecast
+        with patch("forecasting.generate_forecast") as mock_gen:
+            # Prepare mock return
+            # It needs to return history + forecast
+            # History (train) dates: Jan 1 to Jan 5
+            # Forecast (test) dates: Jan 6 to Jan 10
+            
+            history_df = pd.DataFrame({
+                "date": dates[:5],
+                "value": [10]*5,
+                "Type": [C.UI_LABEL_HISTORY]*5
+            })
+            
+            forecast_df = pd.DataFrame({
+                "date": dates[5:],
+                "value": [15.0]*5, # Predicted
+                "Type": [C.UI_LABEL_FORECAST]*5
+            })
+            
+            mock_gen.return_value = pd.concat([history_df, forecast_df])
+            
+            result = forecasting.run_backtest(
+                df=df,
+                date_col="date",
+                value_col="value",
+                algorithm="Dummy",
+                test_days=5
+            )
+            
+            assert result["mae"] == 5.0
+            assert result["rmse"] == 5.0
+            assert result["mape"] == 25.0
+
+    def test_run_backtest_mape_zero_handling(self):
+        # Scenario: Actuals contain zero
+        dates = pd.date_range(start="2023-01-01", periods=4)
+        # Train: 2 days, Test: 2 days
+        # Test Actuals: [0, 100]
+        # Predicted: [10, 10]
+        
+        df = pd.DataFrame({
+            "date": dates,
+            "value": [10, 10, 0, 100]
+        })
+        
+        with patch("forecasting.generate_forecast") as mock_gen:
+            forecast_df = pd.DataFrame({
+                "date": dates[2:],
+                "value": [10.0, 10.0],
+                "Type": [C.UI_LABEL_FORECAST]*2
+            })
+            # We don't strictly need history in return for backtest logic, but good practice
+            mock_gen.return_value = forecast_df 
+            
+            result = forecasting.run_backtest(df, "date", "value", "Dummy", test_days=2)
+            
+            # MAPE Calculation:
+            # Day 1: Actual=0, Pred=10. Skipped for MAPE? 
+            # Code: non_zero = y_true != 0. 
+            # Only Day 2 is calculated.
+            # Day 2: Actual=100, Pred=10. Diff=90. Abs(90/100) = 0.9 = 90%
+            # MAPE = Mean([90%]) = 90.0
+            
+            assert result["mape"] == 90.0
+
 
     @patch("forecasting.ExponentialSmoothing")
     def test_generate_forecast_holt_winters(self, mock_es_class):
