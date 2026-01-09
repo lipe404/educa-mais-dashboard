@@ -17,6 +17,16 @@ SIDRA_POP_2022_ALL = C.API_URL_SIDRA_POP_2022_ALL
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_municipios_por_uf(uf: str) -> pd.DataFrame:
+    """
+    Fetches the list of municipalities for a given state (UF) from the IBGE API.
+
+    Args:
+        uf (str): The 2-letter state code (e.g., 'SP', 'MG').
+
+    Returns:
+        pd.DataFrame: A DataFrame containing columns ['id', 'nome', 'uf', 'regiao'].
+                      Returns an empty DataFrame on error.
+    """
     try:
         r = requests.get(IBGE_MUNICIPIOS_UF.format(uf=uf), timeout=10)
         r.raise_for_status()
@@ -73,6 +83,15 @@ def get_populacao_2022_municipios(ids: List[str]) -> pd.DataFrame:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_populacao_2022_all() -> pd.DataFrame:
+    """
+    Fetches the 2022 Census population for ALL municipalities in Brazil at once.
+    
+    This is preferred over `get_populacao_2022_municipios` for large analyses as it
+    reduces the overhead of multiple HTTP requests.
+
+    Returns:
+        pd.DataFrame: A DataFrame with columns ['id', 'pop_2022'].
+    """
     try:
         r = requests.get(SIDRA_POP_2022_ALL, timeout=30)
         r.raise_for_status()

@@ -30,8 +30,31 @@ def generate_forecast(
     full_horizon_days: int,
 ) -> pd.DataFrame:
     """
-    Generates a forecast DataFrame appended to the historical data.
-    Only supports Prophet and Holt-Winters with Optimistic Bias.
+    Generates a forecast DataFrame appended to the historical data using Prophet or Holt-Winters.
+
+    This function applies advanced post-processing to the forecast, including:
+    1.  **Optimistic Bias**: Lifts the forecast curve if the initial predicted values are lower
+        than the recent historical average (last 30 days), ensuring the forecast doesn't
+        start with an unrealistic drop.
+    2.  **Sustainability Floor**: Enforces a minimum value (40% of recent average) to prevent
+        the trend from crashing to zero in long horizons.
+    3.  **Organic Noise**: Adds random Gaussian noise based on historical volatility (30% of std dev)
+        to simulate natural day-to-day variations and avoid artificially smooth lines.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing historical data.
+        date_col (str): The name of the column containing date values.
+        value_col (str): The name of the column containing the target numeric values to forecast.
+        algorithm (str): The algorithm to use. Options: 'Prophet' or 'Holt-Winters'.
+        full_horizon_days (int): The number of days to forecast into the future.
+
+    Returns:
+        pd.DataFrame: A new DataFrame containing both historical data and the generated forecast.
+                      It includes a 'Type' column distinguishing 'Histórico' from 'Previsão'.
+                      For 'Previsão' rows, the 'value_col' contains the predicted values (adjusted).
+    
+    Raises:
+        ImportError: If the selected algorithm library (prophet or statsmodels) is not installed.
     """
     # Prepare Base Data (Daily Aggregation)
     daily = df.groupby(df[date_col].dt.date)[value_col].sum().reset_index()
@@ -161,7 +184,26 @@ def generate_smart_insights(
     is_currency: bool = False,
 ) -> str:
     """
-    Generates text analysis of the historical and forecast data.
+    Generates a natural language summary and analysis of the historical and forecast data.
+
+    It calculates:
+    - **Recent Trend**: Compares the last 7 days vs the previous 7 days to determine if the
+      metric is growing, slowing down, or stable.
+    - **Forecast Totals**: Sums up the predicted values for the full horizon.
+    - **Daily Average**: Calculates the expected daily run rate.
+    - **Strategic Insight**: Compares the forecast daily average with the recent history to
+      give a qualitative assessment (Positive, Negative, or Neutral).
+
+    Args:
+        df (pd.DataFrame): Historical data.
+        date_col (str): Date column name.
+        value_col (str): Value column name.
+        forecast_df (pd.DataFrame): The output from `generate_forecast`.
+        unit_label (str, optional): Label for the unit (e.g., "novos contratos"). Defaults to C.LABEL_NEW_CONTRACTS.
+        is_currency (bool, optional): If True, formats values as currency (R$). Defaults to False.
+
+    Returns:
+        str: A formatted string with emojis and insights ready for display in Streamlit.
     """
     # 1. Historical Analysis
     daily = df.groupby(df[date_col].dt.date)[value_col].sum().sort_index()
