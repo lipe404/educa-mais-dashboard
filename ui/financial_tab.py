@@ -42,6 +42,10 @@ def render(
     focus_year = end_date.year if isinstance(end_date, date) else now.year
     focus_month = selected_month if selected_month is not None else end_date.month if isinstance(end_date, date) else now.month
     
+    # Calculate Previous Month
+    prev_year = focus_year if focus_month > 1 else focus_year - 1
+    prev_month = focus_month - 1 if focus_month > 1 else 12
+
     show_comparison = st.toggle("Comparar com Mês Anterior (Mês vs Mês)", value=False)
     
     if show_comparison:
@@ -52,10 +56,6 @@ def render(
         # Assuming 'df' contains the filtered data user is looking at.
         # But for M-o-M comparison, we usually want the FULL current month vs FULL prev month.
         # Let's use 'full_df' (which is fat_filtered_base) for both to ensure apples-to-apples comparison of the months.
-        
-        # Calculate Previous Month
-        prev_year = focus_year if focus_month > 1 else focus_year - 1
-        prev_month = focus_month - 1 if focus_month > 1 else 12
         
         # Filter Current Month (from full_df to get full month context)
         curr_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (full_df[C.COL_INT_DATA].dt.month == focus_month)
