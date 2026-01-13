@@ -40,24 +40,68 @@ def validate_columns(df: pd.DataFrame, required: list[str]) -> bool:
     return True
 
 
-def process_column(df: pd.DataFrame, src: str, dest: str, func=None, default=None):
+def process_column(df: pd.DataFrame, src: str, dest: str, func=None, default=None, aliases: list = None, index: int = None):
+    # Determine the actual source column name
+    actual_src = None
     if src in df.columns:
+        actual_src = src
+    elif aliases:
+        # Try exact aliases
+        for alias in aliases:
+            if alias in df.columns:
+                actual_src = alias
+                break
+        # Try case-insensitive matching
+        if not actual_src:
+            for col in df.columns:
+                if str(col).strip().upper() == src.upper():
+                    actual_src = col
+                    break
+                for alias in aliases:
+                    if str(col).strip().upper() == alias.upper():
+                        actual_src = col
+                        break
+    
+    # Fallback to index if provided and still not found
+    if not actual_src and index is not None:
+        if 0 <= index < len(df.columns):
+            actual_src = df.columns[index]
+            logger.info(f"Column '{src}' not found by name. Using index {index} (name: '{actual_src}')")
+
+    if actual_src:
         if func:
-            df[dest] = df[src].apply(func)
+            try:
+                df[dest] = df[actual_src].apply(func)
+            except Exception as e:
+                 logger.error(f"Error processing column {actual_src} -> {dest}: {e}")
+                 df[dest] = default
         else:
-            df[dest] = df[src]
+            df[dest] = df[actual_src]
     else:
+        logger.warning(f"Column '{src}' not found (aliases={aliases}, index={index}). Using default.")
         df[dest] = default
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
-def load_sheet(sheet_id: str, sheet_name: str) -> pd.DataFrame:
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+def load_sheet(sheet_id: str, sheet_name: str, gid: str = None) -> pd.DataFrame:
+    if gid:
+        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    else:
+        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+        
     try:
-        logger.info(f"Loading sheet: {sheet_name}")
+        logger.info(f"Loading sheet: {sheet_name} (GID: {gid})")
         r = requests.get(url, timeout=10)
         r.raise_for_status()
+        
+        # Use utf-8-sig to handle BOM if present
+        r.encoding = 'utf-8-sig'
+        
         df = pd.read_csv(StringIO(r.text))
+        
+        # Clean headers: strip whitespace and BOM artifacts
+        df.columns = df.columns.str.strip().str.replace('\ufeff', '')
+        
         return df
     except Exception as e:
         logger.error(f"Error loading {sheet_name}: {e}")
@@ -153,5 +197,34 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
     if C.COL_INT_DATA in df.columns:
         df[C.COL_INT_DATA] = pd.to_datetime(
             df[C.COL_INT_DATA], errors="coerce")
+
+    return df
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_alunos(sheet_id: str) -> pd.DataFrame:
+    df = load_sheet(sheet_id, C.SHEET_NAME_STUDENTS, gid=C.GID_STUDENTS)
+    if df.empty:
+        return df
+
+    # Map columns based on CSV structure
+    # 0: PARCEIRO, 1: TIPO, 2: DATA, 3: NOME DO ALUNO, 4: CURSO
+    # 5: CPF, 6: DOCUMENTOS, 7: SISTEC, 8: CARTEIRINHA
+    
+    process_column(df, C.COL_SRC_PARTNER, C.COL_INT_PARTNER, lambda x: str(x).strip(), "", aliases=["Parceiro", "parceiro", "PARCEIRO"], index=0)
+    process_column(df, C.COL_SRC_FINANCIAL_TYPE, C.COL_INT_FINANCIAL_TYPE, lambda x: str(x).strip().upper(), "", aliases=["Tipo", "tipo", "TIPO"], index=1)
+    process_column(df, C.COL_SRC_DATA, C.COL_INT_DATA, parse_datetime_any, None, aliases=["Data", "data", "DATA"], index=2)
+    process_column(df, C.COL_SRC_STUDENT_NAME, C.COL_INT_STUDENT_NAME, lambda x: str(x).strip(), "", aliases=["Nome", "Aluno", "Nome do Aluno", "ALUNO", "NOME", "NOME DO ALUNO"], index=3)
+    process_column(df, C.COL_SRC_COURSE, C.COL_INT_COURSE, lambda x: str(x).strip(), "", aliases=["Curso", "curso", "CURSO"], index=4)
+    process_column(df, C.COL_SRC_CPF, C.COL_INT_CPF, lambda x: str(x).strip(), "", aliases=["CPF", "cpf"], index=5)
+    process_column(df, C.COL_SRC_DOCUMENTS, C.COL_INT_DOCUMENTS, lambda x: str(x).strip(), "", aliases=["Documentos", "documentos", "DOCUMENTOS"], index=6)
+    process_column(df, C.COL_SRC_SISTEC, C.COL_INT_SISTEC, lambda x: str(x).strip(), "", aliases=["Sistec", "sistec", "SISTEC"], index=7)
+    process_column(df, C.COL_SRC_CARD, C.COL_INT_CARD, lambda x: str(x).strip(), "", aliases=["Carteirinha", "carteirinha", "CARTEIRINHA"], index=8)
+
+    # Filter out empty rows based on Student Name or Course
+    df = df[df[C.COL_INT_STUDENT_NAME].notna() & (df[C.COL_INT_STUDENT_NAME] != "") & (df[C.COL_INT_STUDENT_NAME] != "nan")]
+
+    if C.COL_INT_DATA in df.columns:
+        df[C.COL_INT_DATA] = pd.to_datetime(df[C.COL_INT_DATA], errors="coerce")
 
     return df
