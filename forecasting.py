@@ -52,7 +52,7 @@ def generate_forecast(
         pd.DataFrame: A new DataFrame containing both historical data and the generated forecast.
                       It includes a 'Type' column distinguishing 'Histórico' from 'Previsão'.
                       For 'Previsão' rows, the 'value_col' contains the predicted values (adjusted).
-    
+
     Raises:
         ImportError: If the selected algorithm library (prophet or statsmodels) is not installed.
     """
@@ -101,7 +101,7 @@ def generate_forecast(
 
         # Ensure numeric type
         series = daily[value_col].astype(float)
-        
+
         # Add small noise to avoid zero errors if needed, but usually not strict for add model
         # ExponentialSmoothing
         # Use simple 'add' trend/seasonal for robustness on small data
@@ -119,23 +119,23 @@ def generate_forecast(
     # ---------------------------------------------------------
     # POST-PROCESSING RULES
     # ---------------------------------------------------------
-    
+
     # 1. Optimistic Bias:
-    # If the forecast starts lower than the recent average (last 30 days), 
+    # If the forecast starts lower than the recent average (last 30 days),
     # we lift it slightly to assume growth, not immediate crash.
     recent_avg = daily.tail(30)[value_col].mean()
-    if pd.isna(recent_avg): 
+    if pd.isna(recent_avg):
         recent_avg = 0
-        
+
     first_forecast = forecast_values[0] if len(forecast_values) > 0 else 0
-    
+
     bias_percentage = 0.0
     if first_forecast < recent_avg and first_forecast > 0:
-         # Calculate how much lower it is
-         diff = (recent_avg - first_forecast) / first_forecast
-         # Cap bias at 20% to avoid explosion
-         bias_percentage = min(diff, 0.20)
-    
+        # Calculate how much lower it is
+        diff = (recent_avg - first_forecast) / first_forecast
+        # Cap bias at 20% to avoid explosion
+        bias_percentage = min(diff, 0.20)
+
     # Apply bias
     adjusted_forecast = [v * (1 + bias_percentage) for v in forecast_values]
 
@@ -148,12 +148,12 @@ def generate_forecast(
     # Add random variation based on historical std dev
     hist_std = daily[value_col].std()
     if pd.isna(hist_std) or hist_std == 0:
-        hist_std = recent_avg * 0.1 # Default 10% if no std
-        
+        hist_std = recent_avg * 0.1  # Default 10% if no std
+
     # Generate noise for each day
     # Use fixed seed for reproducibility within same call if needed, but random is better for "organic" feel
-    noise = np.random.normal(0, hist_std * 0.3, size=len(adjusted_forecast)) 
-    
+    noise = np.random.normal(0, hist_std * 0.3, size=len(adjusted_forecast))
+
     final_values = []
     for val, n in zip(adjusted_forecast, noise):
         final_val = val + n
@@ -174,6 +174,7 @@ def generate_forecast(
 
     return final_df
 
+
 def run_backtest(
     df: pd.DataFrame,
     date_col: str,
@@ -189,65 +190,67 @@ def run_backtest(
     daily = df.groupby(df[date_col].dt.date)[value_col].sum().reset_index()
     daily[date_col] = pd.to_datetime(daily[date_col])
     daily = daily.sort_values(date_col)
-    
+
     # Fill missing days
     idx = pd.date_range(daily[date_col].min(), daily[date_col].max())
     daily = daily.set_index(date_col).reindex(idx, fill_value=0).reset_index()
     daily = daily.rename(columns={"index": date_col})
-    
+
     if len(daily) <= test_days:
         return {"error": "Dados insuficientes para backtesting."}
 
     # Split Train/Test
     train_df = daily.iloc[:-test_days].copy()
     test_df = daily.iloc[-test_days:].copy()
-    
+
     # Forecast
-    # We reuse generate_forecast logic but need to strip the "post-processing" 
+    # We reuse generate_forecast logic but need to strip the "post-processing"
     # if we want raw model accuracy, OR keep it if we want to test OUR pipeline.
     # Let's keep the pipeline to test "what user sees".
-    
+
     # We need to adapt generate_forecast to accept a DF and return just values or DF
-    # But generate_forecast expects raw transaction data usually? 
-    # No, it expects a DF with date_col and value_col. 
+    # But generate_forecast expects raw transaction data usually?
+    # No, it expects a DF with date_col and value_col.
     # train_df is already aggregated. generate_forecast re-aggregates.
     # That's fine, re-aggregating aggregated data is idempotent (sum of sums).
-    
+
     forecast_result = generate_forecast(
         train_df, date_col, value_col, algorithm, test_days
     )
-    
+
     # Extract forecast part
-    forecast_only = forecast_result[forecast_result["Type"] == C.UI_LABEL_FORECAST].copy()
-    
+    forecast_only = forecast_result[forecast_result["Type"]
+                                    == C.UI_LABEL_FORECAST].copy()
+
     # Align dates
     # generate_forecast generates dates starting from train_df.max() + 1 day
     # which matches test_df structure exactly.
-    
+
     # Merge for comparison
     comparison = pd.merge(
-        test_df[[date_col, value_col]], 
-        forecast_only[[date_col, value_col]], 
-        on=date_col, 
+        test_df[[date_col, value_col]],
+        forecast_only[[date_col, value_col]],
+        on=date_col,
         how="inner",
         suffixes=("_actual", "_predicted")
     )
-    
+
     # Calculate Metrics
     y_true = comparison[f"{value_col}_actual"]
     y_pred = comparison[f"{value_col}_predicted"]
-    
+
     mae = np.mean(np.abs(y_true - y_pred))
     rmse = np.sqrt(np.mean((y_true - y_pred)**2))
-    
+
     # MAPE (avoid div by zero)
     # Add epsilon or filter zeros
     non_zero = y_true != 0
     if non_zero.any():
-        mape = np.mean(np.abs((y_true[non_zero] - y_pred[non_zero]) / y_true[non_zero])) * 100
+        mape = np.mean(
+            np.abs((y_true[non_zero] - y_pred[non_zero]) / y_true[non_zero])) * 100
     else:
         mape = 0.0
-        
+
     return {
         "mae": mae,
         "rmse": rmse,
@@ -300,7 +303,8 @@ def generate_smart_insights(
         trend_pct = ((recent_avg - prev_avg) / prev_avg) * 100
 
     # 2. Forecast Analysis
-    future_only = forecast_df[forecast_df[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST]
+    future_only = forecast_df[forecast_df[C.COL_FORECAST_TYPE]
+                              == C.LABEL_FORECAST_TYPE_FORECAST]
     future_sum = future_only[value_col].sum()
     future_daily_avg = future_only[value_col].mean()
 

@@ -55,9 +55,10 @@ def get_unidades_locais(ids: List[str], cnae_cat_id: str = "all") -> pd.DataFram
     # Future: Re-enable classif_param if we find static IDs for CNAE Sections.
 
     for i in range(0, len(ids), 40):
-        batch_ids = ids[i : i + 40]
+        batch_ids = ids[i: i + 40]
         # Standard query = Total Local Units (All Categories)
-        url = SIDRA_VALUES.format(t=AGREGADO_CEMPRE, ids="|".join(batch_ids), v=var_id)
+        url = SIDRA_VALUES.format(
+            t=AGREGADO_CEMPRE, ids="|".join(batch_ids), v=var_id)
 
         try:
             r = requests.get(url, timeout=20)

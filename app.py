@@ -15,7 +15,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title=C.APP_TITLE, page_icon="icon-blue-to-pink.ico", layout="wide")
+st.set_page_config(page_title=C.APP_TITLE,
+                   page_icon="icon-blue-to-pink.ico", layout="wide")
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 
@@ -63,20 +64,22 @@ elif pd.notna(max_dt_dados):
 elif pd.notna(max_dt_fat):
     max_date = max_dt_fat.date()
 
-date_range = st.sidebar.date_input(C.UI_LABEL_DATE_RANGE, value=(min_date, max_date))
+date_range = st.sidebar.date_input(
+    C.UI_LABEL_DATE_RANGE, value=(min_date, max_date))
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start_date, end_date = date_range
 else:
     # Handle single date selection or invalid range
     if isinstance(date_range, tuple) and len(date_range) == 1:
-         start_date, end_date = date_range[0], date_range[0]
+        start_date, end_date = date_range[0], date_range[0]
     elif not isinstance(date_range, tuple):
-         start_date, end_date = date_range, date_range
+        start_date, end_date = date_range, date_range
     else:
-         start_date, end_date = min_date, max_date
+        start_date, end_date = min_date, max_date
 
 # Year and Month Filters
-all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA]]).dropna()
+all_dates = pd.concat(
+    [dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA]]).dropna()
 years = sorted(all_dates.dt.year.unique(), reverse=True)
 year_label = st.sidebar.selectbox(
     "Filtrar por Ano", [C.UI_LABEL_ALL] + [str(int(y)) for y in years]
@@ -104,12 +107,15 @@ if month_label != C.UI_LABEL_ALL:
             break
 
 # Contract Type Filter
-contract_type_options = [C.UI_LABEL_ALL, C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS]
-selected_contract_type = st.sidebar.radio(C.UI_LABEL_CONTRACT_TYPE, contract_type_options)
+contract_type_options = [C.UI_LABEL_ALL,
+                         C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS]
+selected_contract_type = st.sidebar.radio(
+    C.UI_LABEL_CONTRACT_TYPE, contract_type_options)
 
 # Geographic Filters
 unique_regions = sorted([r for r in dados[C.COL_INT_REGION].unique() if r])
-selected_regions = st.sidebar.multiselect(C.UI_LABEL_FILTER_REGION, unique_regions)
+selected_regions = st.sidebar.multiselect(
+    C.UI_LABEL_FILTER_REGION, unique_regions)
 
 # State Filter (dependent on Region)
 if selected_regions:
@@ -121,9 +127,11 @@ if selected_regions:
         ]
     )
 else:
-    available_states = sorted([s for s in dados[C.COL_INT_STATE].unique() if s])
+    available_states = sorted(
+        [s for s in dados[C.COL_INT_STATE].unique() if s])
 
-selected_states = st.sidebar.multiselect(C.UI_LABEL_FILTER_STATE, available_states)
+selected_states = st.sidebar.multiselect(
+    C.UI_LABEL_FILTER_STATE, available_states)
 
 # City Filter (dependent on State) - Cascading Filter
 if selected_states:
@@ -138,7 +146,8 @@ else:
     # If no state selected, show all cities (or maybe none to avoid clutter, but let's show all for now)
     available_cities = sorted([c for c in dados[C.COL_INT_CITY].unique() if c])
 
-selected_cities = st.sidebar.multiselect("Filtrar por Cidade", available_cities)
+selected_cities = st.sidebar.multiselect(
+    "Filtrar por Cidade", available_cities)
 
 # Apply Filters
 # Using standard masking since index optimization requires more complex setup for two distinct frames
@@ -242,7 +251,8 @@ st.markdown(
 )
 
 t1, t2, t3, t4, t5, t6, t7 = st.tabs(
-    [C.TAB_NAME_CONTRACTS, C.TAB_NAME_MAP, C.TAB_NAME_FINANCIAL, C.TAB_NAME_FORECAST, C.TAB_NAME_OPPORTUNITY, C.TAB_NAME_PARTNERS, C.TAB_NAME_UNIT_ANALYSIS]
+    [C.TAB_NAME_CONTRACTS, C.TAB_NAME_MAP, C.TAB_NAME_FINANCIAL, C.TAB_NAME_FORECAST,
+        C.TAB_NAME_OPPORTUNITY, C.TAB_NAME_PARTNERS, C.TAB_NAME_UNIT_ANALYSIS]
 )
 
 with t1:

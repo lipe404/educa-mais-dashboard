@@ -39,29 +39,33 @@ def render(df: pd.DataFrame):
     unique_locations = signed_unique[
         [C.COL_INT_CITY, C.COL_INT_STATE]
     ].drop_duplicates()
-    
+
     # --- Map Toggle ---
-    use_boundary_map = st.toggle("Ativar Mapa de Limites (GeoJSON)", value=False, help="Exibe os limites territoriais dos municípios. Pode ser mais lento para carregar.")
-    
+    use_boundary_map = st.toggle("Ativar Mapa de Limites (GeoJSON)", value=False,
+                                 help="Exibe os limites territoriais dos municípios. Pode ser mais lento para carregar.")
+
     if use_boundary_map:
-        st.info("Carregando limites territoriais... Isso pode levar alguns segundos na primeira execução.")
-        
+        st.info(
+            "Carregando limites territoriais... Isso pode levar alguns segundos na primeira execução.")
+
         # Center map on Brazil
-        m = folium.Map(location=[C.MAP_LAT_DEFAULT, C.MAP_LON_DEFAULT], zoom_start=4)
-        
+        m = folium.Map(location=[C.MAP_LAT_DEFAULT,
+                       C.MAP_LON_DEFAULT], zoom_start=4)
+
         # Progress bar
         prog_bar = st.progress(0, text="Buscando geometrias...")
         total_cities = len(unique_locations)
-        
+
         # Limit to avoid freezing if too many cities
         LIMIT_CITIES = 100
         if total_cities > LIMIT_CITIES:
-            st.warning(f"Muitas cidades encontradas ({total_cities}). Exibindo apenas as primeiras {LIMIT_CITIES} para performance.")
+            st.warning(
+                f"Muitas cidades encontradas ({total_cities}). Exibindo apenas as primeiras {LIMIT_CITIES} para performance.")
             unique_locations = unique_locations.head(LIMIT_CITIES)
             total_cities = LIMIT_CITIES
-            
+
         success_count = 0
-        
+
         for i, (idx, row) in enumerate(unique_locations.iterrows()):
             city, state = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
             if city and state:
@@ -74,21 +78,24 @@ def render(df: pd.DataFrame):
                         # 3. Add to Map
                         folium.GeoJson(
                             geo_data,
-                            style_function=lambda x: {'fillColor': '#ff2d95', 'color': '#0b1437', 'weight': 1, 'fillOpacity': 0.4},
+                            style_function=lambda x: {
+                                'fillColor': '#ff2d95', 'color': '#0b1437', 'weight': 1, 'fillOpacity': 0.4},
                             tooltip=f"{city} - {state}"
                         ).add_to(m)
                         success_count += 1
-            
+
             # Update progress
-            prog_bar.progress(min((i + 1) / total_cities, 1.0), text=f"Carregando {city}...")
-            
+            prog_bar.progress(min((i + 1) / total_cities, 1.0),
+                              text=f"Carregando {city}...")
+
         prog_bar.empty()
-        
+
         if success_count == 0:
-            st.warning("Não foi possível carregar os limites dos municípios. Verifique a conexão ou os nomes das cidades.")
+            st.warning(
+                "Não foi possível carregar os limites dos municípios. Verifique a conexão ou os nomes das cidades.")
         else:
             st_folium(m, width="100%", height=600, returned_objects=[])
-            
+
     else:
         # Standard Plotly Map
         location_map = {}
@@ -137,48 +144,58 @@ def render(df: pd.DataFrame):
     st.markdown("### Pesquisar Cidade")
     search_col1, search_col2 = st.columns([2, 1])
     with search_col1:
-        search_city = st.text_input("Digite o nome da cidade para verificar se há polo parceiro:")
-    
+        search_city = st.text_input(
+            "Digite o nome da cidade para verificar se há polo parceiro:")
+
     if search_city:
         # Normalize search and data for comparison
         search_term = search_city.strip().lower()
-        cities_normalized = signed_unique[C.COL_INT_CITY].astype(str).str.strip().str.lower()
-        
+        cities_normalized = signed_unique[C.COL_INT_CITY].astype(
+            str).str.strip().str.lower()
+
         # Check for exact match (case insensitive)
         matches = signed_unique[cities_normalized == search_term]
-        
+
         if not matches.empty:
             found_states = matches[C.COL_INT_STATE].unique().tolist()
-            st.success(f"✅ A cidade '{search_city}' possui polo parceiro! (Estado(s): {', '.join(found_states)})")
+            st.success(
+                f"✅ A cidade '{search_city}' possui polo parceiro! (Estado(s): {', '.join(found_states)})")
         else:
             # Optional: Partial match suggestion
-            partial_matches = signed_unique[cities_normalized.str.contains(search_term, regex=False)]
+            partial_matches = signed_unique[cities_normalized.str.contains(
+                search_term, regex=False)]
             if not partial_matches.empty:
-                suggestions = partial_matches[C.COL_INT_CITY].unique().tolist()[:5] # Limit to 5
-                st.warning(f"❌ Cidade exata não encontrada. Você quis dizer: {', '.join(suggestions)}?")
+                suggestions = partial_matches[C.COL_INT_CITY].unique().tolist()[
+                    :5]  # Limit to 5
+                st.warning(
+                    f"❌ Cidade exata não encontrada. Você quis dizer: {', '.join(suggestions)}?")
             else:
-                st.error(f"❌ A cidade '{search_city}' não possui polo parceiro registrado.")
-    
+                st.error(
+                    f"❌ A cidade '{search_city}' não possui polo parceiro registrado.")
+
     st.divider()
     # --------------------------------
 
     counts_state = signed_unique[C.COL_INT_STATE].value_counts().reset_index()
     counts_state.columns = [C.UI_LABEL_COL_STATE, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
-        px.bar(counts_state, x=C.UI_LABEL_COL_STATE, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_STATE),
+        px.bar(counts_state, x=C.UI_LABEL_COL_STATE,
+               y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_STATE),
         width="stretch",
     )
 
     # --- New Feature: Partner Distribution Chart ---
     # Group by number of partners to see how many states have 1, 2, 3... partners
-    dist_data = counts_state[C.UI_LABEL_COL_PARTNERS].value_counts().reset_index()
+    dist_data = counts_state[C.UI_LABEL_COL_PARTNERS].value_counts(
+    ).reset_index()
     dist_data.columns = [C.UI_LABEL_COL_PARTNERS, "Qtd Estados"]
     dist_data = dist_data.sort_values(C.UI_LABEL_COL_PARTNERS)
-    
+
     # Add list of states for tooltip
     state_lists = []
     for count in dist_data[C.UI_LABEL_COL_PARTNERS]:
-        states = counts_state[counts_state[C.UI_LABEL_COL_PARTNERS] == count][C.UI_LABEL_COL_STATE].tolist()
+        states = counts_state[counts_state[C.UI_LABEL_COL_PARTNERS]
+                              == count][C.UI_LABEL_COL_STATE].tolist()
         state_lists.append(", ".join(states))
     dist_data["Estados"] = state_lists
 
@@ -189,30 +206,36 @@ def render(df: pd.DataFrame):
         hover_data={"Estados": True},
         text="Qtd Estados",
         title="Distribuição de Parceiros por Estado (Quantos estados têm X parceiros)",
-        labels={C.UI_LABEL_COL_PARTNERS: "Quantidade de Parceiros", "Qtd Estados": "Quantidade de Estados"}
+        labels={C.UI_LABEL_COL_PARTNERS: "Quantidade de Parceiros",
+                "Qtd Estados": "Quantidade de Estados"}
     )
     fig_dist.update_traces(textposition='outside')
-    fig_dist.update_xaxes(type='category') # Treat number of partners as categories
+    # Treat number of partners as categories
+    fig_dist.update_xaxes(type='category')
     st.plotly_chart(fig_dist, width="stretch")
     # -----------------------------------------------
 
     counts_city = signed_unique[C.COL_INT_CITY].value_counts().reset_index()
     counts_city.columns = [C.UI_LABEL_COL_CITY, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
-        px.bar(counts_city, x=C.UI_LABEL_COL_CITY, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_CITY),
+        px.bar(counts_city, x=C.UI_LABEL_COL_CITY,
+               y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_CITY),
         width="stretch",
     )
 
-    counts_region = signed_unique[C.COL_INT_REGION].value_counts().reset_index()
+    counts_region = signed_unique[C.COL_INT_REGION].value_counts(
+    ).reset_index()
     counts_region.columns = [C.UI_LABEL_COL_REGION, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
-        px.bar(counts_region, x=C.UI_LABEL_COL_REGION, y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_REGION),
+        px.bar(counts_region, x=C.UI_LABEL_COL_REGION,
+               y=C.UI_LABEL_COL_PARTNERS, title=C.UI_LABEL_PARTNERS_BY_REGION),
         width="stretch",
     )
 
     all_states = sorted(list(C.ESTADO_REGIAO.keys()))
     present_states = (
-        signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
+        signed_unique[C.COL_INT_STATE].replace(
+            "", pd.NA).dropna().unique().tolist()
     )
     present_states = [s for s in present_states if s in C.ESTADO_REGIAO]
     missing_states = [s for s in all_states if s not in set(present_states)]

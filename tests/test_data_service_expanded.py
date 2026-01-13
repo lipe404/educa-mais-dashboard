@@ -6,17 +6,21 @@ from unittest.mock import patch, MagicMock
 import constants as C
 from services import data as data_service
 
+
 class TestDataServiceExpanded:
     # --- Helper Function Edge Cases ---
 
     def test_parse_datetime_any_edge_cases(self):
         # Mixed formats
-        assert data_service.parse_datetime_any("2023/01/01") == pd.Timestamp("2023-01-01")
-        assert data_service.parse_datetime_any("01-01-2023") == pd.Timestamp("2023-01-01")
-        
+        assert data_service.parse_datetime_any(
+            "2023/01/01") == pd.Timestamp("2023-01-01")
+        assert data_service.parse_datetime_any(
+            "01-01-2023") == pd.Timestamp("2023-01-01")
+
         # Non-string inputs that are convertible
-        assert data_service.parse_datetime_any(20230101) is not None # parser might handle this or fail depending on implementation details, but let's check basic robustness
-        
+        # parser might handle this or fail depending on implementation details, but let's check basic robustness
+        assert data_service.parse_datetime_any(20230101) is not None
+
         # Empty strings
         assert data_service.parse_datetime_any("") is None
         assert data_service.parse_datetime_any("   ") is None
@@ -26,27 +30,27 @@ class TestDataServiceExpanded:
         # Code: float(str(x).replace(",", ".")) -> "1.000,00" -> "1.000.00" -> Error?
         # Usually simple replacement isn't enough for thousands separators.
         # Let's test what the current implementation actually does.
-        
+
         assert data_service.to_float_any("1234") == 1234.0
         assert data_service.to_float_any("1234,56") == 1234.56
         assert data_service.to_float_any("  1234,56  ") == 1234.56
-        
+
         # Check invalid inputs
         assert np.isnan(data_service.to_float_any("abc"))
         assert np.isnan(data_service.to_float_any([]))
-        
+
     def test_process_column_with_exception(self):
         df = pd.DataFrame({"src": ["a", "b"]})
-        
+
         def faulty_func(x):
             raise ValueError("Error")
-            
+
         # If func raises exception, apply might fail.
         # The current implementation does: df[dest] = df[src].apply(func)
         # If apply fails, it propagates the exception.
         # Let's verify this behavior or if we need to wrap it.
         with pytest.raises(ValueError):
-             data_service.process_column(df, "src", "dest", faulty_func)
+            data_service.process_column(df, "src", "dest", faulty_func)
 
     # --- get_dados Logic Tests ---
 
@@ -65,7 +69,7 @@ class TestDataServiceExpanded:
 
         # Use unique ID to bypass cache
         df = data_service.get_dados("dummy_id_missing_cols")
-        
+
         # Check if missing columns were created with defaults
         assert C.COL_INT_CITY in df.columns
         assert df.iloc[0][C.COL_INT_CITY] == ""
@@ -76,15 +80,17 @@ class TestDataServiceExpanded:
     def test_get_dados_region_mapping(self, mock_load_sheet):
         raw_data = {
             "Partner Name": ["P1", "P2", "P3"],
-            C.COL_SRC_STATE: ["SP", "BA", "XX"], # SP=Sudeste, BA=Nordeste, XX=Unknown
+            # SP=Sudeste, BA=Nordeste, XX=Unknown
+            C.COL_SRC_STATE: ["SP", "BA", "XX"],
             C.COL_SRC_TIMESTAMP: ["01/01/2023"] * 3
         }
         mock_df = pd.DataFrame(raw_data)
         mock_load_sheet.return_value = mock_df
 
         df = data_service.get_dados("dummy_id_region")
-        
-        assert df.iloc[0][C.COL_INT_REGION] == "Sudeste" # Assuming mapping exists in constants
+
+        # Assuming mapping exists in constants
+        assert df.iloc[0][C.COL_INT_REGION] == "Sudeste"
         assert df.iloc[1][C.COL_INT_REGION] == "Nordeste"
         assert df.iloc[2][C.COL_INT_REGION] == C.DEFAULT_REGION_OTHER
 
@@ -108,11 +114,11 @@ class TestDataServiceExpanded:
         mock_load_sheet.return_value = mock_df
 
         df = data_service.get_faturamento("dummy_id_malformed")
-        
+
         # Check Value parsing
         assert df.iloc[0][C.COL_INT_VALOR] == 1000.0
         assert np.isnan(df.iloc[1][C.COL_INT_VALOR])
-        
+
         # Check Date parsing
         assert df.iloc[0][C.COL_INT_DATA] == pd.Timestamp("2023-01-01")
         assert pd.isna(df.iloc[1][C.COL_INT_DATA])

@@ -10,7 +10,8 @@ API_KEY = os.getenv("KEY_API")
 
 
 def render(fat_df: pd.DataFrame):
-    key = st.text_input(C.UI_LABEL_ACCESS_KEY, type="password", key="partners_access_key")
+    key = st.text_input(C.UI_LABEL_ACCESS_KEY,
+                        type="password", key="partners_access_key")
     if key != API_KEY:
         st.warning(C.UI_LABEL_ENTER_KEY_MSG)
         return
@@ -46,7 +47,8 @@ def render(fat_df: pd.DataFrame):
         x=C.COL_INT_PARTNER,
         y='total_vendas',
         title=C.UI_LABEL_TOP_10_SALES,
-        labels={C.COL_INT_PARTNER: C.UI_LABEL_PARTNER, 'total_vendas': C.UI_LABEL_NUM_SALES},
+        labels={C.COL_INT_PARTNER: C.UI_LABEL_PARTNER,
+                'total_vendas': C.UI_LABEL_NUM_SALES},
         color='total_vendas',
         color_continuous_scale=px.colors.sequential.Pinkyl,
         text_auto=True
@@ -55,7 +57,8 @@ def render(fat_df: pd.DataFrame):
     st.plotly_chart(fig_sales, width="stretch")
 
     # Sort by total revenue (descending)
-    partner_sales_rev = partner_sales.sort_values('total_faturamento', ascending=False)
+    partner_sales_rev = partner_sales.sort_values(
+        'total_faturamento', ascending=False)
 
     # Top 10 by revenue
     top_revenue = partner_sales_rev.head(10)
@@ -66,7 +69,8 @@ def render(fat_df: pd.DataFrame):
         x=C.COL_INT_PARTNER,
         y='total_faturamento',
         title=C.UI_LABEL_TOP_10_REVENUE,
-        labels={C.COL_INT_PARTNER: C.UI_LABEL_PARTNER, 'total_faturamento': C.UI_LABEL_TOTAL_REVENUE_CURRENCY},
+        labels={C.COL_INT_PARTNER: C.UI_LABEL_PARTNER,
+                'total_faturamento': C.UI_LABEL_TOTAL_REVENUE_CURRENCY},
         color='total_faturamento',
         color_continuous_scale=px.colors.sequential.Blues,
         text_auto='.2f'
@@ -77,9 +81,10 @@ def render(fat_df: pd.DataFrame):
     # Summary metrics
     col1, col2, col3 = st.columns(3)
     col1.metric(C.UI_LABEL_TOTAL_PARTNERS, len(partner_sales))
-    col2.metric(C.UI_LABEL_PARTNER_MOST_SALES, top_sales.iloc[0][C.COL_INT_PARTNER])
-    col3.metric(C.UI_LABEL_PARTNER_MOST_REVENUE, top_revenue.iloc[0][C.COL_INT_PARTNER])
-
+    col2.metric(C.UI_LABEL_PARTNER_MOST_SALES,
+                top_sales.iloc[0][C.COL_INT_PARTNER])
+    col3.metric(C.UI_LABEL_PARTNER_MOST_REVENUE,
+                top_revenue.iloc[0][C.COL_INT_PARTNER])
 
     # Detailed table
     st.markdown(C.UI_LABEL_PARTNERS_DETAILS_TITLE)
@@ -88,5 +93,6 @@ def render(fat_df: pd.DataFrame):
         'total_vendas': C.UI_LABEL_NUM_SALES,
         'total_faturamento': C.UI_LABEL_TOTAL_REVENUE_CURRENCY
     }).reset_index(drop=True)
-    table_df[C.UI_LABEL_TOTAL_REVENUE_CURRENCY] = table_df[C.UI_LABEL_TOTAL_REVENUE_CURRENCY].apply(lambda x: f"R$ {x:,.2f}")
+    table_df[C.UI_LABEL_TOTAL_REVENUE_CURRENCY] = table_df[C.UI_LABEL_TOTAL_REVENUE_CURRENCY].apply(
+        lambda x: f"R$ {x:,.2f}")
     st.dataframe(table_df)

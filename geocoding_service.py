@@ -26,7 +26,8 @@ class GeocodingService:
             )
             # Garantir índice na coluna key para performance (embora PK já crie índice implícito,
             # isso garante redundância caso o esquema mude)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
 
     def get_coords(self, city: str, state: str) -> tuple[float | None, float | None]:
         if not city or not state:
@@ -36,7 +37,8 @@ class GeocodingService:
 
         # Check cache
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("SELECT lat, lon FROM cache WHERE key = ?", (key,))
+            cursor = conn.execute(
+                "SELECT lat, lon FROM cache WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row:
                 # If lat/lon are None in DB, it means we tried before and failed (negative cache)

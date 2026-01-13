@@ -61,7 +61,8 @@ def load_sheet(sheet_id: str, sheet_name: str) -> pd.DataFrame:
         return df
     except Exception as e:
         logger.error(f"Error loading {sheet_name}: {e}")
-        st.error(C.ERR_MSG_LOADING_SHEET.format(sheet_name=sheet_name, error=e))
+        st.error(C.ERR_MSG_LOADING_SHEET.format(
+            sheet_name=sheet_name, error=e))
         return pd.DataFrame()
 
 
@@ -73,16 +74,21 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
 
     process_column(df, C.COL_SRC_TIMESTAMP, C.COL_INT_DT, parse_datetime_any)
     process_column(
-        df, C.COL_SRC_STATUS, C.COL_INT_STATUS, lambda x: str(x).strip().upper(), ""
+        df, C.COL_SRC_STATUS, C.COL_INT_STATUS, lambda x: str(
+            x).strip().upper(), ""
     )
     process_column(
-        df, C.COL_SRC_CAPTADOR, C.COL_INT_CAPTADOR, lambda x: str(x).strip(), ""
+        df, C.COL_SRC_CAPTADOR, C.COL_INT_CAPTADOR, lambda x: str(
+            x).strip(), ""
     )
     process_column(
-        df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(x).strip().upper(), ""
+        df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(
+            x).strip().upper(), ""
     )
-    process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY, lambda x: str(x).strip(), "")
-    process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP, lambda x: str(x).strip(), "")
+    process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY,
+                   lambda x: str(x).strip(), "")
+    process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP,
+                   lambda x: str(x).strip(), "")
     process_column(
         df,
         C.COL_SRC_CONTRACT_TYPE,
@@ -101,7 +107,8 @@ def get_dados(sheet_id: str) -> pd.DataFrame:
 
     # Map Regions
     if C.COL_INT_STATE in df.columns:
-        df[C.COL_INT_REGION] = df[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
+        df[C.COL_INT_REGION] = df[C.COL_INT_STATE].map(
+            C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
 
     return df
 
@@ -126,7 +133,8 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
         lambda x: to_float_any(x) / 100.0,
         0.0,
     )
-    process_column(df, C.COL_SRC_DATA, C.COL_INT_DATA, parse_datetime_any, None)
+    process_column(df, C.COL_SRC_DATA, C.COL_INT_DATA,
+                   parse_datetime_any, None)
     process_column(
         df,
         C.COL_SRC_FINANCIAL_TYPE,
@@ -143,6 +151,7 @@ def get_faturamento(sheet_id: str) -> pd.DataFrame:
     )
 
     if C.COL_INT_DATA in df.columns:
-        df[C.COL_INT_DATA] = pd.to_datetime(df[C.COL_INT_DATA], errors="coerce")
+        df[C.COL_INT_DATA] = pd.to_datetime(
+            df[C.COL_INT_DATA], errors="coerce")
 
     return df

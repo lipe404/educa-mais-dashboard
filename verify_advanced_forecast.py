@@ -22,7 +22,8 @@ def test_advanced_forecast():
 
     # Create seasonal data (sine wave)
     dates = pd.date_range(start="2023-01-01", periods=100)
-    values = [10 + 5 * np.sin(i / 7) + i / 10 for i in range(100)]  # Seasonal + Trend
+    # Seasonal + Trend
+    values = [10 + 5 * np.sin(i / 7) + i / 10 for i in range(100)]
     df = pd.DataFrame({"Date": dates, "Value": values})
 
     # Test Prophet
@@ -32,7 +33,8 @@ def test_advanced_forecast():
             forecast = forecasting.generate_forecast(
                 df, "Date", "Value", C.ALGORITHM_PROPHET, 14
             )
-            future = forecast[forecast[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST]
+            future = forecast[forecast[C.COL_FORECAST_TYPE]
+                              == C.LABEL_FORECAST_TYPE_FORECAST]
             if len(future) == 14:
                 print("✅ Prophet generated 14 days forecast.")
             else:
@@ -49,11 +51,13 @@ def test_advanced_forecast():
             forecast = forecasting.generate_forecast(
                 df, "Date", "Value", C.ALGORITHM_HOLT_WINTERS, 14
             )
-            future = forecast[forecast[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST]
+            future = forecast[forecast[C.COL_FORECAST_TYPE]
+                              == C.LABEL_FORECAST_TYPE_FORECAST]
             if len(future) == 14:
                 print("✅ Holt-Winters generated 14 days forecast.")
             else:
-                print(f"❌ Holt-Winters generated {len(future)} days (Expected 14).")
+                print(
+                    f"❌ Holt-Winters generated {len(future)} days (Expected 14).")
         except Exception as e:
             print(f"❌ Holt-Winters Error: {e}")
 
@@ -61,7 +65,8 @@ def test_advanced_forecast():
     print("\nTesting Insights...")
     dummy_forecast = df.copy()  # Just for shape
     dummy_forecast[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_FORECAST
-    insights = forecasting.generate_smart_insights(df, "Date", "Value", dummy_forecast)
+    insights = forecasting.generate_smart_insights(
+        df, "Date", "Value", dummy_forecast)
     if "Análise Inteligente" in insights:
         print("✅ Insights generated.")
     else:

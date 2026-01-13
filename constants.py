@@ -246,7 +246,8 @@ UI_LABEL_SIMULATOR_TITLE = "### Simulador de faturamento adicional"
 UI_LABEL_SIMULATOR_INPUT = "Valor adicional (R$)"
 UI_LABEL_SIMULATOR_TOTAL = "Faturamento total (simulado)"
 UI_LABEL_SIMULATOR_PARTNER = "Comissão parceiros (simulado)"
-UI_LABEL_SIMULATOR_TEAM = "Comissão equipe" # (simulado) appended dynamically or just base
+# (simulado) appended dynamically or just base
+UI_LABEL_SIMULATOR_TEAM = "Comissão equipe"
 UI_LABEL_SIMULATOR_NET = "Líquido empresa (simulado)"
 UI_LABEL_SIMULATOR_VS_LAST_UP = "Acima do mês passado (simulado)"
 UI_LABEL_SIMULATOR_VS_LAST_DOWN = "Falta p/ igualar mês passado (simulado)"
