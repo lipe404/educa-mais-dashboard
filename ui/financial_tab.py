@@ -37,14 +37,77 @@ def render(
         f"{C.UI_LABEL_TEAM_COMMISSION_BASE} ({int(C.COMMISSION_RATE_TEAM*100)}%)", f"R$ {equipe:,.2f}")
     c4.metric(C.UI_LABEL_NET_REVENUE, f"R$ {liquido:,.2f}")
 
-    daily = df.groupby(df[C.COL_INT_DATA].dt.date)[
-        C.COL_INT_VALOR].sum().reset_index()
-    daily.columns = [C.COL_INT_DATA, C.COL_INT_VALOR]
-    st.plotly_chart(
-        px.line(daily, x=C.COL_INT_DATA, y=C.COL_INT_VALOR,
-                title=C.UI_LABEL_DAILY_REVENUE),
-        width="stretch",
-    )
+    # --- Daily Revenue Chart with Comparison ---
+    now = date.today()
+    focus_year = end_date.year if isinstance(end_date, date) else now.year
+    focus_month = selected_month if selected_month is not None else end_date.month if isinstance(end_date, date) else now.month
+    
+    show_comparison = st.toggle("Comparar com Mês Anterior (Mês vs Mês)", value=False)
+    
+    if show_comparison:
+        show_cumulative = st.toggle("Comparativo de Cumulativo", value=False)
+
+        # 1. Prepare Current Month Data (Aligned to Day 1-31)
+        # Use 'df' if it represents the current month view, or filter 'full_df' if 'df' is weird.
+        # Assuming 'df' contains the filtered data user is looking at.
+        # But for M-o-M comparison, we usually want the FULL current month vs FULL prev month.
+        # Let's use 'full_df' (which is fat_filtered_base) for both to ensure apples-to-apples comparison of the months.
+        
+        # Calculate Previous Month
+        prev_year = focus_year if focus_month > 1 else focus_year - 1
+        prev_month = focus_month - 1 if focus_month > 1 else 12
+        
+        # Filter Current Month (from full_df to get full month context)
+        curr_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (full_df[C.COL_INT_DATA].dt.month == focus_month)
+        df_curr = full_df[curr_mask].copy()
+        
+        # Filter Previous Month
+        prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (full_df[C.COL_INT_DATA].dt.month == prev_month)
+        df_prev = full_df[prev_mask].copy()
+        
+        # Group by Day
+        daily_curr = df_curr.groupby(df_curr[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR].sum().reset_index()
+        daily_curr.columns = ["Dia", "Valor"]
+        daily_curr["Período"] = f"Mês Atual ({focus_month:02d}/{focus_year})"
+        
+        daily_prev = df_prev.groupby(df_prev[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR].sum().reset_index()
+        daily_prev.columns = ["Dia", "Valor"]
+        daily_prev["Período"] = f"Mês Anterior ({prev_month:02d}/{prev_year})"
+        
+        if show_cumulative:
+            daily_curr["Valor"] = daily_curr["Valor"].cumsum()
+            daily_prev["Valor"] = daily_prev["Valor"].cumsum()
+            chart_title = f"Comparativo Cumulativo: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+        else:
+            chart_title = f"Comparativo Diário: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+
+        # Combine
+        combined = pd.concat([daily_curr, daily_prev])
+        
+        # Ensure X-axis covers 1-31
+        # (Optional: Fill missing days with 0? Plotly handles gaps okay, but 0 is better for revenue)
+        # Let's just plot what we have.
+        
+        fig = px.line(
+            combined, 
+            x="Dia", 
+            y="Valor", 
+            color="Período", 
+            title=chart_title,
+            markers=True
+        )
+        fig.update_xaxes(range=[1, 31]) # Force 31 days view
+        st.plotly_chart(fig, width="stretch")
+        
+    else:
+        daily = df.groupby(df[C.COL_INT_DATA].dt.date)[
+            C.COL_INT_VALOR].sum().reset_index()
+        daily.columns = [C.COL_INT_DATA, C.COL_INT_VALOR]
+        st.plotly_chart(
+            px.line(daily, x=C.COL_INT_DATA, y=C.COL_INT_VALOR,
+                    title=C.UI_LABEL_DAILY_REVENUE),
+            width="stretch",
+        )
 
     m = df.dropna(subset=[C.COL_INT_DATA]).copy()
     m["_ano"] = m[C.COL_INT_DATA].dt.year
@@ -70,11 +133,9 @@ def render(
         width="stretch",
     )
 
-    now = date.today()
-    focus_year = end_date.year if isinstance(end_date, date) else now.year
-    focus_month = selected_month if selected_month is not None else now.month
-    prev_year = focus_year if focus_month > 1 else focus_year - 1
-    prev_month = focus_month - 1 if focus_month > 1 else 12
+    # Use existing variables calculated above
+    # now, focus_year, focus_month, prev_year, prev_month are already defined.
+    
     cur_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (
         full_df[C.COL_INT_DATA].dt.month == focus_month
     )

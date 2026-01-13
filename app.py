@@ -178,7 +178,14 @@ if selected_cities:
 
 dados_filtered = dados[mask_dados].copy()
 
-mask_fat = (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (
+mask_fat_base = pd.Series(True, index=faturamento.index)
+
+if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
+    mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_TECNICO
+elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
+    mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
+
+mask_fat = mask_fat_base & (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (
     faturamento[C.COL_INT_DATA].dt.date <= end_date
 )
 if selected_year:
@@ -187,12 +194,45 @@ if selected_year:
 if selected_month:
     mask_fat &= faturamento[C.COL_INT_DATA].dt.month == selected_month
 
-if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
-    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_TECNICO
-elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
-    mask_fat &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
-
 fat_filtered = faturamento[mask_fat].copy()
+fat_filtered_base = faturamento[mask_fat_base].copy()
+
+# --- Sidebar Metrics ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Métricas")
+
+# 1. Ticket Médio
+total_rev = fat_filtered[C.COL_INT_VALOR].sum()
+count_rev = fat_filtered.shape[0]
+ticket_medio = total_rev / count_rev if count_rev > 0 else 0.0
+
+st.sidebar.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
+
+# 2. Churn Rate
+# Need _pid for unique student count
+churn_df = dados_filtered.copy()
+churn_df["_pid"] = churn_df[C.COL_INT_PARTNER].astype(str).str.strip()
+churn_df["_pid"] = churn_df["_pid"].where(
+    churn_df["_pid"] != "",
+    churn_df[C.COL_INT_CEP].astype(str).str.strip(),
+)
+churn_df["_pid"] = churn_df["_pid"].where(
+    churn_df["_pid"] != "",
+    churn_df[C.COL_INT_CITY].astype(str).str.strip()
+    + "|"
+    + churn_df[C.COL_INT_STATE].astype(str).str.strip(),
+)
+
+active_mask = churn_df[C.COL_INT_STATUS] == C.STATUS_ASSINADO
+active_count = churn_df[active_mask].drop_duplicates(subset=["_pid"]).shape[0]
+
+cancelled_mask = churn_df[C.COL_INT_STATUS] == C.STATUS_CANCELADO
+cancelled_count = churn_df[cancelled_mask].drop_duplicates(subset=["_pid"]).shape[0]
+
+total_customers = active_count + cancelled_count
+churn_rate = (cancelled_count / total_customers * 100) if total_customers > 0 else 0.0
+
+st.sidebar.metric("Churn Rate", f"{churn_rate:.2f}%")
 
 # Render Tabs
 # Custom CSS for Tab Icons
@@ -260,7 +300,7 @@ with t1:
 with t2:
     map_tab.render(dados_filtered)
 with t3:
-    financial_tab.render(fat_filtered, faturamento, end_date, selected_month)
+    financial_tab.render(fat_filtered, fat_filtered_base, end_date, selected_month)
 with t4:
     forecast_tab.render(dados_filtered, fat_filtered)
 with t5:
