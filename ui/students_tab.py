@@ -41,6 +41,10 @@ def render(students_df: pd.DataFrame):
         st.info("Nenhum dado encontrado após aplicar o filtro (removendo Pós-Graduação).")
         return
 
+    # Split multiple courses in the same cell (separated by ';')
+    filtered_df[C.COL_INT_COURSE] = filtered_df[C.COL_INT_COURSE].astype(str).str.split(';')
+    filtered_df = filtered_df.explode(C.COL_INT_COURSE)
+
     # Clean up course names
     # Ensure it's string, uppercase, strip whitespace, and normalize internal spaces
     filtered_df[C.COL_INT_COURSE] = filtered_df[C.COL_INT_COURSE].astype(str).str.upper().str.strip().str.replace(r'\s+', ' ', regex=True)
