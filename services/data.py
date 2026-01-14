@@ -228,3 +228,44 @@ def get_alunos(sheet_id: str) -> pd.DataFrame:
         df[C.COL_INT_DATA] = pd.to_datetime(df[C.COL_INT_DATA], errors="coerce")
 
     return df
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_students_general_data(sheet_id: str) -> pd.DataFrame:
+    df = load_sheet(sheet_id, C.SHEET_NAME_STUDENTS_GENERAL, gid=C.GID_STUDENTS_GENERAL)
+    if df.empty:
+        return df
+
+    # Map columns
+    process_column(df, C.COL_SRC_GEN_FIRST_NAME, C.COL_INT_GEN_FIRST_NAME, lambda x: str(x).strip(), "", aliases=["First Name"], index=0)
+    process_column(df, C.COL_SRC_GEN_LAST_NAME, C.COL_INT_GEN_LAST_NAME, lambda x: str(x).strip(), "", aliases=["Last Name"], index=1)
+    process_column(df, C.COL_SRC_GEN_CPF, C.COL_INT_GEN_CPF, lambda x: str(x).strip(), "", aliases=["cpf", "CPF"], index=2)
+    process_column(df, C.COL_SRC_GEN_PHONE, C.COL_INT_GEN_PHONE, lambda x: str(x).strip(), "", aliases=["phone", "Phone", "Telefone"], index=3)
+    process_column(df, C.COL_SRC_GEN_EMAIL, C.COL_INT_GEN_EMAIL, lambda x: str(x).strip(), "", aliases=["email", "Email"], index=4)
+    process_column(df, C.COL_SRC_GEN_ZIP, C.COL_INT_GEN_ZIP, lambda x: str(x).strip(), "", aliases=["zip", "CEP", "Cep"], index=5)
+    process_column(df, C.COL_SRC_GEN_CITY, C.COL_INT_GEN_CITY, lambda x: str(x).strip(), "", aliases=["cidade", "Cidade"], index=6)
+    process_column(df, C.COL_SRC_GEN_STATE, C.COL_INT_GEN_STATE, lambda x: str(x).strip().upper(), "", aliases=["estado", "Estado"], index=7)
+    process_column(df, C.COL_SRC_GEN_ADDRESS, C.COL_INT_GEN_ADDRESS, lambda x: str(x).strip(), "", aliases=["endereço", "Endereço", "endereco"], index=8)
+    process_column(df, C.COL_SRC_GEN_NEIGHBORHOOD, C.COL_INT_GEN_NEIGHBORHOOD, lambda x: str(x).strip(), "", aliases=["bairro", "Bairro"], index=9)
+    process_column(df, C.COL_SRC_GEN_COUNTRY, C.COL_INT_GEN_COUNTRY, lambda x: str(x).strip(), "", aliases=["Country", "País"], index=10)
+
+    # Clean rows with empty or invalid city/state
+    if C.COL_INT_GEN_CITY in df.columns:
+        df[C.COL_INT_GEN_CITY] = df[C.COL_INT_GEN_CITY].astype(str).str.strip()
+    if C.COL_INT_GEN_STATE in df.columns:
+        df[C.COL_INT_GEN_STATE] = df[C.COL_INT_GEN_STATE].astype(str).str.strip().str.upper()
+
+    if C.COL_INT_GEN_CITY in df.columns and C.COL_INT_GEN_STATE in df.columns:
+        mask_valid_city = (df[C.COL_INT_GEN_CITY] != "") & (~df[C.COL_INT_GEN_CITY].str.lower().isin(["nan", "none"]))
+        mask_valid_state = (df[C.COL_INT_GEN_STATE] != "") & (~df[C.COL_INT_GEN_STATE].str.lower().isin(["nan", "none"]))
+        df = df[mask_valid_city & mask_valid_state]
+
+    # Map Regions based on State
+    if C.COL_INT_GEN_STATE in df.columns:
+        # Ensure state abbreviations are clean (2 chars usually)
+        # Some sheets might have full names, but ESTADO_REGIAO keys are 2 chars (UF).
+        # We might need to handle full names if the sheet has them.
+        # Assuming UFs for now as per "estado".
+        df[C.COL_INT_REGION] = df[C.COL_INT_GEN_STATE].map(C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
+
+    return df

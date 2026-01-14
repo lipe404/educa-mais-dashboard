@@ -4,18 +4,13 @@ import plotly.express as px
 import os
 from dotenv import load_dotenv
 import constants as C
+from services import data as data_service
 
 load_dotenv()
 API_KEY = os.getenv("KEY_API")
 
 
-def render(students_df: pd.DataFrame):
-    key = st.text_input(C.UI_LABEL_ACCESS_KEY,
-                        type="password", key="students_access_key")
-    if key != API_KEY:
-        st.warning(C.UI_LABEL_ENTER_KEY_MSG)
-        return
-
+def render_analysis(students_df: pd.DataFrame):
     st.markdown("### Análise de Alunos e Cursos")
 
     if students_df.empty:
@@ -115,3 +110,106 @@ def render(students_df: pd.DataFrame):
             C.COL_INT_FINANCIAL_TYPE,
             C.COL_INT_DATA
         ]])
+
+
+def render_general(sheet_id: str):
+    st.markdown("### Dados Gerais de Alunos")
+    
+    with st.spinner("Carregando dados gerais de alunos..."):
+        df = data_service.get_students_general_data(sheet_id)
+        
+    if df.empty:
+        st.warning("Não foi possível carregar os dados gerais de alunos.")
+        return
+
+    # Metrics
+    total_students = len(df)
+    unique_cities = df[C.COL_INT_GEN_CITY].nunique()
+    unique_states = df[C.COL_INT_GEN_STATE].nunique()
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total de Alunos", total_students)
+    c2.metric("Cidades Atendidas", unique_cities)
+    c3.metric("Estados Atendidos", unique_states)
+    
+    st.divider()
+
+    # 1. Estados com mais alunos
+    st.markdown("#### Estados com mais Alunos")
+    state_counts = df[C.COL_INT_GEN_STATE].value_counts().reset_index()
+    state_counts.columns = ["Estado", "Quantidade"]
+    
+    fig_states = px.bar(
+        state_counts,
+        x="Estado",
+        y="Quantidade",
+        title="Distribuição de Alunos por Estado",
+        text_auto=True,
+        color="Quantidade",
+        color_continuous_scale="Blues"
+    )
+    st.plotly_chart(fig_states, use_container_width=True)
+    
+    # 2. Cidades com mais alunos
+    st.markdown("#### Top 10 Cidades com mais Alunos")
+    city_counts = df[C.COL_INT_GEN_CITY].value_counts().head(10).reset_index()
+    city_counts.columns = ["Cidade", "Quantidade"]
+    
+    fig_cities = px.bar(
+        city_counts,
+        x="Quantidade",
+        y="Cidade",
+        orientation='h',
+        title="Top 10 Cidades",
+        text_auto=True,
+        color="Quantidade",
+        color_continuous_scale="Greens"
+    )
+    fig_cities.update_layout(yaxis={'categoryorder': 'total ascending'})
+    st.plotly_chart(fig_cities, use_container_width=True)
+
+    # 3. Regiões com mais alunos
+    st.markdown("#### Alunos por Região")
+    if C.COL_INT_REGION in df.columns:
+        region_counts = df[C.COL_INT_REGION].value_counts().reset_index()
+        region_counts.columns = ["Região", "Quantidade"]
+        
+        fig_regions = px.pie(
+            region_counts,
+            values="Quantidade",
+            names="Região",
+            title="Distribuição Regional",
+            hole=0.4
+        )
+        st.plotly_chart(fig_regions, use_container_width=True)
+    else:
+        st.warning("Informação de região não disponível.")
+
+    # Show raw data option
+    with st.expander("Visualizar Dados Brutos (ALUNOS_GERAL)"):
+        st.dataframe(df)
+
+
+def render(students_df: pd.DataFrame, sheet_id: str = None):
+    key = st.text_input(C.UI_LABEL_ACCESS_KEY,
+                        type="password", key="students_access_key")
+    if key != API_KEY:
+        st.warning(C.UI_LABEL_ENTER_KEY_MSG)
+        return
+
+    # Sub-navigation
+    view_mode = st.radio(
+        "Selecione a visualização:",
+        ["Análise de Cursos (Planilha Alunos)", "Dados Gerais (Planilha ALUNOS_GERAL)"],
+        horizontal=True
+    )
+    
+    st.divider()
+
+    if view_mode == "Análise de Cursos (Planilha Alunos)":
+        render_analysis(students_df)
+    else:
+        if sheet_id:
+            render_general(sheet_id)
+        else:
+            st.error("ID da planilha não configurado. Verifique as variáveis de ambiente.")
