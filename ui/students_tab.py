@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 import constants as C
 from services import data as data_service
+from geocoding_service import GeocodingService
 
 load_dotenv()
 API_KEY = os.getenv("KEY_API")
@@ -184,6 +185,71 @@ def render_general(sheet_id: str):
         st.plotly_chart(fig_regions, use_container_width=True)
     else:
         st.warning("Informação de região não disponível.")
+
+    # 4. Mapa de Pontos (CEP)
+    st.markdown("#### Distribuição Geográfica (Mapa de Pontos)")
+    
+    if C.COL_INT_GEN_ZIP in df.columns:
+        # Checkbox to enable map generation (as it can be slow)
+        if st.checkbox("Gerar Mapa de Distribuição (Baseado no CEP)"):
+            geo_service = GeocodingService()
+            
+            # Extract unique ZIPs and counts
+            zip_counts = df[C.COL_INT_GEN_ZIP].value_counts().reset_index()
+            zip_counts.columns = ["cep", "count"]
+            
+            total_zips = len(zip_counts)
+            st.info(f"Total de CEPs únicos encontrados: {total_zips}. A geocodificação pode demorar se não estiver em cache.")
+            
+            
+            # Progress bar
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            coords_data = []
+            
+            for i, row in zip_counts.iterrows():
+                cep = row['cep']
+                count = row['count']
+                status_text.text(f"Processando CEP: {cep} ({i+1}/{len(zip_counts)})")
+                
+                lat, lon = geo_service.get_coords_by_zip(cep)
+                if lat is not None and lon is not None:
+                    coords_data.append({
+                        "lat": lat,
+                        "lon": lon,
+                        "cep": cep,
+                        "alunos": count
+                    })
+                
+                progress_bar.progress((i + 1) / len(zip_counts))
+            
+            progress_bar.empty()
+            status_text.empty()
+            
+            if coords_data:
+                map_df = pd.DataFrame(coords_data)
+                
+                # Using Plotly Scatter Mapbox
+                fig_map = px.scatter_mapbox(
+                    map_df,
+                    lat="lat",
+                    lon="lon",
+                    size="alunos",
+                    hover_name="cep",
+                    hover_data={"alunos": True, "lat": False, "lon": False},
+                    color_discrete_sequence=["blue"],
+                    zoom=3,
+                    height=500,
+                    size_max=15
+                )
+                fig_map.update_layout(mapbox_style="open-street-map")
+                fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+                
+                st.plotly_chart(fig_map, use_container_width=True)
+            else:
+                st.warning("Não foi possível obter coordenadas para os CEPs fornecidos.")
+    else:
+        st.warning("Coluna de CEP não encontrada.")
 
     # Show raw data option
     with st.expander("Visualizar Dados Brutos (ALUNOS_GERAL)"):

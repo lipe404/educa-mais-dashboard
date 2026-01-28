@@ -73,6 +73,48 @@ class GeocodingService:
         except (GeocoderTimedOut, GeocoderUnavailable):
             # Don't cache timeout errors, we want to retry them later
             return None, None
-        except Exception as e:
-            print(f"Geocoding error for {query}: {e}")
+    def get_coords_by_zip(self, zip_code: str) -> tuple[float | None, float | None]:
+        if not zip_code:
             return None, None
+        
+        # Clean zip code (keep only numbers)
+        clean_zip = "".join(filter(str.isdigit, str(zip_code)))
+        if not clean_zip:
+            return None, None
+
+        key = f"zip|{clean_zip}"
+
+        # Check cache
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT lat, lon FROM cache WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            if row:
+                return row[0], row[1]
+
+        # Fetch from API
+        # Using structured query for postalcode
+        query = {"postalcode": clean_zip, "country": C.GEO_COUNTRY}
+        try:
+            time.sleep(1.1)
+            loc = self.geolocator.geocode(query, timeout=4)
+            
+            lat, lon = None, None
+            if loc:
+                lat, lon = loc.latitude, loc.longitude
+
+            # Save to cache
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO cache (key, lat, lon) VALUES (?, ?, ?)",
+                    (key, lat, lon),
+                )
+
+            return lat, lon
+
+        except (GeocoderTimedOut, GeocoderUnavailable):
+            return None, None
+        except Exception as e:
+            print(f"Geocoding error for zip {clean_zip}: {e}")
+            return None, None
+
