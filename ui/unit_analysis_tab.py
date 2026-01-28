@@ -179,7 +179,7 @@ def render(dados_df: pd.DataFrame):
                     )
                     fig.update_layout(
                         mapbox_style="open-street-map", margin={"r": 0, "t": 40, "l": 0, "b": 0})
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
                 # E. Course Recommendations
                 st.markdown("#### Cursos Recomendados para a Região")

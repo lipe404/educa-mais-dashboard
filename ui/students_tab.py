@@ -149,7 +149,7 @@ def render_general(sheet_id: str):
         color="Quantidade",
         color_continuous_scale="Blues"
     )
-    st.plotly_chart(fig_states, use_container_width=True)
+    st.plotly_chart(fig_states, width="stretch")
     
     # 2. Cidades com mais alunos
     st.markdown("#### Top 10 Cidades com mais Alunos")
@@ -167,7 +167,7 @@ def render_general(sheet_id: str):
         color_continuous_scale="Greens"
     )
     fig_cities.update_layout(yaxis={'categoryorder': 'total ascending'})
-    st.plotly_chart(fig_cities, use_container_width=True)
+    st.plotly_chart(fig_cities, width="stretch")
 
     # 3. Regiões com mais alunos
     st.markdown("#### Alunos por Região")
@@ -182,7 +182,7 @@ def render_general(sheet_id: str):
             title="Distribuição Regional",
             hole=0.4
         )
-        st.plotly_chart(fig_regions, use_container_width=True)
+        st.plotly_chart(fig_regions, width="stretch")
     else:
         st.warning("Informação de região não disponível.")
 
@@ -245,7 +245,7 @@ def render_general(sheet_id: str):
                 fig_map.update_layout(mapbox_style="open-street-map")
                 fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
                 
-                st.plotly_chart(fig_map, use_container_width=True)
+                st.plotly_chart(fig_map, width="stretch")
             else:
                 st.warning("Não foi possível obter coordenadas para os CEPs fornecidos.")
     else:
