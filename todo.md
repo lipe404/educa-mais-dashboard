@@ -24,50 +24,35 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 16. Adicionar confirmação antes de ações destrutivas ou pesadas.
 17. Permitir que o usuário personalize a ordem dos cards no dashboard (se possível via session state).
 18. Adicionar modo de "Foco" que esconde a sidebar e cabeçalhos.
-19. Implementar busca global (Cmd+K) para encontrar funcionalidades ou parceiros.
-20. Usar linguagem consistente em todo o app (ex: "Receita" vs "Faturamento").
-21. Adicionar indicadores de progresso para tarefas longas (ex: Geocodificação).
-22. Permitir download de tabelas em múltiplos formatos (CSV, Excel, JSON).
-23. Adicionar opção de "Favoritar" filtros ou visões específicas.
-24. Melhorar a legibilidade de textos longos com espaçamento adequado.
-25. Evitar reloads da página inteira ao alterar filtros secundários (`st.form`).
-26. Notificar o usuário quando a sessão expirar.
-27. Adicionar links diretos para documentação em pontos de dúvida.
-28. Implementar histórico de "Visto Recentemente" para parceiros.
-29. Criar página de "Configurações de Usuário" para preferências locais.
+19. Usar linguagem consistente em todo o app (ex: "Receita" vs "Faturamento").
+20. Adicionar indicadores de progresso para tarefas longas (ex: Geocodificação).
+21. Permitir download de tabelas em múltiplos formatos (CSV, Excel, JSON).
+22. Adicionar opção de "Favoritar" filtros ou visões específicas.
+23. Melhorar a legibilidade de textos longos com espaçamento adequado.
+24. Evitar reloads da página inteira ao alterar filtros secundários (`st.form`).
+25. Notificar o usuário quando a sessão expirar.
+26. Adicionar links diretos para documentação em pontos de dúvida.
 
 ## 2. UI (Interface do Usuário)
 
-1. Centralizar a paleta de cores em `constants.py` ou `theme.toml`.
+1. Centralizar a paleta de cores em `constants.py`.
 2. Criar um Design System básico (cores, tipografia, espaçamentos).
 3. Estilizar cards de métricas com CSS customizado (bordas arredondadas, sombra).
 4. Usar ícones consistentes (Material Icons ou FontAwesome) via CSS/Markdown.
 5. Padronizar o tamanho e peso das fontes dos cabeçalhos (H1, H2, H3).
-6. Implementar Dark Mode / Light Mode toggle personalizado.
-7. Estilizar tabelas (`st.dataframe`) com barras de progresso e heatmaps.
-8. Criar rodapé profissional com versão e copyright.
-9. Remover marca d'água "Made with Streamlit" via CSS.
-10. Alinhar verticalmente gráficos e métricas em colunas adjacentes.
-11. Usar divisores (`st.divider`) para separar seções logicamente.
-12. Personalizar a scrollbar para combinar com o tema do app.
-13. Adicionar logo da empresa no favicon e na sidebar (já feito, mas padronizar tamanhos).
-14. Usar avatares ou iniciais coloridas para parceiros/alunos.
-15. Estilizar botões primários e secundários distintamente.
-16. Melhorar o contraste de cores para leitura (WCAG).
-17. Criar componentes de alerta (`st.info`, `st.warning`) personalizados.
-18. Adicionar animações sutis de fade-in ao carregar elementos.
-19. Padronizar o formato de exibição de moeda (R$ 1.000,00).
-20. Usar mapas com tiles customizados (CartoDB Dark/Light) para visual limpo.
-21. Personalizar o widget de upload de arquivos (se houver).
-22. Criar badges coloridas para status (Ativo = Verde, Cancelado = Vermelho).
-23. Ajustar margens e padding globais para reduzir "espaço em branco" excessivo ou falta dele.
-24. Estilizar inputs de texto e selectboxes (bordas, foco).
-25. Usar fontes monospaced apenas para dados técnicos ou código.
-26. Criar layout responsivo que se adapta a telas ultrawide.
-27. Adicionar imagens de fundo sutis ou padrões geométricos em áreas vazias.
-28. Melhorar a visualização de gauges/velocímetros (tamanho reduzido).
-29. Padronizar a opacidade de elementos desabilitados.
-30. Criar uma página de "Style Guide" interna para desenvolvedores.
+6. Estilizar tabelas (`st.dataframe`) com barras de progresso e heatmaps.
+7. Criar rodapé profissional com versão e copyright.
+8. Alinhar verticalmente gráficos e métricas em colunas adjacentes.
+9. Criar componentes de alerta (`st.info`, `st.warning`) personalizados.
+10. Adicionar animações sutis de fade-in ao carregar elementos.
+11. Ajustar margens e padding globais para reduzir "espaço em branco" excessivo ou falta dele.
+12. Estilizar inputs de texto e selectboxes (bordas, foco).
+13. Usar fontes monospaced apenas para dados técnicos ou código.
+14. Criar layout responsivo que se adapta a telas ultrawide.
+15. Adicionar imagens de fundo sutis ou padrões geométricos em áreas vazias.
+16. Melhorar a visualização de gauges/velocímetros (tamanho reduzido).
+17. Padronizar a opacidade de elementos desabilitados.
+18. Criar uma página de "Style Guide" interna para desenvolvedores.
 
 ## 3. Frontend (Streamlit)
 

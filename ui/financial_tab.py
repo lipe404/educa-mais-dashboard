@@ -41,6 +41,8 @@ def render(
     )
     c4.metric(C.UI_LABEL_NET_REVENUE, f"R$ {liquido:,.2f}")
 
+    st.divider()
+
     # --- Daily Revenue Chart with Comparison ---
     now = date.today()
     focus_year = end_date.year if isinstance(end_date, date) else now.year
@@ -297,6 +299,7 @@ def render(
 
         fig.update_xaxes(range=[0.5, 31.5], dtick=1)
         st.plotly_chart(fig, width="stretch")
+        st.divider()
 
     else:
         daily = (
@@ -312,6 +315,7 @@ def render(
             ),
             width="stretch",
         )
+        st.divider()
 
     m = df.dropna(subset=[C.COL_INT_DATA]).copy()
     m["_ano"] = m[C.COL_INT_DATA].dt.year
@@ -336,6 +340,8 @@ def render(
         ),
         width="stretch",
     )
+
+    st.divider()
 
     # Use existing variables calculated above
     # now, focus_year, focus_month, prev_year, prev_month are already defined.
@@ -364,6 +370,8 @@ def render(
         f"R$ {abs(diff):,.2f}",
         delta=(f"{progress_pct:.1f}%" if progress_pct is not None else None),
     )
+
+    st.divider()
 
     st.markdown(C.UI_LABEL_SIMULATOR_TITLE)
     sim_add = st.number_input(

@@ -74,6 +74,7 @@ def render(dados_df: pd.DataFrame):
             st.info(C.UI_LABEL_NO_CITIES_FOUND)
         else:
             st.metric(C.UI_LABEL_TOTAL_CITIES_CANDIDATE, len(ranked))
+            st.divider()
             st.plotly_chart(
                 px.bar(
                     ranked.sort_values("score", ascending=False).head(30),
@@ -84,6 +85,8 @@ def render(dados_df: pd.DataFrame):
                 ),
                 width="stretch",
             )
+
+            st.divider()
 
             top_n = st.slider(
                 C.UI_LABEL_MAP_GEOCODING,
@@ -136,6 +139,8 @@ def render(dados_df: pd.DataFrame):
                     margin={"r": 0, "t": 30, "l": 0, "b": 0},
                 )
                 st.plotly_chart(fig, width="stretch")
+
+            st.divider()
 
             st.markdown(C.UI_LABEL_RANKING_CITIES)
             st.dataframe(
@@ -198,6 +203,8 @@ def render(dados_df: pd.DataFrame):
                     C.UI_LABEL_TOTAL_LOCAL_UNITS,
                     int(det["unidades_locais"].sum()),
                 )
+
+                st.divider()
 
                 st.plotly_chart(
                     px.bar(
@@ -309,6 +316,8 @@ def render(dados_df: pd.DataFrame):
                     reasoning = f"Análise baseada na correlação entre crescimento demográfico e atividade comercial local para sustentar a demanda por **{selected_course}**."
 
                 st.success(reasoning)
+
+                st.divider()
 
                 # --- MAP RENDERING ---
                 geo_rows = []
@@ -471,6 +480,8 @@ def render(dados_df: pd.DataFrame):
                                 mapbox_style="open-street-map", height=600
                             )
                             st.plotly_chart(fig, width="stretch")
+
+                            st.divider()
 
                             # Show Cluster Stats
                             stats = (

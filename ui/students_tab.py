@@ -92,6 +92,8 @@ def render_analysis(students_df: pd.DataFrame):
     fig_courses.update_layout(yaxis={"categoryorder": "total ascending"})
     st.plotly_chart(fig_courses, width="stretch")
 
+    st.divider()
+
     # --- Chart 2: Cursos mais vendidos por parceiros ---
     st.markdown("#### Cursos Mais Vendidos por Parceiro")
 
@@ -133,6 +135,8 @@ def render_analysis(students_df: pd.DataFrame):
     )
     fig_partner_courses.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_partner_courses, width="stretch")
+
+    st.divider()
 
     # Raw Data Expander
     with st.expander("Ver dados detalhados"):
@@ -187,6 +191,8 @@ def render_general(sheet_id: str):
     )
     st.plotly_chart(fig_states, width="stretch")
 
+    st.divider()
+
     # 2. Cidades com mais alunos
     st.markdown("#### Top 10 Cidades com mais Alunos")
     city_counts = df[C.COL_INT_GEN_CITY].value_counts().head(10).reset_index()
@@ -205,6 +211,8 @@ def render_general(sheet_id: str):
     fig_cities.update_layout(yaxis={"categoryorder": "total ascending"})
     st.plotly_chart(fig_cities, width="stretch")
 
+    st.divider()
+
     # 3. Regiões com mais alunos
     st.markdown("#### Alunos por Região")
     if C.COL_INT_REGION in df.columns:
@@ -221,6 +229,8 @@ def render_general(sheet_id: str):
         st.plotly_chart(fig_regions, width="stretch")
     else:
         st.warning("Informação de região não disponível.")
+
+    st.divider()
 
     # 4. Mapa de Pontos (CEP)
     st.markdown("#### Distribuição Geográfica (Mapa de Pontos)")
@@ -286,6 +296,8 @@ def render_general(sheet_id: str):
                 )
     else:
         st.warning("Coluna de CEP não encontrada.")
+
+    st.divider()
 
     # Show raw data option
     with st.expander("Visualizar Dados Brutos (ALUNOS_GERAL)"):

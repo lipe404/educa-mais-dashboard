@@ -19,7 +19,7 @@ class TestIntegration:
         mock_get.return_value = mock_response
 
         # 2. Load Data
-        df = data_service.get_dados("dummy_id_integration")
+        df, ts = data_service.get_dados("dummy_id_integration")
 
         assert not df.empty
         assert len(df) == 1

@@ -116,6 +116,8 @@ def render(contracts_df, faturamento_df):
                 delta=f"+{total_predicted} novos",
             )
 
+            st.divider()
+
             fig = px.line(
                 final_df,
                 x=C.COL_INT_DT,
@@ -129,7 +131,8 @@ def render(contracts_df, faturamento_df):
             )
             st.plotly_chart(fig, width="stretch")
 
-            st.markdown("---")
+            st.divider()
+            # st.markdown("---") # Replaced by st.divider() for consistency
             insights = forecasting.generate_smart_insights(
                 df_input, C.COL_INT_DT, C.UI_LABEL_CONTRACTS, final_df
             )
@@ -257,6 +260,8 @@ def render(contracts_df, faturamento_df):
                 delta=f"+R$ {total_predicted_f:,.2f}",
             )
 
+            st.divider()
+
             fig_f = px.line(
                 final_df_f,
                 x=C.COL_INT_DATA,
@@ -270,7 +275,8 @@ def render(contracts_df, faturamento_df):
             )
             st.plotly_chart(fig_f, width="stretch")
 
-            st.markdown("---")
+            st.divider()
+            # st.markdown("---") # Replaced by st.divider() for consistency
             insights_f = forecasting.generate_smart_insights(
                 df_input_f,
                 C.COL_INT_DATA,

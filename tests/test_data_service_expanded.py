@@ -1,6 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
+from datetime import datetime
 from unittest.mock import patch, MagicMock
 import constants as C
 from services import data as data_service
@@ -47,11 +48,11 @@ class TestDataServiceExpanded:
             raise ValueError("Error")
 
         # If func raises exception, apply might fail.
-        # The current implementation does: df[dest] = df[src].apply(func)
-        # If apply fails, it propagates the exception.
-        # Let's verify this behavior or if we need to wrap it.
-        with pytest.raises(ValueError):
-            data_service.process_column(df, "src", "dest", faulty_func)
+        # The current implementation catches exceptions and uses default.
+        data_service.process_column(df, "src", "dest", faulty_func, default="ERROR")
+        
+        assert "dest" in df.columns
+        assert (df["dest"] == "ERROR").all()
 
     # --- get_dados Logic Tests ---
 
@@ -66,10 +67,10 @@ class TestDataServiceExpanded:
             # Missing CITY, CEP, CAPTADOR etc.
         }
         mock_df = pd.DataFrame(raw_data)
-        mock_load_sheet.return_value = mock_df
+        mock_load_sheet.return_value = (mock_df, datetime.now())
 
         # Use unique ID to bypass cache
-        df = data_service.get_dados("dummy_id_missing_cols")
+        df, ts = data_service.get_dados("dummy_id_missing_cols")
 
         # Check if missing columns were created with defaults
         assert C.COL_INT_CITY in df.columns
@@ -86,9 +87,9 @@ class TestDataServiceExpanded:
             C.COL_SRC_TIMESTAMP: ["01/01/2023"] * 3,
         }
         mock_df = pd.DataFrame(raw_data)
-        mock_load_sheet.return_value = mock_df
+        mock_load_sheet.return_value = (mock_df, datetime.now())
 
-        df = data_service.get_dados("dummy_id_region")
+        df, ts = data_service.get_dados("dummy_id_region")
 
         # Assuming mapping exists in constants
         assert df.iloc[0][C.COL_INT_REGION] == "Sudeste"
@@ -97,8 +98,8 @@ class TestDataServiceExpanded:
 
     @patch("services.data.load_sheet")
     def test_get_dados_empty_sheet(self, mock_load_sheet):
-        mock_load_sheet.return_value = pd.DataFrame()
-        df = data_service.get_dados("dummy_id_empty")
+        mock_load_sheet.return_value = (pd.DataFrame(), datetime.now())
+        df, ts = data_service.get_dados("dummy_id_empty")
         assert df.empty
 
     # --- get_faturamento Logic Tests ---
@@ -112,9 +113,9 @@ class TestDataServiceExpanded:
             C.COL_SRC_DATA: ["01/01/2023", "invalid-date"],
         }
         mock_df = pd.DataFrame(raw_data)
-        mock_load_sheet.return_value = mock_df
+        mock_load_sheet.return_value = (mock_df, datetime.now())
 
-        df = data_service.get_faturamento("dummy_id_malformed")
+        df, ts = data_service.get_faturamento("dummy_id_malformed")
 
         # Check Value parsing
         assert df.iloc[0][C.COL_INT_VALOR] == 1000.0

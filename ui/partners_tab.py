@@ -63,6 +63,8 @@ def render(fat_df: pd.DataFrame):
     fig_sales.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_sales, width="stretch")
 
+    st.divider()
+
     # Sort by total revenue (descending)
     partner_sales_rev = partner_sales.sort_values("total_faturamento", ascending=False)
 
@@ -86,11 +88,15 @@ def render(fat_df: pd.DataFrame):
     fig_revenue.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_revenue, width="stretch")
 
+    st.divider()
+
     # Summary metrics
     col1, col2, col3 = st.columns(3)
     col1.metric(C.UI_LABEL_TOTAL_PARTNERS, len(partner_sales))
     col2.metric(C.UI_LABEL_PARTNER_MOST_SALES, top_sales.iloc[0][C.COL_INT_PARTNER])
     col3.metric(C.UI_LABEL_PARTNER_MOST_REVENUE, top_revenue.iloc[0][C.COL_INT_PARTNER])
+
+    st.divider()
 
     # Detailed table
     st.markdown(C.UI_LABEL_PARTNERS_DETAILS_TITLE)

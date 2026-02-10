@@ -60,6 +60,8 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     col_c.metric(C.UI_LABEL_SIGNED_MONTH, month_count)
     col_d.metric(C.UI_LABEL_SIGNED_WEEK, week_count)
 
+    st.divider()
+
     today_date = end_date if isinstance(end_date, date) else date.today()
     today_mask = signed_df[C.COL_INT_DT].dt.date == today_date
     today_count = signed_df[today_mask].drop_duplicates(subset=["_pid"]).shape[0]
@@ -107,6 +109,8 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         ),
     )
 
+    st.divider()
+
     q_start = ((focus_month - 1) // 3) * 3 + 1
     quarterly_mask = (
         (signed_df[C.COL_INT_DT].dt.year == focus_year)
@@ -138,6 +142,8 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         gauge_chart(semiannual_count, 180, C.UI_LABEL_GOAL_SEMIANNUAL), width="stretch"
     )
 
+    st.divider()
+
     by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[
         [C.COL_INT_CAPTADOR, "_pid"]
     ]
@@ -151,6 +157,8 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         color_discrete_sequence=px.colors.sequential.Pinkyl,
     )
     st.plotly_chart(pie_fig, width="stretch")
+
+    st.divider()
 
     df_status = df.copy()
     df_status["_pid"] = df_status[C.COL_INT_PARTNER].astype(str).str.strip()
@@ -242,6 +250,8 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         selection_mode="points",
         key="monthly_chart_click",
     )
+
+    st.divider()
 
     target_year = None
     target_month = None

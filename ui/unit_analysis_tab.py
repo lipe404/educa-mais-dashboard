@@ -210,6 +210,8 @@ def render(dados_df: pd.DataFrame):
                     )
                     st.plotly_chart(fig, width="stretch")
 
+                st.divider()
+
                 # E. Course Recommendations
                 st.markdown("#### Cursos Recomendados para a Região")
 
@@ -265,7 +267,7 @@ def render(dados_df: pd.DataFrame):
                     with cols[idx % 3]:
                         st.success(f"**{course}**\n\n_{reason}_")
 
-                st.markdown("---")
+                st.divider()
                 st.caption(
                     "Análise gerada automaticamente com base em dados do IBGE (Censo 2022) e histórico de vendas."
                 )

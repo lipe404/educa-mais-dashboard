@@ -40,6 +40,8 @@ def render(df: pd.DataFrame):
         [C.COL_INT_CITY, C.COL_INT_STATE]
     ].drop_duplicates()
 
+    st.divider()
+
     # --- Map Toggle ---
     use_boundary_map = st.toggle(
         "Ativar Mapa de Limites (GeoJSON)",
@@ -150,6 +152,8 @@ def render(df: pd.DataFrame):
             )
             st.plotly_chart(fig_map, width="stretch")
 
+    st.divider()
+
     # --- New Feature: City Search ---
     st.markdown("### Pesquisar Cidade")
     search_col1, search_col2 = st.columns([2, 1])
@@ -205,6 +209,8 @@ def render(df: pd.DataFrame):
         width="stretch",
     )
 
+    st.divider()
+
     # --- New Feature: Partner Distribution Chart ---
     # Group by number of partners to see how many states have 1, 2, 3... partners
     dist_data = counts_state[C.UI_LABEL_COL_PARTNERS].value_counts().reset_index()
@@ -238,6 +244,8 @@ def render(df: pd.DataFrame):
     st.plotly_chart(fig_dist, width="stretch")
     # -----------------------------------------------
 
+    st.divider()
+
     counts_city = signed_unique[C.COL_INT_CITY].value_counts().reset_index()
     counts_city.columns = [C.UI_LABEL_COL_CITY, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
@@ -250,6 +258,8 @@ def render(df: pd.DataFrame):
         width="stretch",
     )
 
+    st.divider()
+
     counts_region = signed_unique[C.COL_INT_REGION].value_counts().reset_index()
     counts_region.columns = [C.UI_LABEL_COL_REGION, C.UI_LABEL_COL_PARTNERS]
     st.plotly_chart(
@@ -261,6 +271,8 @@ def render(df: pd.DataFrame):
         ),
         width="stretch",
     )
+
+    st.divider()
 
     all_states = sorted(list(C.ESTADO_REGIAO.keys()))
     present_states = (
