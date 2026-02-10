@@ -1,350 +1,965 @@
 # Checklist de Melhorias e Implementações - Educa Mais Dashboard
 
-Este documento contém uma lista exaustiva de sugestões de melhorias para o sistema, categorizadas por área de atuação e páginas específicas. O objetivo é elevar o nível do projeto em termos de usabilidade, performance, segurança e funcionalidades.
+Este documento contém uma lista exaustiva e reescrita de sugestões de melhorias para o sistema, categorizadas por área de atuação. O objetivo é transformar este projeto em um software de nível empresarial.
+
+---
 
 ## 1. UX (Experiência do Usuário)
-
-| #  | Item                            | Estado Atual                                                       | Como Melhorar                                                                                      | Estado Pós-Implementação                                                                 |
-| -- | ------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 1  | Feedback de Carregamento Global | Carregamento de abas pesadas pode parecer travado.                 | Implementar `st.spinner()` ou placeholders (skeletons) granulares em cada aba.                   | Usuário sabe exatamente qual componente está carregando.                                  |
-| 2  | Persistência de Filtros        | Filtros resetam ao recarregar a página (F5).                      | Utilizar `st.query_params` para salvar estado dos filtros na URL.                                | Usuário pode compartilhar links com filtros aplicados e não perde contexto ao recarregar. |
-| 3  | Tratamento de Erros Amigável   | Erros de Python (tracebacks) podem aparecer na tela.               | Envolver renderizações em blocos `try-except` e mostrar mensagens amigáveis com `st.error`. | Usuário vê "Erro ao carregar dados" em vez de `KeyError: 'coluna'`.                     |
-| 4  | Tooltips Explicativos           | Métricas e gráficos carecem de contexto detalhado.               | Adicionar parâmetro `help="Explicação..."` em métricas e inputs.                             | Usuário entende o significado de cada KPI ao passar o mouse.                               |
-| 5  | Navegação por Teclado         | Foco e navegação via Tab não otimizados.                        | Revisar ordem dos widgets e usar `st.form` onde aplicável para submissão em lote.              | Acessibilidade e agilidade para power users.                                                |
-| 6  | Empty States (Estados Vazios)   | Gráficos podem quebrar ou ficar estranhos sem dados.              | Verificar `if df.empty:` antes de renderizar e mostrar `st.info("Sem dados para o período")`. | Interface limpa e informativa mesmo sem dados.                                              |
-| 7  | Responsividade Mobile           | Sidebar ocupa muito espaço em telas pequenas.                     | Testar e ajustar layout para colunas colapsarem corretamente em mobile (`st.columns`).           | Melhor experiência em smartphones e tablets.                                               |
-| 8  | Filtros Contextuais             | Todos os filtros estão na sidebar global, mesmo os específicos.  | Mover filtros específicos de aba (ex: "Visualização do Mapa") para dentro da própria aba.      | Interface menos poluída e filtros onde são necessários.                                  |
-| 9  | Botão de Reset de Filtros      | Não há forma fácil de limpar todos os filtros.                  | Criar botão na sidebar que limpa `st.session_state` dos filtros.                                | Facilidade para reiniciar a análise.                                                       |
-| 10 | Documentação Integrada        | O usuário precisa adivinhar regras de negócio.                   | Criar ícones de `?` ou expanders com "Como interpretar esta tela".                              | Auto-serviço de aprendizado do sistema.                                                    |
-| 11 | Feedback de Ação              | Botões (ex: "Recarregar") não dão feedback claro de conclusão. | Usar `st.toast("Dados atualizados com sucesso!")` após ações.                                 | Confirmação visual de que a ação funcionou.                                             |
-| 12 | Formatação de Números        | Moedas e percentuais podem variar na formatação.                 | Padronizar funções de formatação (R$, %, casas decimais) em `utils.py`.                      | Consistência visual em todos os KPIs.                                                      |
-| 13 | Agrupamento de Informações    | Páginas longas exigem muito scroll.                               | Usar `st.expander` para seções secundárias ou tabelas detalhadas.                             | Visão geral limpa com detalhes sob demanda.                                                |
-| 14 | Atalhos de Data                 | DatePicker exige muitos cliques.                                   | Adicionar botões rápidos: "Hoje", "Ontem", "Este Mês", "Últimos 30 dias".                      | Seleção de período muito mais rápida.                                                   |
-| 15 | Consistência de Linguagem      | Mistura de termos (ex: "Faturamento" vs "Receita").                | Revisar `constants.py` para garantir terminologia única.                                        | Menor carga cognitiva para o usuário.                                                      |
-| 16 | Indicadores de Tendência       | Métricas mostram apenas valor atual.                              | Adicionar delta (setinha verde/vermelha) comparando com período anterior.                         | Contexto imediato de melhora ou piora.                                                      |
-| 17 | Download de Dados               | Tabelas não possuem exportação clara.                           | Adicionar botão de download CSV/Excel acima de cada dataframe exibido.                            | Facilidade para trabalhar dados fora do sistema.                                            |
-| 18 | Personalização de Visão      | Usuário vê todas as colunas sempre.                              | Adicionar `st.multiselect` para escolher colunas visíveis em tabelas grandes.                   | Foco apenas no que importa para o usuário.                                                 |
-| 19 | Modo de Leitura                 | Gráficos Plotly podem ter muitos botões de controle.             | Configurar `config={'displayModeBar': False}` ou simplificar toolbar.                            | Visual mais limpo e focado nos dados.                                                       |
-| 20 | Onboarding                      | Novos usuários ficam perdidos.                                    | Criar um modal de boas-vindas na primeira visita explicando o sistema.                             | Curva de aprendizado reduzida.                                                              |
+1. Implementar `st.spinner()` granular para cada gráfico que carrega dados pesados.
+2. Adicionar "skeletons" (placeholders visuais) enquanto os dados carregam.
+3. Criar persistência de filtros na URL (`st.query_params`) para compartilhamento de visões.
+4. Adicionar tooltips explicativos (`help=`) em todas as métricas e cabeçalhos.
+5. Implementar botão "Voltar ao Topo" em páginas longas.
+6. Criar mensagens de erro amigáveis (substituir stack traces por "Dados indisponíveis").
+7. Adicionar feedback visual (toasts) após ações como "Recarregar Dados".
+8. Melhorar a navegação por teclado (Tab index lógico).
+9. Criar um fluxo de "Onboarding" para novos usuários (modal explicativo).
+10. Adicionar breadcrumbs para navegação profunda (ex: Oportunidade > Detalhada).
+11. Implementar "Empty States" ilustrados quando não houver dados.
+12. Permitir colapsar a sidebar em mobile automaticamente.
+13. Adicionar botão de "Resetar Filtros" visível e acessível.
+14. Criar atalhos de teclado para ações comuns (ex: 'R' para recarregar).
+15. Melhorar o texto dos botões para serem orientados a ação (ex: "Gerar Relatório" vs "Ok").
+16. Adicionar confirmação antes de ações destrutivas ou pesadas.
+17. Exibir data da última atualização dos dados visivelmente no cabeçalho.
+18. Permitir que o usuário personalize a ordem dos cards no dashboard (se possível via session state).
+19. Adicionar modo de "Foco" que esconde a sidebar e cabeçalhos.
+20. Implementar busca global (Cmd+K) para encontrar funcionalidades ou parceiros.
+21. Usar linguagem consistente em todo o app (ex: "Receita" vs "Faturamento").
+22. Adicionar indicadores de progresso para tarefas longas (ex: Geocodificação).
+23. Permitir download de tabelas em múltiplos formatos (CSV, Excel, JSON).
+24. Adicionar opção de "Favoritar" filtros ou visões específicas.
+25. Melhorar a legibilidade de textos longos com espaçamento adequado.
+26. Evitar reloads da página inteira ao alterar filtros secundários (`st.form`).
+27. Notificar o usuário quando a sessão expirar.
+28. Adicionar links diretos para documentação em pontos de dúvida.
+29. Implementar histórico de "Visto Recentemente" para parceiros.
+30. Criar página de "Configurações de Usuário" para preferências locais.
 
 ## 2. UI (Interface do Usuário)
+1. Centralizar a paleta de cores em `constants.py` ou `theme.toml`.
+2. Criar um Design System básico (cores, tipografia, espaçamentos).
+3. Estilizar cards de métricas com CSS customizado (bordas arredondadas, sombra).
+4. Usar ícones consistentes (Material Icons ou FontAwesome) via CSS/Markdown.
+5. Padronizar o tamanho e peso das fontes dos cabeçalhos (H1, H2, H3).
+6. Implementar Dark Mode / Light Mode toggle personalizado.
+7. Estilizar tabelas (`st.dataframe`) com barras de progresso e heatmaps.
+8. Criar rodapé profissional com versão e copyright.
+9. Remover marca d'água "Made with Streamlit" via CSS.
+10. Alinhar verticalmente gráficos e métricas em colunas adjacentes.
+11. Usar divisores (`st.divider`) para separar seções logicamente.
+12. Personalizar a scrollbar para combinar com o tema do app.
+13. Adicionar logo da empresa no favicon e na sidebar (já feito, mas padronizar tamanhos).
+14. Usar avatares ou iniciais coloridas para parceiros/alunos.
+15. Estilizar botões primários e secundários distintamente.
+16. Melhorar o contraste de cores para leitura (WCAG).
+17. Criar componentes de alerta (`st.info`, `st.warning`) personalizados.
+18. Adicionar animações sutis de fade-in ao carregar elementos.
+19. Padronizar o formato de exibição de moeda (R$ 1.000,00).
+20. Usar mapas com tiles customizados (CartoDB Dark/Light) para visual limpo.
+21. Personalizar o widget de upload de arquivos (se houver).
+22. Criar badges coloridas para status (Ativo = Verde, Cancelado = Vermelho).
+23. Ajustar margens e padding globais para reduzir "espaço em branco" excessivo ou falta dele.
+24. Estilizar inputs de texto e selectboxes (bordas, foco).
+25. Usar fontes monospaced apenas para dados técnicos ou código.
+26. Criar layout responsivo que se adapta a telas ultrawide.
+27. Adicionar imagens de fundo sutis ou padrões geométricos em áreas vazias.
+28. Melhorar a visualização de gauges/velocímetros (tamanho reduzido).
+29. Padronizar a opacidade de elementos desabilitados.
+30. Criar uma página de "Style Guide" interna para desenvolvedores.
 
-| #  | Item                            | Estado Atual                                       | Como Melhorar                                                                        | Estado Pós-Implementação                       |
-| -- | ------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| 1  | Paleta de Cores Consistente     | Cores hardcoded em vários arquivos.               | Centralizar paleta em `constants.py` ou tema `config.toml`.                      | Identidade visual sólida e fácil manutenção.  |
-| 2  | Estilização de Cards          | Métricas usam estilo padrão do Streamlit.        | Criar CSS customizado para cards com sombra e bordas arredondadas.                   | Visual mais profissional e moderno "App-like".    |
-| 3  | Tipografia                      | Fonte padrão do Streamlit (Sans-serif genérica). | Importar fonte corporativa via Google Fonts no CSS.                                  | Alinhamento com a marca da empresa.               |
-| 6  | Espaçamento (Whitespace)       | Elementos podem estar muito colados.               | Usar `st.container` com padding ou divisores `st.divider()`.                     | Layout mais respirável e fácil de escanear.     |
-| 7  | Hierarquia Visual               | Títulos e subtítulos com pesos parecidos.        | Definir tamanhos claros para H1, H2, H3 e labels de métricas.                       | Leitura guiada pela importância da informação. |
-| 8  | Tabelas Estilizadas             | Dataframes padrão do Pandas.                      | Usar `st.dataframe` com `column_config` para barras de progresso e formatação. | Tabelas ricas e interativas visualmente.          |
-| 9  | Gráficos Gauge                 | Gráficos de velocímetro ocupam muito espaço.    | Ajustar margens e tamanho no Plotly layout.                                          | Melhor aproveitamento do espaço na tela.         |
-| 10 | Botões Primários/Secundários | Botões têm a mesma cor.                          | Usar `type="primary"` para ações principais e `secondary` para outras.         | Call-to-action claro para o usuário.             |
-| 11 | Tema Escuro/Claro               | Depende da configuração do sistema do usuário.  | Forçar um tema ou criar toggle de tema personalizado.                               | Controle total sobre a apresentação visual.     |
-| 12 | Animações Sutis               | Transições de abas são bruscas.                 | (Limitado no Streamlit) Usar CSS para fade-in em elementos carregados.               | Sensação de fluidez na interface.               |
-| 13 | Rodapé Personalizado           | Rodapé padrão "Made with Streamlit".             | Ocultar padrão e criar rodapé com copyright e versão do sistema.                  | Aparência de software proprietário.             |
-| 14 | Alinhamento de Gráficos        | Gráficos podem desencontrar em colunas.           | Forçar altura fixa nos gráficos Plotly (`height=400`).                           | Grid perfeito e alinhado.                         |
-| 15 | Inputs Estilizados              | Caixas de seleção padrão.                       | Personalizar bordas e cores de foco via CSS injection.                               | Inputs integrados ao design system.               |
-| 16 | Imagens de Placeholder          | Falta de imagens em perfis vazios.                 | Usar avatares gerados (ex: iniciais) para parceiros sem foto.                        | Interface mais humana e acabada.                  |
-| 17 | Mapas Temáticos                | Mapas usam tiles padrão do OSM.                   | Usar tiles do CartoDB Positron ou Dark Matter.                                       | Mapas mais limpos que destacam os dados.          |
-| 18 | Alertas Visuais                 | Sucesso/Erro usam caixas padrão.                  | Estilizar `st.success/warning` para combinar com a paleta.                         | Feedback visual integrado ao tema.                |
-| 19 | Scrollbar Personalizada         | Barra de rolagem padrão do navegador.             | Estilizar scrollbar (fina, cores do tema) via CSS `::-webkit-scrollbar`.           | Detalhe de acabamento refinado.                   |
-
-## 3. Performance
-
-| #  | Item                       | Estado Atual                                     | Como Melhorar                                                                                                     | Estado Pós-Implementação                                |
-| -- | -------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 1  | Cache de Dados             | `load_sheet` cacheado, mas processamento não. | Cachear resultado de `get_dados` após processamento pesado.                                                    | Carregamento instantâneo após primeira carga.            |
-| 2  | Formato de Dados           | Leitura direta de Google Sheets (lento).         | Implementar job noturno que salva em Parquet/CSV e app lê do arquivo.                                            | Redução drástica no tempo de I/O (de segundos para ms). |
-| 3  | Geocodificação Síncrona | `time.sleep(1.1)` trava a execução.          | Mover geocodificação para script separado/background ou usar API paga/batch.                                    | Interface não trava aguardando coordenadas.               |
-| 4  | Otimização Pandas        | Uso de loops ou apply em dataframes.             | Vetorizar todas as operações (usar funções nativas do numpy/pandas).                                          | Processamento de dados muito mais rápido.                 |
-| 5  | Lazy Loading de Abas       | Todas as abas podem estar processando dados.     | Carregar dados pesados apenas dentro do `if` da aba ativa (se possível na arquitetura).                        | Inicialização do app mais rápida.                       |
-| 6  | Redução de GeoJSON       | Arquivos de fronteiras IBGE pesados.             | Simplificar polígonos (TopplogyPreserveSimplification) antes de salvar.                                          | Renderização do mapa muito mais leve.                    |
-| 7  | Cache de Consultas API     | Consultas repetidas a APIs externas.             | Aumentar TTL do cache para dados que mudam pouco (ex: CNAE, IBGE).                                                | Menos chamadas de rede e maior resiliência.               |
-| 8  | Profiling                  | Sem métricas de performance.                    | Adicionar decorador de timing nas funções principais e logar tempo.                                             | Identificação precisa de gargalos.                       |
-| 9  | Tipagem de Dados Pandas    | Strings usam muita memória.                     | Converter colunas categóricas para `category` dtype e inteiros menores (`int32`).                            | Redução de uso de RAM pelo servidor.                     |
-| 10 | Limpeza de Cache           | Cache pode crescer indefinidamente.              | Configurar `max_entries` no `st.cache_data`.                                                                  | Prevenção de estouro de memória no servidor.            |
-| 11 | Renderização de Mapa     | Plotar milhares de pontos trava o navegador.     | Usar `ClusterMarker` no Folium ou mudar para PyDeck (GPU accelerated).                                          | Mapas fluidos mesmo com 10k+ pontos.                       |
-| 12 | Compressão de Assets      | Imagens/logos carregados full-size.              | Otimizar/comprimir imagens na pasta `assets` ou `static`.                                                     | Menor transferência de dados.                             |
-| 13 | Imports Otimizados         | Imports pesados no topo do arquivo.              | Importar bibliotecas pesadas apenas dentro das funções que as usam.                                             | Startup time do script reduzido.                           |
-| 14 | Query em Planilha          | Baixa planilha inteira para filtrar depois.      | Se usar API de banco, filtrar no SQL (`WHERE`). Se Sheets, usar `gspread` com range específico se possível. | Menor tráfego de dados.                                   |
-| 15 | Gerenciamento de Conexão  | Conexões abertas e fechadas repetidamente.      | Usar `st.connection` para gerenciar pool de conexões (se migrar para DB).                                      | Reuso eficiente de conexões.                              |
-| 16 | Paralelismo                | Tarefas independentes sequenciais.               | Usar `concurrent.futures` para chamadas de API independentes (com cuidado no Streamlit).                        | Tempo total reduzido para tarefas I/O bound.               |
-| 17 | Pré-cálculo de Métricas | Métricas calculadas em tempo de execução.     | Pré-calcular KPIs diários e salvar em tabela agregada.                                                          | Dashboard exibe números instantaneamente.                 |
-| 18 | Debounce em Inputs         | Filtros de texto disparam reload a cada letra.   | Usar `st.form` ou componentes com debounce.                                                                     | Menos reprocessamentos desnecessários.                    |
-| 19 | Upgrade Bibliotecas        | Versões antigas do Pandas/Streamlit.            | Atualizar para Pandas 2.0 (PyArrow backend) e Streamlit recente.                                                  | Ganhos de performance gratuitos do motor.                  |
-| 20 | Monitoramento de Memória  | Sem visibilidade de uso de RAM.                  | Adicionar script simples para logar uso de memória do processo.                                                  | Detecção proativa de vazamentos de memória.             |
+## 3. Frontend (Streamlit)
+1. Modularizar cada aba em funções `render()` isoladas (já iniciado, aprofundar).
+2. Usar `st.session_state` para gerenciar estado global complexo.
+3. Implementar `st.fragment` (Streamlit 1.37+) para atualizações parciais.
+4. Otimizar o uso de `st.columns` para layouts complexos.
+5. Usar `st.expander` para esconder detalhes técnicos ou filtros avançados.
+6. Implementar `st.popover` para menus de contexto.
+7. Substituir `st.radio` por `st.pills` (novo componente) onde apropriado.
+8. Usar `st.data_editor` para permitir edições rápidas (se permitido).
+9. Implementar callbacks (`on_change`) para inputs para reatividade imediata.
+10. Usar `st.container(height=...)` para áreas com scroll interno.
+11. Criar componentes customizados (Custom Components) se necessário (ex: Navbar).
+12. Gerenciar cache de recursos estáticos (imagens).
+13. Implementar lógica de "rerun" controlada para evitar loops.
+14. Usar `st.status` para logs de processos longos.
+15. Refatorar sidebar para usar `st.sidebar` context managers.
+16. Implementar upload de arquivos drag-and-drop robusto.
+17. Usar `st.chat_input` se adicionar funcionalidades de IA.
+18. Adicionar suporte a temas dinâmicos via `config.toml`.
+19. Otimizar a renderização de dataframes grandes (paginação no backend).
+20. Usar `st.image` com otimização de largura.
+21. Implementar "Tabs" aninhadas com cuidado para não poluir a UI.
+22. Usar `st.code` para exibir logs ou JSONs de debug.
+23. Capturar exceções de frontend e exibir em container dedicado.
+24. Adicionar suporte a query parameters para deeplinking.
+25. Usar `st.toast` para notificações não intrusivas.
+26. Implementar layout fluido (`layout="wide"`) como padrão configurável.
+27. Criar wrappers para widgets comuns para padronizar parâmetros.
+28. Evitar uso de `st.write` genérico, preferir componentes específicos.
+29. Implementar `st.metric` com deltas automáticos.
+30. Usar `st.logo` (novo) para gestão de marca.
 
 ## 4. Segurança
+1. Mover todas as credenciais para `st.secrets` (TOML).
+2. Implementar autenticação robusta (Login/Senha) com hash.
+3. Configurar RBAC (Controle de Acesso Baseado em Função).
+4. Sanitizar todos os inputs de usuário contra Injection/XSS.
+5. Implementar timeout de sessão por inatividade.
+6. Proteger rotas/abas baseadas no nível de usuário.
+7. Logar tentativas de login falhas.
+8. Mascarar dados sensíveis (PII) nas tabelas (ex: CPF parcial).
+9. Garantir HTTPS em produção (configuração de infra).
+10. Não commitar `.env` ou arquivos de segredos (revisar gitignore).
+11. Rodar scanner de vulnerabilidades (`pip-audit`) no CI/CD.
+12. Implementar Rate Limiting se exposto publicamente.
+13. Validar tipos e formatos de arquivos no upload.
+14. Desabilitar stack traces detalhados em produção.
+15. Criptografar dados sensíveis em repouso (se salvar localmente).
+16. Implementar política de senhas fortes.
+17. Adicionar cabeçalhos de segurança HTTP (via proxy reverso).
+18. Bloquear acesso de IPs suspeitos (se possível na infra).
+19. Realizar auditoria de código focado em segurança periodicamente.
+20. Manter dependências (`requirements.txt`) atualizadas.
+21. Usar `st.secrets` para chaves de API externas (Google, OpenAI).
+22. Implementar logs de auditoria (quem fez o quê e quando).
+23. Proteger endpoints de webhook se houver.
+24. Validar integridade dos dados vindos do Google Sheets.
+25. Evitar `eval()` ou `exec()` no código.
+26. Limitar o tamanho de uploads para evitar DoS.
+27. Isolar o ambiente de execução (Docker container).
+28. Revisar permissões da conta de serviço Google (Least Privilege).
+29. Implementar 2FA (Autenticação de Dois Fatores) se crítico.
+30. Criar plano de resposta a incidentes de segurança.
 
-| #  | Item                          | Estado Atual                                           | Como Melhorar                                                                                   | Estado Pós-Implementação                                              |
-| -- | ----------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 1  | Gerenciamento de Segredos     | Senhas podem estar no código ou `.env` exposto.     | Usar `st.secrets` (TOML) exclusivamente e garantir `.gitignore`.                            | Credenciais seguras e fora do controle de versão.                       |
-| 2  | Autenticação Robusta        | Validação simples de string `API_KEY`.             | Implementar `streamlit-authenticator` com hash de senhas.                                     | Login seguro, criptografado e multi-usuário.                            |
-| 3  | Controle de Acesso (RBAC)     | Todos veem tudo (ou bloqueio simples).                 | Criar níveis de permissão (Admin, Gestor, Parceiro) e renderizar abas condicionalmente.       | Usuários acessam apenas o que devem.                                    |
-| 4  | Sanitização de Inputs       | Entradas de texto confiadas cegamente.                 | Validar e sanitizar inputs antes de processar ou usar em queries.                               | Proteção contra injeção (se houver SQL) e XSS.                       |
-| 5  | Logs de Auditoria             | Ninguém sabe quem acessou o quê.                     | Logar acessos e ações críticas (quem filtrou o que, quem baixou dados).                      | Rastreabilidade de uso do sistema.                                       |
-| 6  | Timeout de Sessão            | Sessão fica aberta indefinidamente.                   | Implementar verificação de inatividade e logout automático.                                  | Proteção contra acesso não autorizado em computadores compartilhados. |
-| 7  | Proteção de Rotas           | Arquivos `.py` podem ser executados individualmente? | Garantir que sub-páginas verifiquem estado de autenticação no topo.                          | Prevenção de bypass de login.                                          |
-| 8  | Dependências Vulneráveis    | Bibliotecas podem ter CVEs.                            | Rodar `pip-audit` ou `safety` no CI/CD.                                                     | Código livre de vulnerabilidades conhecidas.                            |
-| 9  | Exposição de Erros          | Tracebacks mostram caminhos de arquivo.                | Suprimir tracebacks em produção (`client.showErrorDetails = false` no config).              | Atacantes não veem estrutura interna do servidor.                       |
-| 10 | Rate Limiting                 | Sem limite de requisições.                           | Implementar lógica simples para bloquear IPs com excesso de refresh (se exposto publicamente). | Proteção básica contra DoS.                                           |
-| 11 | Validação de Dados Externos | Dados do Sheets confiados cegamente.                   | Validar schema estrito (Pandera) ao carregar dados.                                             | Proteção contra dados maliciosos ou corrompidos na fonte.              |
-| 12 | HTTPS                         | Depende do deploy.                                     | Forçar HTTPS no nível do servidor/proxy reverso.                                              | Comunicação criptografada.                                             |
-| 13 | Backup de Dados               | Depende do Google Sheets.                              | Script de backup automático dos dados para S3/Local diariamente.                               | Recuperação de desastres garantida.                                    |
-| 14 | Mascaramento de Dados         | Dados sensíveis (CPFs, nomes) expostos.               | Mascarar dados pessoais na visualização se não for estritamente necessário (LGPD).          | Conformidade com leis de proteção de dados.                            |
-| 15 | Headers de Segurança         | Headers HTTP padrão.                                  | Configurar headers (HSTS, X-Frame-Options) se usar container customizado.                       | Proteção contra clickjacking e outros vetores web.                     |
-| 16 | Hardcoded Values              | Metas e regras hardcoded.                              | Mover lógica de negócio para config/banco seguro.                                             | Menor risco de manipulação de regras no código.                       |
-| 17 | Separação Dev/Prod          | Mesmo ambiente para tudo.                              | Criar ambientes distintos com credenciais distintas.                                            | Testes não afetam dados reais.                                          |
-| 18 | Revisão de Código           | Commit direto na main.                                 | Exigir Pull Requests com aprovação para mudanças em arquivos críticos.                      | Controle de qualidade e segurança no código.                           |
-| 19 | API Keys de Terceiros         | Chaves de mapas/geocoding expostas no front?           | Garantir que chaves sejam usadas apenas no backend (Python) e não vazem pro JS.                | Proteção de cotas de serviços pagos.                                  |
-| 20 | Política de Senhas           | Senha única ou fraca.                                 | Exigir complexidade mínima e rotação de senhas.                                              | Dificultar força bruta.                                                 |
+## 5. Infraestrutura
+1. Dockerizar a aplicação (`Dockerfile` e `docker-compose`).
+2. Configurar ambiente de Staging e Produção.
+3. Usar Redis para cache distribuído (substituir cache em memória local).
+4. Configurar CI/CD (GitHub Actions) para deploy automático.
+5. Implementar monitoramento de uptime (Health Checks).
+6. Configurar logs centralizados (ex: CloudWatch, Datadog).
+7. Usar servidor WSGI robusto se sair do Streamlit Cloud.
+8. Configurar CDN para assets estáticos se necessário.
+9. Automatizar backups de dados locais (`geocache.db`).
+10. Configurar variáveis de ambiente de forma segura no host.
+11. Implementar Autoscaling (se deploy em nuvem elástica).
+12. Monitorar uso de CPU/RAM do container.
+13. Configurar alertas de downtime via email/Slack.
+14. Usar volumes persistentes para dados que não podem ser perdidos.
+15. Configurar proxy reverso (Nginx) para SSL e cache.
+16. Documentar arquitetura de infraestrutura (diagrama).
+17. Implementar rotação de logs para não encher o disco.
+18. Testar recuperação de desastres (Restore de backup).
+19. Isolar rede do banco de dados (se houver).
+20. Usar IaC (Terraform/Ansible) para provisionamento.
+21. Configurar limites de recursos no Docker (CPU/Memória).
+22. Otimizar tamanho da imagem Docker (Multi-stage build).
+23. Configurar linting de Dockerfile.
+24. Implementar verificação de dependências no pipeline.
+25. Configurar DNS e domínios personalizados.
+26. Usar gerenciador de versões Python (`pyenv`) no desenvolvimento.
+27. Padronizar sistema operacional base (ex: Debian Slim).
+28. Configurar Timezone do servidor corretamente.
+29. Monitorar custos de infraestrutura.
+30. Implementar "Graceful Shutdown" da aplicação.
 
-## 5. Novas Páginas Sugeridas
+## 6. Performance
+1. Vetorizar operações Pandas (remover `apply` e loops).
+2. Converter colunas de string para `category` onde aplicável.
+3. Usar `parquet` em vez de CSV para cache local.
+4. Implementar carregamento assíncrono para APIs externas.
+5. Otimizar queries ao Google Sheets (baixar apenas colunas necessárias).
+6. Reduzir tamanho dos GeoJSONs (simplificação de polígonos).
+7. Aumentar TTL do cache para dados estáticos (IBGE).
+8. Implementar paginação no backend para grandes datasets.
+9. Usar `modin` ou `polars` se Pandas for gargalo.
+10. Profiling de código (`cProfile`) para identificar gargalos.
+11. Otimizar renderização de mapas (Clusterização de marcadores).
+12. Evitar recálculo de métricas inalteradas (`st.cache_data`).
+13. Minificar CSS e JS injetados.
+14. Comprimir imagens antes de exibir.
+15. Usar formatos de imagem modernos (WebP).
+16. Limitar número de pontos plotados em gráficos de linha.
+17. Implementar debounce em filtros de texto.
+18. Carregar abas pesadas apenas quando clicadas (Lazy Loading).
+19. Otimizar loops de geocodificação (batch processing).
+20. Monitorar tempo de resposta das APIs.
+21. Reduzir uso de memória global (del variaveis grandes).
+22. Usar `st.cache_resource` para conexões e modelos ML.
+23. Pré-calcular agregações complexas em job noturno.
+24. Otimizar imports (importar dentro da função se raro).
+25. Remover bibliotecas não utilizadas do `requirements.txt`.
+26. Configurar `max_entries` no cache para evitar OOM.
+27. Usar tipos numéricos menores (`int32`, `float32`) se possível.
+28. Evitar cópias desnecessárias de DataFrames (`df.copy()`).
+29. Otimizar regex em filtros.
+30. Testar performance com carga de múltiplos usuários.
 
-| #  | Item                         | Descrição                                                                      | Valor para o Negócio                                    |
-| -- | ---------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 1  | Dashboard Executivo (Home)   | Visão "One-pager" com os 5 principais KPIs de todo o negócio.                  | Visão rápida da saúde da empresa sem navegar em abas. |
-| 2  | Gestão de Usuários         | CRUD de usuários, redefinição de senha e atribuição de perfis.              | Autonomia para o administrador do sistema.               |
-| 3  | Configurações do Sistema   | Interface para editar metas, datas de corte e parâmetros globais.               | Flexibilidade sem precisar editar código.               |
-| 4  | Logs e Auditoria             | Visualizador de logs do sistema (quem fez o que e quando).                       | Segurança e monitoramento de uso.                       |
-| 5  | Upload de Dados              | Interface para upload de CSV/Excel complementar (ex: metas manuais).             | Independência de fontes de dados automáticas.          |
-| 6  | Análise de Concorrência    | Página para registrar e comparar dados de concorrentes por região.             | Inteligência de mercado centralizada.                   |
-| 7  | Relatórios Personalizados   | Ferramenta para montar um relatório PDF escolhendo gráficos.                   | Facilidade para criar apresentações de resultados.     |
-| 8  | Central de Ajuda             | Tutoriais em vídeo e FAQ sobre o uso do dashboard.                              | Redução de dúvidas e suporte.                         |
-| 9  | Status do Sistema            | Página técnica mostrando status das integrações (API Sheets, Geocoding).     | Diagnóstico rápido de problemas.                       |
-| 10 | Perfil do Parceiro (Detalhe) | Página "Ficha" dedicada a um único parceiro com histórico completo.           | Visão 360º do relacionamento.                          |
-| 11 | Simulador de Comissões      | Calculadora para prever ganhos baseados em cenários de vendas.                  | Engajamento e motivação para parceiros/vendedores.     |
-| 12 | Mapa de Calor (Heatmap)      | Página dedicada apenas a visualização de densidade (vendas, leads).           | Identificação visual rápida de zonas quentes.         |
-| 13 | Funil de Vendas              | Visualização clássica de funil (Lead -> Contato -> Proposta -> Fechado).      | Identificação de gargalos no processo comercial.       |
-| 14 | Análise de Churn            | Página focada em cancelamentos e motivos de saída.                             | Retenção de clientes e receita.                        |
-| 15 | Comparativo Regional         | Ferramenta para colocar duas regiões lado a lado e comparar KPIs.               | Benchmarking interno.                                    |
-| 16 | Notificações               | Central de alertas (ex: "Meta atingida", "Dados desatualizados").                | Proatividade na gestão.                                 |
-| 17 | Análise de Produtos         | Performance detalhada por tipo de curso/produto.                                 | Otimização de portfólio.                              |
-| 18 | Gamificação                | Ranking interativo com medalhas e conquistas para parceiros.                     | Estímulo à competição saudável.                     |
-| 19 | Exportação de Dados        | Página centralizada para baixar dumps de dados brutos permitidos.               | Facilidade para analistas de dados.                      |
-| 20 | Playground de IA             | Interface de chat (LLM) para fazer perguntas aos dados ("Qual melhor região?"). | Insights exploratórios via linguagem natural.           |
+## 7. Testes e QA
+1. Criar suite de testes unitários (`pytest`) para funções de serviço.
+2. Implementar testes de integração para APIs (IBGE, Sheets).
+3. Criar testes de interface (E2E) com Playwright ou Selenium.
+4. Implementar testes de regressão visual (snapshots).
+5. Configurar pre-commit hooks para linting e testes rápidos.
+6. Testar validação de dados de entrada (Schema validation).
+7. Cobrir casos de borda (datas nulas, arquivos vazios).
+8. Implementar testes de carga (Locust) para simular usuários.
+9. Testar responsividade em diferentes resoluções.
+10. Mockar chamadas de API externas nos testes unitários.
+11. Medir cobertura de código (`pytest-cov`) e definir meta (ex: 80%).
+12. Testar fluxos de erro (o que acontece se a API cair?).
+13. Automatizar testes no GitHub Actions.
+14. Testar compatibilidade com diferentes navegadores.
+15. Validar consistência dos cálculos financeiros.
+16. Testar filtros combinados (Data + Estado + Curso).
+17. Verificar acessibilidade automatizada (Pa11y).
+18. Testar instalação limpa do projeto (`requirements.txt`).
+19. Validar tipos de retorno das funções (Type Checking).
+20. Criar dataset de "fixtures" para testes reprodutíveis.
+21. Testar geocodificação com endereços inválidos.
+22. Verificar comportamento com sessão expirada.
+23. Testar upload de arquivos corrompidos.
+24. Validar sanitização de inputs (Security testing).
+25. Testar performance de renderização de gráficos.
+26. Documentar casos de teste manuais.
+27. Implementar Smoke Tests para deploy rápido.
+28. Testar migração de versões de dependências.
+29. Validar internacionalização (formatos de data/número).
+30. Criar dashboard de resultados de testes.
 
-## 6. Ferramentas e Infraestrutura
+## 8. Acessibilidade
+1. Adicionar textos alternativos (`alt`) em todas as imagens.
+2. Garantir contraste de cores suficiente (Ratio 4.5:1).
+3. Permitir navegação completa via teclado.
+4. Usar labels descritivos em todos os inputs.
+5. Evitar depender apenas de cores para transmitir informação.
+6. Usar tags semânticas HTML (via Markdown/Components) onde possível.
+7. Testar com leitores de tela (NVDA, VoiceOver).
+8. Fornecer descrições textuais para gráficos complexos.
+9. Permitir redimensionamento de texto sem quebrar o layout.
+10. Evitar animações que causam vertigem ou flash.
+11. Implementar foco visível em elementos interativos.
+12. Usar linguagem simples e clara.
+13. Fornecer legendas ou transcrições para áudio/vídeo (se houver).
+14. Organizar conteúdo com hierarquia de cabeçalhos lógica.
+15. Evitar timeouts muito curtos sem aviso.
+16. Criar atalhos de navegação ("Pular para conteúdo").
+17. Usar padrões ARIA onde necessário.
+18. Garantir que mensagens de erro sejam lidas pelo screen reader.
+19. Permitir pausar atualizações automáticas de conteúdo.
+20. Testar em modo de alto contraste.
+21. Fornecer instruções claras para interações complexas.
+22. Evitar captchas inacessíveis.
+23. Garantir acessibilidade em modais e popups.
+24. Usar fontes legíveis (tamanho e tipo).
+25. Permitir input de voz (futuro).
+26. Validar acessibilidade de PDFs gerados.
+27. Fornecer suporte a múltiplos idiomas (se aplicável).
+28. Treinar equipe em práticas de acessibilidade.
+29. Incluir checklist de acessibilidade no Definition of Done.
+30. Disponibilizar mapa do site ou índice de navegação.
 
-| #  | Item                             | Estado Atual                           | Como Melhorar                                                                | Estado Pós-Implementação                               |
-| -- | -------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1  | Linting                          | Código pode ter estilo inconsistente. | Configurar `ruff` ou `flake8`.                                           | Código padronizado e limpo.                              |
-| 2  | Formatação                     | Formatação manual.                   | Configurar `black` ou `ruff format` no save.                             | Fim das discussões sobre estilo de código.              |
-| 3  | Type Checking                    | Tipagem dinâmica pura.                | Adicionar type hints e rodar `mypy`.                                       | Menos bugs de tipo em tempo de execução.                |
-| 4  | Testes Unitários                | Sem testes visíveis.                  | Criar testes com `pytest` para funções de `services/`.                 | Confiança para refatorar sem quebrar lógica.            |
-| 5  | CI/CD                            | Deploy manual?                         | Configurar GitHub Actions para lint, test e deploy.                          | Processo de entrega automatizado e seguro.                |
-| 6  | Containerização                | `.devcontainer` existe, mas e prod?  | Criar `Dockerfile` otimizado para produção (multi-stage).                | Ambiente idêntico em dev e prod.                         |
-| 7  | Gerenciamento de Dependências   | `requirements.txt` simples.          | Migrar para `poetry` ou `uv`.                                            | Resolução de dependências determinística e lockfile.  |
-| 8  | Pre-commit Hooks                 | Commits podem quebrar o build.         | Configurar `pre-commit` para rodar linter antes do commit.                 | Repositório sempre saudável.                            |
-| 9  | Documentação de Código        | Docstrings variadas.                   | Adicionar docstrings padrão Google/NumPy em todas as funções.             | Código auto-explicativo.                                 |
-| 10 | Monitoramento de Erros           | Logs no console.                       | Integrar Sentry.                                                             | Alertas em tempo real sobre erros no front dos usuários. |
-| 11 | Analytics de Uso                 | Sem métricas de acesso.               | Integrar Streamlit Analytics ou PostHog.                                     | Entender quais abas são mais usadas.                     |
-| 12 | Versionamento Semântico         | Versões ad-hoc.                       | Adotar SemVer e criar tags no Git.                                           | Controle claro de releases.                               |
-| 13 | Banco de Dados                   | Planilhas Google (frágil).            | Migrar para PostgreSQL ou SQLite (se local).                                 | Robustez, integridade e performance de dados.             |
-| 14 | Editor Config                    | Configuração depende do editor.      | Padronizar `.editorconfig`.                                                | Identação consistente entre editores diferentes.        |
-| 15 | Virtual Environment              | Manual.                                | Automatizar criação de venv no Makefile ou Taskfile.                       | Setup de ambiente rápido para novos devs.                |
-| 16 | Estrutura de Pastas              | Arquivos na raiz.                      | Mover `app.py` e outros para `src/` e modularizar mais.                  | Organização escalável.                                 |
-| 17 | Gestão de Configuração        | Variáveis espalhadas.                 | Usar `pydantic-settings` para validar variáveis de ambiente.              | Erro rápido se configuração estiver faltando.          |
-| 18 | Scripts de Manutenção          | Comandos manuais.                      | Criar `Makefile` com comandos `make run`, `make test`, `make clean`. | Padronização de comandos operacionais.                  |
-| 19 | Backup de Código                | GitHub.                                | Garantir redundância ou mirror se crítico.                                 | Segurança do ativo intelectual.                          |
-| 20 | Análise Estática de Segurança | Nenhuma.                               | Rodar `bandit` no código.                                                 | Detecção automática de falhas de segurança comuns.    |
+## 9. Analytics e BI
+1. Definir KPIs claros para cada página (já iniciado, expandir).
+2. Implementar análise de Cohort para retenção de alunos.
+3. Criar visualização de Funil de Vendas (Oportunidade -> Contrato).
+4. Calcular LTV (Lifetime Value) dos parceiros.
+5. Analisar Churn Rate (taxa de cancelamento) de contratos.
+6. Implementar segmentação RFM (Recência, Frequência, Valor).
+7. Criar projeções de crescimento (YoY, MoM).
+8. Analisar sazonalidade de vendas/matrículas.
+9. Identificar produtos/cursos "Estrela" e "Abacaxi".
+10. Cruzar dados demográficos (IBGE) com vendas internas.
+11. Implementar análise de Pareto (Curva ABC) de parceiros.
+12. Calcular Ticket Médio por região/estado.
+13. Monitorar taxa de conversão de leads.
+14. Analisar penetração de mercado por município.
+15. Criar dashboard executivo (Resumo para C-Level).
+16. Comparar desempenho real vs metas estabelecidas.
+17. Analisar correlação entre descontos e volume de vendas.
+18. Monitorar tempo médio de fechamento de contrato.
+19. Identificar regiões saturadas vs inexploradas.
+20. Analisar performance por canal de aquisição (se houver dados).
+21. Calcular ROI de campanhas ou parceiros.
+22. Implementar detecção de anomalias em faturamento.
+23. Criar relatórios de exceção (o que saiu do padrão).
+24. Analisar tendências de longo prazo (Moving Averages).
+25. Clusterizar parceiros por comportamento.
+26. Simular cenários ("E se aumentarmos o preço em 10%?").
+27. Acompanhar evolução do market share.
+28. Analisar satisfação do cliente (NPS) se houver dados.
+29. Monitorar inadimplência.
+30. Integrar dados de concorrentes (se disponíveis).
 
-## 7. Página: Contratos
+## 10. Notificações
+1. Implementar central de notificações na UI.
+2. Criar alertas de "Meta Batida" (toasts/confetti).
+3. Notificar sobre dados desatualizados.
+4. Alerta de anomalia em faturamento (queda brusca).
+5. Notificar erros de integração com APIs.
+6. Lembretes de renovação de contratos próximos.
+7. Alerta de novos parceiros cadastrados.
+8. Notificações por email (integração SMTP/SendGrid).
+9. Alertas via Slack/Teams/WhatsApp (Webhooks).
+10. Notificar término de processamentos longos.
+11. Permitir usuário configurar preferências de notificação.
+12. Histórico de notificações lidas/não lidas.
+13. Alerta de vencimento de API Keys.
+14. Notificar atualizações do sistema (Changelog).
+15. Alertas de segurança (login em novo dispositivo).
+16. Notificações de tarefas pendentes.
+17. Alerta de performance (servidor sobrecarregado).
+18. Notificar exportações concluídas.
+19. Lembretes de follow-up com parceiros.
+20. Alertas de datas comemorativas para campanhas.
+21. Notificações push (se evoluir para PWA).
+22. Agrupar notificações similares.
+23. Ações rápidas na notificação (ex: "Ver Detalhes").
+24. Sons de notificação (opcional/configurável).
+25. Indicador visual (badge) no ícone de notificações.
+26. Notificações de feedback de usuário.
+27. Alerta de limite de cota de API atingido.
+28. Digest diário/semanal por email.
+29. Notificar alterações em contratos importantes.
+30. Testar sistema de notificações em staging.
 
-| #  | Item                          | Estado Atual                              | Como Melhorar                                                     | Estado Pós-Implementação                      |
-| -- | ----------------------------- | ----------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
-| 1  | Metas Dinâmicas              | Metas (30, 90, 180) hardcoded no código. | Criar inputs na sidebar ou config para ajustar metas.             | Flexibilidade para ajustar objetivos sem deploy. |
-| 2  | Gráfico de Evolução        | Visão estática acumulada.               | Adicionar gráfico de linha temporal (assinaturas por dia/mês).  | Visualização da tendência de crescimento.     |
-| 3  | Drill-down de Status          | Gráfico de pizza estático.              | Tornar fatias clicáveis para filtrar a tabela abaixo.            | Interatividade para investigar gargalos.         |
-| 4  | Tabela Detalhada              | Pode não existir ou ser simples.         | Adicionar `st.dataframe` com busca e ordenação dos contratos. | Acesso rápido aos detalhes de cada contrato.    |
-| 5  | KPIs de Conversão            | Apenas contagem absoluta.                 | Calcular taxa de conversão (Assinados / Total).                  | Medição de eficiência comercial.              |
-| 6  | Tempo Médio de Ciclo         | Não existe.                              | Calcular tempo entre "Enviado" e "Assinado".                      | Identificação de lentidão no processo.        |
-| 7  | Análise por Captador         | Gráfico de barras simples.               | Adicionar ranking com foto e % de atingimento da meta individual. | Gamificação e reconhecimento.                  |
-| 8  | Filtro de Valor               | Sem filtro por valor de contrato.         | Adicionar slider de range de valor (se houver dado financeiro).   | Foco em contratos de alto valor (High Ticket).   |
-| 9  | Comparativo Período Anterior | Sem comparação.                         | Adicionar indicador "vs Mês Passado" nos Big Numbers.            | Contexto de performance imediato.                |
-| 10 | Previsão de Fechamento       | Baseado apenas no passado.                | Estimar contratos a fechar com base no funil atual.               | Previsibilidade de curto prazo.                  |
-| 11 | Exportação Filtrada         | Download genérico.                       | Botão "Baixar Lista Filtrada" da tabela de contratos.            | Dados prontos para trabalho operacional.         |
-| 12 | Alerta de Estagnação        | Contratos parados não destacados.        | Destacar em vermelho contratos parados há > X dias.              | Ação proativa para destravar vendas.           |
-| 13 | Distribuição Geográfica    | Sem mapa nesta aba.                       | Pequeno mapa de bolhas mostrando origem dos contratos.            | Correlação visual geografia x vendas.          |
-| 14 | Ticket Médio                 | Não visível.                            | Card com valor médio dos contratos assinados.                    | Monitoramento de qualidade da venda.             |
-| 15 | Sazonalidade                  | Análise mensal simples.                  | Heatmap de dias da semana/horários de assinatura.                | Entender melhor momento de fechamento.           |
-| 16 | Motivos de Perda              | Se houver dados de recusa.                | Gráfico de Pareto de motivos de não-fechamento.                 | Plano de ação para objeções.                 |
-| 17 | Filtro por Produto            | Mistura todos os contratos.               | Filtro para ver desempenho por tipo de curso.                     | Análise específica de portfólio.              |
-| 18 | Assinaturas Digitais          | Apenas status.                            | Se possível, link direto para o documento (DocuSign/etc).        | Agilidade na conferência.                       |
-| 19 | Responsividade de Gráficos   | Gráficos podem ficar espremidos.         | Usar `use_container_width=True` em todos os charts Plotly.      | Layout adaptável a qualquer tela.               |
-| 20 | Anotações                   | Gráficos sem contexto de eventos.        | Permitir adicionar marcos (ex: "Início Campanha Black Friday").  | Correlação causa-efeito visual.                |
+## 11. Qualidade do Código
+1. Adicionar Type Hints (mypy) em todo o projeto.
+2. Configurar linter rigoroso (Ruff ou Pylint).
+3. Formatar código automaticamente (Black ou Ruff format).
+4. Remover código morto e imports não usados.
+5. Reduzir complexidade ciclomática (refatorar funções grandes).
+6. Padronizar nomes de variáveis e funções (snake_case).
+7. Documentar todas as funções (Docstrings Google/NumPy style).
+8. Usar constantes para "Magic Numbers" e strings repetidas.
+9. Modularizar arquivos grandes (`app.py`, `ui/*.py`).
+10. Implementar tratamento de exceções específico (evitar `except Exception`).
+11. Usar Dataclasses ou Pydantic para modelos de dados.
+12. Revisar e melhorar comentários de código.
+13. Seguir princípios SOLID.
+14. Desacoplar lógica de negócio da interface (UI).
+15. Implementar injeção de dependência onde útil.
+16. Usar caminhos relativos/absolutos de forma consistente (`pathlib`).
+17. Revisar uso de variáveis globais.
+18. Padronizar estrutura de diretórios.
+19. Eliminar código duplicado (DRY).
+20. Usar f-strings consistentemente.
+21. Garantir que todo arquivo tenha newline no final.
+22. Ordenar imports (isort).
+23. Usar Enums para opções fixas (status, tipos).
+24. Revisar lógica booleana complexa.
+25. Adicionar `__init__.py` onde necessário.
+26. Usar context managers (`with`) para recursos.
+27. Evitar mutação de argumentos padrão.
+28. Revisar nomenclatura de arquivos.
+29. Implementar logging estruturado.
+30. Realizar Code Reviews periódicos.
 
-## 8. Página: Mapa
+## 12. Documentação
+1. Criar `README.md` detalhado (instalação, uso, arquitetura).
+2. Documentar API interna (se houver endpoints).
+3. Criar Wiki ou `docs/` com guias de negócio.
+4. Documentar dicionário de dados (o que é cada coluna).
+5. Criar guia de contribuição (`CONTRIBUTING.md`).
+6. Manter `CHANGELOG.md` atualizado.
+7. Documentar variáveis de ambiente necessárias (`.env.example`).
+8. Criar diagramas de arquitetura (C4 model ou UML).
+9. Documentar fluxo de deploy.
+10. Criar FAQ para usuários finais.
+11. Documentar decisões de design (ADRs).
+12. Criar tutoriais em vídeo ou GIF.
+13. Documentar dependências e suas licenças.
+14. Comentar trechos de código complexos ("Why", not "What").
+15. Criar mapa de navegação do app.
+16. Documentar processos manuais (ex: atualização de planilha).
+17. Criar glossário de termos do domínio (Educação/Vendas).
+18. Documentar configurações do VS Code (`.vscode`).
+19. Criar templates de Issue e PR no GitHub.
+20. Documentar testes (como rodar, o que cobrem).
+21. Manter lista de melhorias (`todo.md`) atualizada e priorizada.
+22. Documentar roles e permissões de usuários.
+23. Criar manual do usuário em PDF/HTML exportável.
+24. Documentar estrutura do banco de dados/planilhas.
+25. Criar badges de status no README (Build, Coverage).
+26. Documentar atalhos de teclado.
+27. Traduzir documentação se houver equipe internacional.
+28. Versionar a documentação junto com o código.
+29. Usar ferramentas como MkDocs ou Sphinx.
+30. Documentar plano de rollback.
 
-| #  | Item                          | Estado Atual                       | Como Melhorar                                                         | Estado Pós-Implementação                           |
-| -- | ----------------------------- | ---------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------- |
-| 1  | Performance de Renderização | Lento com muitos pontos.           | Implementar clusterização de marcadores (MarkerCluster).            | Mapa carrega rápido e agrupa pontos automaticamente. |
-| 2  | Filtro de Raio                | Não existe.                       | Ferramenta para desenhar círculo e filtrar parceiros dentro de X km. | Análise de cobertura local precisa.                  |
-| 3  | Camadas de Dados              | Apenas parceiros.                  | Adicionar camadas toggleáveis (Escolas, Concorrentes, População).  | Cruzamento visual de dados ricos.                     |
-| 4  | Heatmap                       | Apenas pinos.                      | Adicionar camada de mapa de calor baseada em densidade de vendas.     | Visualização imediata de zonas quentes.             |
-| 5  | Popup Rico                    | Informações básicas no clique.  | Popup HTML formatado com mini-gráficos e links.                      | Decisão rápida sem sair do mapa.                    |
-| 6  | Busca de Endereço            | Geocoding lento/básico.           | Autocomplete de endereço na busca (via API).                         | UX fluida para encontrar locais.                      |
-| 7  | Legenda Clara                 | Pinos podem confundir.             | Legenda flutuante explicativa (cores/ícones).                        | Entendimento imediato do que é o quê.               |
-| 8  | Tela Cheia                    | Mapa confinado no layout.          | Botão para expandir mapa para tela cheia.                            | Imersão total na análise geográfica.               |
-| 9  | Filtro Cruzado                | Mapa não filtra outros gráficos. | Seleção no mapa (Lasso select) filtra tabelas abaixo.               | Integração total entre mapa e dados.                |
-| 10 | Rotas (Futuro)                | Sem roteirização.                | Ferramenta simples de "Traçar Rota" entre parceiros selecionados.    | Planejamento de visitas.                              |
-| 11 | Mapa de Coroplético          | Fronteiras simples.                | Pintar municípios baseado em vendas/população (Choropleth).        | Análise macro-regional visual.                       |
-| 12 | Ícones Personalizados        | Pinos padrão.                     | Ícones distintos para tipos de parceiro (Ouro, Prata, Bronze).       | Diferenciação visual de valor.                      |
-| 13 | Controle de Zoom              | Zoom manual.                       | "Auto-fit" bounds para mostrar todos os pontos filtrados.             | Mapa sempre centralizado nos dados relevantes.        |
-| 14 | Exportação de Imagem        | Print screen manual.               | Botão "Salvar Mapa como PNG".                                        | Facilidade para relatórios.                          |
-| 15 | Modo Satélite                | Apenas mapa de rua.                | Toggle para visão de satélite.                                      | Contexto físico/geográfico (zona rural vs urbana).  |
-| 16 | Dados Demográficos           | Sem contexto populacional.         | Tooltip no município mostrando população/PIB (dados IBGE).         | Contexto de mercado potencial.                        |
-| 17 | Análise de Proximidade       | Visual.                            | Calcular e mostrar "Parceiro mais próximo" de um ponto.              | Suporte logístico.                                   |
-| 18 | Histórico no Mapa            | Estático atual.                   | Slider temporal para ver evolução da expansão no mapa.             | Animação do crescimento da rede.                    |
-| 19 | Geocoding Reverso             | Coordenadas manuais.               | Ao clicar no mapa, preencher endereço no form de novo parceiro.      | Facilidade de cadastro.                               |
-| 20 | Cache de Tiles                | Recarregamento constante.          | Configurar cache local de tiles do mapa.                              | Navegação no mapa mais suave.                       |
+## 13. IA (Inteligência Artificial)
+1. Implementar previsão de demanda com Prophet/NeuralProphet.
+2. Criar chatbot (LLM) para "conversar" com os dados ("Qual faturamento de ontem?").
+3. Usar NLP para analisar sentimentos em feedbacks de alunos.
+4. Implementar recomendação de cursos para regiões baseada em similaridade.
+5. Detecção automática de anomalias (Isolation Forest).
+6. Classificação automática de leads (Hot/Cold).
+7. Otimização de rotas para visitas a parceiros.
+8. Clustering de municípios (K-Means/DBSCAN) para expansão.
+9. Gerar insights automáticos ("Você vendeu 20% a mais que a média").
+10. Resumir relatórios longos com LLMs.
+11. Prever Churn de parceiros.
+12. Analisar correlação semântica entre cursos e mercado de trabalho local.
+13. Implementar OCR para leitura de contratos digitalizados (se houver).
+14. Usar IA para limpeza e normalização de dados (fuzzy matching de nomes).
+15. Prever inadimplência.
+16. Gerar personas de clientes baseadas em dados.
+17. Otimizar mix de produtos por região.
+18. Analisar elasticidade de preço.
+19. Implementar busca semântica na documentação.
+20. Usar Vision AI para analisar fotos de fachada de parceiros.
+21. Prever impacto de campanhas de marketing.
+22. Gerar textos de marketing personalizados para parceiros.
+23. Analisar concorrência via scraping e IA.
+24. Implementar assistente virtual de onboarding.
+25. Explicar o "porquê" de uma previsão (Explainable AI).
+26. Ajustar hiperparâmetros de modelos automaticamente.
+27. Monitorar drift de modelos (Data Drift).
+28. Usar IA generativa para criar cenários de simulação.
+29. Implementar análise de causa raiz de problemas.
+30. Validar ética e viés dos modelos utilizados.
 
-## 9. Página: Faturamento
+## 14. Página de Contratos
+1. Visualizar funil de status (Enviado -> Assinado -> Pago).
+2. Adicionar filtros avançados (Data, Valor, Responsável).
+3. Permitir busca textual por nome do contrato/ID.
+4. Exibir KPIs de tempo médio em cada etapa.
+5. Criar visualização de calendário de vencimentos.
+6. Adicionar botão para visualizar PDF do contrato (se link disponível).
+7. Implementar edição de metadados do contrato (se permitido).
+8. Visualizar histórico de alterações do contrato.
+9. Agrupar contratos por parceiro/cliente.
+10. Adicionar tags coloridas para tipos de contrato.
+11. Exportar lista filtrada para Excel.
+12. Calcular valor total em carteira vs realizado.
+13. Gráfico de evolução de assinaturas por dia/mês.
+14. Identificar contratos estagnados (sem mudança há X dias).
+15. Comparar desempenho entre vendedores/captadores.
+16. Adicionar alertas de contratos próximos ao vencimento.
+17. Visualizar distribuição geográfica dos contratos.
+18. Implementar paginação na tabela de contratos.
+19. Adicionar colunas customizáveis na tabela.
+20. Linkar contrato à página do parceiro.
+21. Gráfico de dispersão (Valor vs Tempo de Fechamento).
+22. Analisar motivos de perda/cancelamento.
+23. Visualizar ticket médio dos contratos assinados.
+24. Adicionar comentários/anotações aos contratos.
+25. Integração com assinatura digital (Docusign/ClickSign status).
+26. Checklist de documentos pendentes por contrato.
+27. Visualizar hierarquia (Contrato Mãe/Filho).
+28. Simulador de comissões baseado nos contratos.
+29. Indicador de contratos com pendências financeiras.
+30. Relatório de renovações automáticas.
 
-| #  | Item                         | Estado Atual                      | Como Melhorar                                                             | Estado Pós-Implementação                      |
-| -- | ---------------------------- | --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------ |
-| 1  | Visão Anual vs Mensal       | Gráficos podem misturar visões. | Toggle claro "Ano/Mês" que adapta todos os gráficos.                    | Análise na granularidade correta.               |
-| 2  | Comparativo YoY              | Linha única.                     | Adicionar linha do ano anterior (sombra ou tracejada) no gráfico mensal. | Comparação direta de crescimento sazonal.      |
-| 3  | Margem de Lucro              | Apenas receita bruta.             | Se houver dados de custo, adicionar linha de margem/lucro.                | Visão de saúde financeira real.                |
-| 4  | Top Clientes                 | Tabela simples.                   | Gráfico de barras horizontais dos Top 10 pagadores.                      | Foco nos clientes chave (Pareto).                |
-| 5  | Inadimplência               | Não visível.                    | KPI e gráfico de valores vencidos vs pagos.                              | Controle de saúde do caixa.                     |
-| 6  | Ticket Médio Histórico     | Valor estático.                  | Gráfico de linha da evolução do ticket médio.                         | Identificação de tendências de valorização. |
-| 7  | Projeção de Fim de Mês    | Valor atual.                      | Tracejado projetando o fechamento do mês baseado na média diária.      | Antecipação de resultados.                     |
-| 8  | Breakdown por Fonte          | Receita total.                    | Donut chart: Cartão vs Boleto vs Pix (se disponível).                   | Inteligência de meios de pagamento.             |
-| 9  | Receita Recorrente           | Misturada.                        | Separar MRR (Recorrente) de One-off (Pontual).                            | Avaliação da estabilidade da receita.          |
-| 10 | Tabela Dinâmica (Pivot)     | Tabela fixa.                      | Usar `pivot_table` interativa (linhas/colunas configuráveis).          | Análise ad-hoc poderosa.                        |
-| 11 | Exportação Financeira      | CSV simples.                      | Exportar em formato pronto para contabilidade (Excel formatado).          | Ganho de tempo no backoffice.                    |
-| 12 | Análise de Coorte           | Não existe.                      | Gráfico de retenção de receita por safra (cohort).                     | Entendimento da qualidade das safras de vendas.  |
-| 13 | Alertas de Desvio            | Visual.                           | Destacar meses com desvio > 20% da média.                                | Atenção imediata a anomalias.                  |
-| 14 | Custo de Aquisição (CAC)   | Não calculado.                   | Se houver dados de mkt, cruzar para mostrar CAC.                          | Visão de eficiência de investimento.           |
-| 15 | LTV (Lifetime Value)         | Não calculado.                   | Estimar LTV baseada na média histórica.                                 | Visão de valor de longo prazo.                  |
-| 16 | Gráfico Cascata (Waterfall) | Não existe.                      | Mostrar composição do resultado (Vendas Novas + Renovação - Churn).   | Entendimento claro da movimentação financeira. |
-| 17 | Sazonalidade Financeira      | Análise visual.                  | Boxplot dos meses para mostrar variância histórica.                     | Previsibilidade estatística.                    |
-| 18 | Conversão de Moeda          | Apenas BRL.                       | Se houver internacional, toggle BRL/USD.                                  | Preparo para expansão.                          |
-| 19 | Metas Financeiras            | Linha fixa.                       | Barra de progresso " % da Meta de Faturamento".                           | Foco no objetivo financeiro.                     |
-| 20 | Detalhamento de Impostos     | Bruto = Líquido?                 | Simular descontos de impostos para visão líquida estimada.              | Realismo financeiro.                             |
+## 15. Página de Mapas
+1. Implementar clusterização de marcadores (MarkerCluster) para performance.
+2. Adicionar camadas (Layers) alternáveis (Satélite, Rua, Dark).
+3. Filtrar pontos visíveis por raio ou desenho livre.
+4. Colorir marcadores dinamicamente por métrica (Valor, Status).
+5. Adicionar popups ricos (HTML/Gráficos) ao clicar no marcador.
+6. Implementar mapa de calor (Heatmap) de densidade de vendas.
+7. Visualizar fronteiras de estados/municípios (GeoJSON).
+8. Adicionar busca de endereço com zoom automático.
+9. Permitir exportar área visível como imagem.
+10. Calcular rotas ou distâncias entre pontos.
+11. Adicionar legenda clara para cores e tamanhos.
+12. Filtrar mapa interativamente com outros gráficos.
+13. Mostrar localização do usuário (Geolocalização).
+14. Visualizar territórios de vendas.
+15. Animar evolução temporal no mapa (Time Slider).
+16. Adicionar camada de dados demográficos (IBGE) sobreposta.
+17. Otimizar carregamento de GeoJSONs pesados.
+18. Implementar minimapa de contexto.
+19. Permitir seleção de múltiplos pontos para ação em lote.
+20. Visualizar concorrentes no mapa.
+21. Adicionar ferramenta de medição de área/distância.
+22. Suporte a mapas 3D (PyDeck) para visualização de altura (ex: faturamento).
+23. Persistir estado do mapa (zoom/centro) ao navegar.
+24. Customizar ícones dos marcadores.
+25. Adicionar camada de trânsito ou fluxo (se relevante).
+26. Visualizar raio de atuação de cada parceiro.
+27. Integrar com Street View.
+28. Adicionar tooltips ao passar o mouse (hover).
+29. Resetar visão para enquadrar todos os pontos.
+30. Análise de "espaços em branco" (White space analysis).
 
-## 10. Página: Previsões
+## 16. Página de Faturamento
+1. Adicionar comparativo Ano contra Ano (YoY).
+2. Implementar gráfico de cascata (Waterfall) para explicar resultado líquido.
+3. Visualizar composição da receita por categoria (Pie/Treemap).
+4. Adicionar linhas de tendência e média móvel.
+5. Permitir drill-down (Ano -> Mês -> Dia -> Transação).
+6. Calcular e exibir margem de lucro/contribuição.
+7. Gráfico de Pareto de produtos/serviços.
+8. Simulador de faturamento (como já implementado, mas expandir cenários).
+9. Analisar sazonalidade mensal/semanal.
+10. Visualizar inadimplência e contas a receber.
+11. Exportar relatório financeiro formatado (PDF).
+12. Adicionar indicadores de meta (Gauges/Bullets).
+13. Comparar faturamento Realizado vs Orçado.
+14. Analisar Ticket Médio ao longo do tempo.
+15. Visualizar fluxo de caixa (Entradas vs Saídas).
+16. Adicionar anotações em picos ou quedas (ex: "Black Friday").
+17. Tabela detalhada com Sparklines.
+18. Analisar faturamento por forma de pagamento.
+19. Calcular CAC (Custo de Aquisição) se houver dados de custo.
+20. Visualizar distribuição de faturamento por estado/região.
+21. Gráfico de "Corrida de Barras" (Bar Chart Race) temporal.
+22. Analisar concentração de receita em clientes (Risco).
+23. Ajustar valores pela inflação (IPCA) para comparação real.
+24. Previsão de fechamento do mês atual.
+25. Destaque para "Melhor dia" e "Pior dia".
+26. Análise de coorte de receita (Vintage Analysis).
+27. Visualizar descontos concedidos vs Receita Bruta.
+28. Integração com API bancária para saldo real (futuro).
+29. Alertas de desvios significativos do padrão.
+30. Dashboard específico para comissões.
 
-| #  | Item                       | Estado Atual                   | Como Melhorar                                                                  | Estado Pós-Implementação                         |
-| -- | -------------------------- | ------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| 1  | Seleção de Modelo        | Prophet padrão.               | Permitir escolher entre Prophet, ARIMA, Holt-Winters via UI.                   | Flexibilidade para encontrar o melhor ajuste.       |
-| 2  | Ajuste de Hiperparâmetros | Automático/Hardcoded.         | Sliders para ajustar sazonalidade, changepoints, alpha/beta/gamma.             | Tuning fino por cientistas de dados/analistas.      |
-| 3  | Intervalos de Confiança   | Fixo ou oculto.                | Permitir ajustar intervalo (80%, 90%, 95%) e visualizar a faixa.               | Gestão de risco baseada na incerteza.              |
-| 4  | Backtesting Visual         | Gráfico estático.            | Mostrar corte de treino/teste e erro no período de teste visualmente.         | Validação visual da confiança do modelo.         |
-| 5  | Métricas de Erro          | Texto simples.                 | Exibir tabela comparativa de MAPE, RMSE, MAE para cada modelo.                 | Decisão técnica baseada em números.              |
-| 6  | Regressores Externos       | Apenas série temporal.        | Permitir upload/input de variáveis externas (ex: investimento mkt).           | Modelos causais mais robustos.                      |
-| 7  | Cenários (What-If)        | Linha única.                  | Criar cenários Otimista, Realista e Pessimista.                               | Planejamento estratégico completo.                 |
-| 8  | Explicação do Modelo     | Caixa preta.                   | Plotar componentes da decomposição (Tendência, Sazonalidade Anual/Semanal). | Entendimento do "porquê" da previsão.             |
-| 9  | Exportação de Forecast   | Visual.                        | Botão para baixar CSV com as datas futuras e valores previstos.               | Uso dos dados em orçamentos externos.              |
-| 10 | Ajuste Manual              | Modelo matemático puro.       | Permitir "override" manual de pontos futuros (ex: saber que haverá feriado).  | Inteligência humana + IA.                          |
-| 11 | Detecção de Outliers     | Dados sujos entram no modelo.  | Opção para remover/suavizar outliers antes de treinar.                       | Previsões não contaminadas por eventos atípicos. |
-| 12 | Comparação Multi-modelo  | Um por vez.                    | Plotar linhas de 3 modelos diferentes no mesmo gráfico.                       | Competição de modelos visual.                     |
-| 13 | Histórico de Previsões   | Previsão atual.               | Guardar previsões passadas e comparar com o realizado ("Forecast Accuracy").  | Aprendizado sobre a qualidade das previsões.       |
-| 14 | Feriados                   | Padrão do Prophet (se ativo). | Interface para adicionar/remover feriados customizados que afetam o negócio.  | Ajuste fino de calendário.                         |
-| 15 | Simulação de Metas       | Previsão passiva.             | Input "Meta Desejada" e cálculo reverso do crescimento necessário.           | Ferramenta de planejamento de metas.                |
-| 16 | Performance de Treino      | Sem feedback.                  | Mostrar tempo de treinamento e avisos de convergência.                        | Transparência computacional.                       |
-| 17 | Validação Cruzada        | Split simples.                 | Implementar Time Series Cross-Validation (janelas deslizantes).                | Robustez estatística da validação.               |
-| 18 | Dicas de Interpretação   | Gráficos complexos.           | Texto dinâmico explicando "A tendência é de alta de X%...".                 | Acessibilidade para não-estatísticos.             |
-| 19 | Salvar Modelo              | Treina toda vez.               | Botão para serializar (pickle) e salvar o modelo treinado.                    | Reuso rápido sem retreinar.                        |
-| 20 | Alertas de Tendência      | Visual.                        | Aviso automático se a previsão indicar queda brusca.                         | Radar de problemas futuros.                         |
+## 17. Página de Previsões
+1. Implementar múltiplos algoritmos (Prophet, ARIMA, Holt-Winters, XGBoost).
+2. Permitir ajuste manual de parâmetros do modelo (com explicações).
+3. Exibir intervalos de confiança (Cenário Otimista/Pessimista).
+4. Backtesting visual (Previsão vs Realizado no passado).
+5. Calcular métricas de erro (MAE, RMSE, MAPE) automaticamente.
+6. Permitir adicionar regressores externos (ex: Feriados, PIB).
+7. Previsão hierárquica (Total -> Estado -> Cidade).
+8. Exportar previsões para CSV/Excel.
+9. Salvar modelos treinados para uso posterior.
+10. Comparar performance de diferentes modelos lado a lado.
+11. Explicabilidade do modelo (quais fatores influenciaram).
+12. Previsão de metas (Goal Seeking - quanto preciso vender?).
+13. Ajuste sazonal manual.
+14. Detecção de outliers que podem sujar a previsão.
+15. Previsão de novos produtos (Cold Start).
+16. Simulação de "What-If" (E se investirmos X em marketing?).
+17. Gráfico interativo de zoom na previsão.
+18. Tabela de valores previstos dia a dia.
+19. Notificar se a previsão indica queda brusca.
+20. Integrar previsão com planejamento de estoque/vagas.
+21. Decomposição da série temporal (Tendência, Sazonalidade, Resíduo).
+22. Cross-validation temporal.
+23. Previsão de curto prazo vs longo prazo.
+24. Documentação sobre como interpretar a previsão.
+25. Indicador de "Confiabilidade da Previsão".
+26. Agrupar previsões por categoria de produto.
+27. Re-treino automático periódico.
+28. Análise de impacto de eventos (ex: Pandemia).
+29. Comparar previsão da máquina vs meta humana.
+30. Visualizar histórico de revisões de previsão.
 
-## 11. Página: Análise de Oportunidade
+## 18. Análise de Oportunidade (Geral)
+1. Cruzar dados internos com dados de mercado (IBGE/SIDRA).
+2. Calcular índice de saturação de mercado.
+3. Identificar "Oceano Azul" (Alta demanda, baixa oferta).
+4. Score de atratividade por município.
+5. Filtros demográficos avançados (Renda, Idade, Escolaridade).
+6. Visualizar concorrentes na região (se houver dados).
+7. Mapa de calor de potencial de consumo.
+8. Ranking de melhores cidades para expansão.
+9. Estimativa de faturamento potencial por cidade.
+10. Análise de canibalização (nova unidade vs existentes).
+11. Relatório detalhado de viabilidade ("Dossiê Cidade").
+12. Comparar perfil da cidade com perfil de sucesso da empresa.
+13. Exportar lista de leads/prospects (empresas locais).
+14. Análise de infraestrutura local (Internet, Transporte).
+15. Integração com dados de emprego (CAGED) para cursos pro.
+16. Visualizar PIB per capita e IDH.
+17. Filtro por distância de unidades existentes.
+18. Análise de tendências demográficas (Crescimento populacional).
+19. Simulador de Ponto de Equilíbrio (Break-even) para nova unidade.
+20. Sugestão automática de mix de cursos para a região.
+21. Clusterização de cidades semelhantes.
+22. Priorização automática de expansão.
+23. Visualizar parcerias potenciais na região (Indústrias, Escolas).
+24. Histórico de prospecção na região.
+25. Análise de risco da região.
+26. Dashboard comparativo (Cidade A vs Cidade B).
+27. Mapa de fluxo de pessoas (se dados disponíveis).
+28. Integração com Google Maps Places API.
+29. Análise de verticalização da cidade.
+30. Relatório de impacto social potencial.
 
-| #  | Item                       | Estado Atual                 | Como Melhorar                                                                       | Estado Pós-Implementação               |
-| -- | -------------------------- | ---------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
-| 1  | Clusterização Interativa | Parâmetros fixos.           | Sliders para `eps` e `min_samples` do DBSCAN visíveis.                         | Exploração dinâmica de agrupamentos.   |
-| 2  | Filtros de Mercado         | Filtros básicos.            | Adicionar filtros por PIB per capita, IDH, População (dados IBGE).                | Segmentação de mercado qualificada.     |
-| 3  | Score de Oportunidade      | Sem ranking.                 | Criar algoritmo de scoring (População * Renda / Concorrência) e rankear cidades. | Lista priorizada de onde atacar.          |
-| 4  | Mapa de Brancos            | Visual.                      | Destacar claramente municípios sem parceiros mas com alto potencial.               | Identificação imediata de Blue Oceans.  |
-| 5  | Análise de Saturação    | Sem indicador.               | Calcular penetração (Vendas / População) e alertar saturação.                 | Evitar canibalização.                   |
-| 6  | Dados de CNAE              | Integração quebrada/lenta. | Corrigir integração ou usar dados estáticos cacheados de empresas por setor.     | Visão B2B real.                          |
-| 7  | Comparação de Clusters   | Visual.                      | Tabela comparando média de métricas entre os clusters encontrados.                | Perfilamento dos grupos de oportunidade.  |
-| 8  | Exportação de Leads      | Visualização.              | Botão "Gerar Lista de Prospecção" das cidades selecionadas.                      | Ação comercial direta.                  |
-| 9  | Integração CRM           | Dados isolados.              | (Futuro) Botão para enviar cidades/regiões para pipeline do CRM.                  | Conexão Marketing -> Vendas.             |
-| 10 | Análise SWOT Automática  | Não existe.                 | Gerar quadrantes Forças/Fraquezas baseados em dados da região.                    | Insight estratégico automatizado.        |
-| 11 | Ficha do Município        | Dados dispersos.             | Ao clicar na cidade, abrir ficha completa (População, Escolas, Empresas, PIB).    | Dossiê completo do alvo.                 |
-| 12 | Raio de Influência        | Ponto único.                | Desenhar raio de influência estimado de uma nova unidade.                          | Planejamento de cobertura territorial.    |
-| 13 | Custo de Entrada           | Não estimado.               | Se houver dados, estimar custo de setup em nova região.                            | Análise de viabilidade econômica.       |
-| 14 | Tendência Demográfica    | Estático.                   | Mostrar se a cidade está crescendo ou encolhendo (Censo).                          | Aposta em mercados em expansão.          |
-| 15 | Concorrência Visual       | Não mapeada.                | Se houver dados, plotar concorrentes no mapa de oportunidades.                      | Inteligência competitiva.                |
-| 16 | Relatório PDF             | Tela.                        | Gerar "Estudo de Viabilidade" em PDF para a região selecionada.                    | Material para reuniões de expansão.     |
-| 17 | Filtro de Distância       | Qualquer lugar.              | Filtrar oportunidades a X km de um centro de distribuição/escritório.            | Otimização logística.                  |
-| 18 | Feedback do Usuário       | Apenas dados.                | Permitir usuário marcar cidade como "Descartada" ou "Em Negociação".             | Gestão simples de pipeline de expansão. |
-| 19 | Camada de Educação       | Dados gerais.                | Focar em dados de escolas/alunos (Censo Escolar) se o nicho for educação.         | Dados super-relevantes para o setor.      |
-| 20 | Importação de Dados      | Apenas sistema.              | Permitir upload de lista de cidades alvo para análise em lote.                     | Análise de listas externas.              |
+## 19. Visão Geral (Overview)
+1. Dashboard de "Health Check" do negócio (KPIs vitais).
+2. Widgets personalizáveis (Drag & Drop se possível).
+3. Resumo de atividades recentes.
+4. Atalhos para ações frequentes.
+5. Gráfico de funil macro da empresa.
+6. Mapa simplificado de presença nacional.
+7. Top 5 Rankings (Parceiros, Cursos, Cidades).
+8. Indicadores de meta global.
+9. Feed de notícias ou avisos do sistema.
+10. Comparativo rápido Mês Atual vs Mês Anterior.
+11. Visualização de atingimento de meta por equipe.
+12. Calendário de eventos importantes.
+13. Contador de usuários online/ativos.
+14. Tempo até o fim do ciclo (Mês/Trimestre).
+15. Insights automáticos ("Faturamento recorde hoje!").
+16. Botão de "Pânico" ou suporte rápido.
+17. Link para relatórios completos.
+18. Visualização limpa para exibição em TV (Wallboard).
+19. Saudação personalizada ("Bom dia, Usuário").
+20. Resumo de pendências/tarefas.
+21. Gráfico de velocímetro (Gauge) para meta principal.
+22. Mini-tabelas de destaques.
+23. Filtro global de data que afeta os widgets.
+24. Indicador de status dos sistemas (Integrações).
+25. Destaque para o "Parceiro do Mês".
+26. Frase motivacional ou dica do dia.
+27. Visualização de NPS global.
+28. Resumo financeiro simplificado (Receita, Despesa, Lucro).
+29. Contadores animados.
+30. Modo de apresentação (slideshow de KPIs).
 
-## 12. Página: Parceiros
+## 20. Análise Detalhada (Oportunidade)
+1. Ficha completa do município (População, Economia, Educação).
+2. Pirâmide etária da cidade.
+3. Evolução do PIB e População nos últimos anos.
+4. Matriz SWOT automática da cidade.
+5. Comparativo direto com média estadual/nacional.
+6. Análise de setores econômicos predominantes (Agro, Indústria, Serviço).
+7. Detalhamento de escolas e matrículas (Censo Escolar).
+8. Dados de frota de veículos (indicador de renda).
+9. Acesso a saneamento e energia.
+10. Empresas atuantes na cidade (por CNAE).
+11. Salário médio local.
+12. Taxa de desemprego estimada.
+13. Pontos de interesse (Shoppings, Universidades).
+14. Distância para capital e polos regionais.
+15. Índice de desenvolvimento (IFDM/IDH).
+16. Dados de conectividade (Banda larga).
+17. Histórico político/administrativo (opcional).
+18. Links para sites oficiais da prefeitura.
+19. Galeria de fotos da cidade (Google API).
+20. Comentários/Anotações da equipe sobre a cidade.
+21. Checklist de validação de campo.
+22. Score de segurança pública.
+23. Custo de vida estimado.
+24. Preço médio de aluguel comercial.
+25. Legislação local relevante (iss, alvará).
+26. Incentivos fiscais disponíveis.
+27. Rede bancária disponível.
+28. Fluxo turístico.
+29. Clima e riscos naturais.
+30. Relatório PDF consolidado da cidade.
 
-| #  | Item                         | Estado Atual      | Como Melhorar                                                                   | Estado Pós-Implementação                |
-| -- | ---------------------------- | ----------------- | ------------------------------------------------------------------------------- | ------------------------------------------ |
-| 1  | Ranking Gamificado           | Tabela simples.   | Criar pódio visual (1º, 2º, 3º) com fotos/logos.                            | Estímulo visual à competição.          |
-| 2  | Scorecard do Parceiro        | Dados dispersos.  | Criar cartão resumo com nota geral (0-100) baseada em múltiplos KPIs.         | Avaliação holística rápida.            |
-| 3  | Histórico de Performance    | Snapshot atual.   | Sparklines (mini gráficos) na tabela mostrando tendência últimos 6 meses.    | Visão de momento (subindo/caindo).        |
-| 4  | Comparativo (Benchmarking)   | Isolado.          | Permitir selecionar 2 parceiros e comparar lado a lado.                         | Análise de gaps de performance.           |
-| 5  | Classificação ABC          | Não existe.      | Classificar automaticamente em Curva ABC (Pareto) e adicionar tag visual.       | Foco na gestão dos parceiros 'A'.         |
-| 6  | Mapa da Rede                 | Geral.            | Mapa específico desta aba mostrando apenas a rede de parceiros com status.     | Visão geográfica da força de vendas.    |
-| 7  | Análise de Churn            | Não visível.    | Lista de parceiros inativos há X meses (Risco de Churn).                       | Ação de retenção proativa.             |
-| 8  | Funil do Parceiro            | Geral.            | Mostrar funil de vendas individual agregado.                                    | Diagnóstico de onde o parceiro trava.     |
-| 9  | Documentação               | Não existe.      | Indicador de status de documentação (Pendente/Ok).                            | Compliance em dia.                         |
-| 10 | Treinamentos                 | Não rastreado.   | Se houver dados, mostrar % de certificação/treinamento da equipe do parceiro. | Correlação Capacitação x Vendas.       |
-| 11 | Metas Individuais            | Geral.            | Visualizar meta vs realizado de cada parceiro.                                  | Cobrança assertiva.                       |
-| 12 | Notas de Reunião            | Não existe.      | Pequeno campo de texto ou log para anotar último contato.                      | CRM leve integrado.                        |
-| 13 | Data de Aniversário         | Não existe.      | Mostrar "Tempo de Casa" e alertar aniversários de parceria.                    | Relacionamento e fidelização.            |
-| 14 | Contatos Chave               | Não visível.    | Mostrar nome/email/telefone do responsável principal no card.                  | Ação rápida de contato.                 |
-| 15 | Potencial de Mercado         | Igual para todos. | Cruzar vendas do parceiro com potencial da região dele (Market Share local).   | Avaliação justa de desempenho.           |
-| 16 | Badge de Destaque            | Nenhum.           | Ícones automáticos: "Maior Crescimento", "Novo Entrante", "Consistente".      | Reconhecimento automático.                |
-| 17 | Exportação de Contatos     | Não existe.      | Baixar VCard ou CSV para mailing.                                               | Integração com ferramentas de email mkt. |
-| 18 | Status Financeiro            | Não visível.    | Indicador de inadimplência do próprio parceiro (se aplicável).               | Risco financeiro.                          |
-| 19 | Feedback do Parceiro         | Unilateral.       | (Futuro) Espaço para registrar NPS do parceiro com a empresa.                  | Ouvir a ponta.                             |
-| 20 | Clusterização de Parceiros | Lista plana.      | Agrupar por perfil (ex: "Hunters", "Farmers", "Novatos").                       | Estratégias de gestão diferenciadas.     |
+## 21. Análise por Curso (Oportunidade)
+1. Demanda específica por área de conhecimento.
+2. Cruzamento Curso vs Vagas de Emprego locais.
+3. Concorrência específica (quantas escolas ofertam o curso?).
+4. Ticket médio praticado pelo mercado para o curso.
+5. Perfil do aluno ideal na região.
+6. Sazonalidade da procura pelo curso.
+7. Custo de implementação do curso na região.
+8. Regulamentação local específica para o curso.
+9. Parcerias estratégicas para estágio na região.
+10. Evasão média do curso na região.
+11. Empregabilidade dos egressos.
+12. Tendência de busca no Google (Google Trends) local.
+13. Comparativo de grade curricular com concorrentes.
+14. Sugestão de preço baseada na renda local.
+15. Capacidade de absorção do mercado.
+16. Equipamentos necessários vs disponibilidade local.
+17. Docentes qualificados disponíveis na região.
+18. Modalidade preferida (EAD, Presencial, Híbrido) na região.
+19. Impacto de concorrentes indiretos (YouTube, Cursos Livres).
+20. Previsão de saturação.
+21. Feedback de alunos de cidades vizinhas.
+22. Mapa de calor de interesse pelo tema.
+23. Campanhas de marketing sugeridas para o curso.
+24. Cases de sucesso em cidades similares.
+25. Requisitos de infraestrutura física.
+26. Análise de ROI específico do curso.
+27. Curva de aprendizado vs perfil educacional local.
+28. Kits didáticos necessários e logística.
+29. Certificações valorizadas na região.
+30. Ranking de cursos mais rentáveis para a cidade.
 
-## 13. Página: Análise Unitária
+## 22. Geo Clustering (Oportunidade)
+1. Algoritmo K-Means para agrupar cidades similares.
+2. DBSCAN para identificar clusters geográficos densos.
+3. Visualização de clusters no mapa com cores distintas.
+4. Análise de perfil médio de cada cluster.
+5. Identificação de "Cidades Polo" e "Cidades Satélite".
+6. Otimização de logística de supervisão por cluster.
+7. Sugestão de campanhas de marketing regionalizadas por cluster.
+8. Comparativo de desempenho entre clusters.
+9. Definição de metas diferenciadas por cluster.
+10. Análise de contágio (sucesso em uma cidade influenciando vizinhas).
+11. Rotas otimizadas dentro do cluster.
+12. Identificação de clusters subaproveitados.
+13. Heatmap de faturamento por cluster.
+14. Dendrograma de similaridade entre cidades.
+15. Filtros para re-clusterizar (ex: só cidades ricas).
+16. Nomeação automática ou manual dos clusters.
+17. Exportar lista de cidades por cluster.
+18. Análise de silhueta para validar qualidade do cluster.
+19. Detecção de outliers (cidades que não se encaixam).
+20. Clusterização hierárquica.
+21. Visualização 3D dos clusters (PCA).
+22. Análise de migração entre clusters.
+23. Benchmarking interno entre unidades do mesmo cluster.
+24. Padronização de processos por cluster.
+25. Alocação de recursos baseada no potencial do cluster.
+26. Testes A/B por cluster.
+27. Análise de canibalização intra-cluster.
+28. Previsão de crescimento agregado do cluster.
+29. Monitoramento de concorrentes por cluster.
+30. Relatório consolidado de inteligência regional.
 
-| #  | Item                        | Estado Atual        | Como Melhorar                                                                         | Estado Pós-Implementação                      |
-| -- | --------------------------- | ------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| 1  | Seletor de Unidade          | Selectbox simples.  | Transformar em um "Search" robusto com autocomplete por nome/cidade/código.          | Encontrar unidade rapidamente.                   |
-| 2  | Dashboard Resumo            | Métricas soltas.   | Layout "Cockpit": Uma tela com tudo que importa sobre a unidade.                      | Visão 360º instantânea.                       |
-| 3  | DRE da Unidade              | Financeiro geral.   | Demonstrativo de Resultado simplificado da unidade (Receita - Impostos - Comissões). | Visão de rentabilidade real.                    |
-| 4  | Comparativo com Média      | Números absolutos. | Adicionar linha de referência "Média da Rede" em todos os gráficos.                | Saber se a unidade está acima/abaixo da média. |
-| 5  | Análise de Produtos        | Geral.              | Mix de produtos vendidos por essa unidade (Pizza chart).                              | Entender vocação da unidade.                   |
-| 6  | Histórico Completo         | Limitado.           | Gráfico de linha desde o início da operação (Lifetime).                           | Análise de ciclo de vida.                       |
-| 7  | Mapa Local                  | Não existe.        | Mini-mapa mostrando a unidade e seus clientes ao redor.                               | Contexto geográfico micro.                      |
-| 8  | Metas Específicas          | Genéricas.         | Mostrar metas customizadas dessa unidade.                                             | Acompanhamento personalizado.                    |
-| 9  | Equipe                      | Não visível.      | Listar vendedores/atendentes vinculados à unidade.                                   | Gestão de pessoas na ponta.                     |
-| 10 | Tickets de Suporte          | Não integrado.     | (Se houver) Mostrar contagem de chamados abertos pela unidade.                        | Saúde operacional.                              |
-| 11 | Log de Alterações         | Não existe.        | Histórico de mudanças de status ou dados cadastrais.                                | Auditoria.                                       |
-| 12 | Radar Chart                 | Não existe.        | Gráfico de radar comparando 5 pilares (Vendas, Qualidade, Financeiro, Mkt, Ops).     | Diagnóstico visual de equilíbrio.              |
-| 13 | Previsão Local             | Geral.              | Rodar modelo de previsão apenas com dados dessa unidade.                             | Forecast específico e acurado.                  |
-| 14 | Plano de Ação             | Não existe.        | Campo para gerente regional escrever "Próximos Passos" para a unidade.               | Gestão orientada a ação.                      |
-| 15 | Fotos/Evidências           | Não existe.        | Galeria para fotos da fachada/equipe (se houver link).                                | Auditoria visual de padronização.              |
-| 16 | Índice de Satisfação     | Não visível.      | Mostrar NPS dos clientes dessa unidade.                                               | Foco na qualidade do atendimento.                |
-| 17 | Campanhas Ativas            | Não visível.      | Listar quais campanhas de mkt estão rodando na região.                              | Alinhamento comercial-marketing.                 |
-| 18 | Download Relatório Unidade | Não existe.        | Botão "Gerar PDF da Unidade" para envio ao parceiro.                                 | Feedback estruturado para o parceiro.            |
-| 19 | Alerta de Risco             | Visual.             | Badge "Risco de Churn" se métricas caírem muito.                                    | Intervenção rápida.                           |
-| 20 | Dados Cadastrais            | Texto simples.      | Layout de cartão de visita com botão "Copiar Dados" e links para WhatsApp/Maps.     | Facilidade operacional.                          |
+## 23. Análise de Regressão (Oportunidade)
+1. Identificar variáveis que mais impactam o faturamento (Feature Importance).
+2. Regressão Linear Múltipla para prever potencial.
+3. Random Forest Regressor para capturar não-linearidades.
+4. Visualização de Resíduos para validar modelo.
+5. Correlação de Pearson/Spearman entre indicadores.
+6. Scatter plots interativos (Variável X vs Faturamento).
+7. Cálculo de R² e R² Ajustado.
+8. Testes de hipótese estatística (p-value).
+9. Identificar variáveis redundantes (Multicolinearidade).
+10. Simulador: "Se a população aumentar X, quanto aumenta a venda?".
+11. Comparar cidades: Realizado vs Previsto pelo modelo (Eficiência).
+12. Identificar cidades "Outliers Positivos" (vendem muito mais que o modelo prevê).
+13. Identificar cidades com potencial inexplorado (vendem menos que o modelo prevê).
+14. Regressão logística para probabilidade de sucesso (Sim/Não).
+15. Análise de elasticidade (Preço vs Demanda).
+16. Validação cruzada dos modelos.
+17. Seleção automática de features (RFE).
+18. Visualização de árvore de decisão.
+19. Exportar coeficientes da equação de regressão.
+20. Análise de sensibilidade.
+21. Documentação das variáveis utilizadas.
+22. Integração com dados temporais (Regressão em Painel).
+23. Segmentação de modelos por porte de cidade.
+24. Tratamento de dados faltantes antes da regressão.
+25. Normalização/Padronização de dados.
+26. Análise de heterocedasticidade.
+27. Comparativo entre diferentes algoritmos de regressão.
+28. Uso de dados geoespaciais na regressão (Spatial Lag).
+29. Interface simples para usuários não-estatísticos.
+30. Relatório automático de insights estatísticos.
 
-## 14. Página: Alunos
+## 24. Página de Parceiros
+1. Perfil 360º do parceiro (Vendas, Financeiro, Qualidade).
+2. Histórico de interações (CRM).
+3. Ranking de parceiros (Gamificação).
+4. Comparativo Parceiro vs Média da Região.
+5. Indicador de Churn Risk do parceiro.
+6. Mapa de atuação do parceiro.
+7. Documentos e contratos do parceiro centralizados.
+8. Status de conformidade/treinamento.
+9. Metas individuais e acompanhamento.
+10. Ferramenta de feedback para o parceiro.
+11. Sugestão de próximas ações (Next Best Action).
+12. Visualização da equipe do parceiro.
+13. Análise de mix de produtos do parceiro.
+14. Ciclo de vida do parceiro (Novo, Maturação, Declínio).
+15. Relatório de comissões pagas.
+16. Badges de reconhecimento (Ouro, Prata, Bronze).
+17. Filtros avançados de busca de parceiros.
+18. Exportar ficha do parceiro.
+19. Integração com WhatsApp para contato rápido.
+20. Histórico de tickets de suporte.
+21. Análise de sazonalidade específica do parceiro.
+22. Benchmarking com parceiros similares.
+23. Log de alterações cadastrais.
+24. Score de engajamento com a plataforma.
+25. Calendário de visitas/reuniões.
+26. Funil de vendas do parceiro.
+27. Notas de auditoria de qualidade.
+28. Link para redes sociais do parceiro.
+29. Rede de relacionamentos (Indicações).
+30. Plano de ação corretiva (se performance baixa).
 
-| #  | Item                     | Estado Atual        | Como Melhorar                                                                           | Estado Pós-Implementação                |
-| -- | ------------------------ | ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 1  | Filtros Avançados       | Básico.            | Filtros combinados: Curso + Status + Data Matrícula + Origem.                          | Segmentação precisa de base.             |
-| 2  | Jornada do Aluno         | Status atual.       | Visualização de pipeline horizontal (Inscrito -> Matriculado -> Cursando -> Formado). | Entendimento do fluxo do aluno.            |
-| 3  | Análise de Evasão      | Não explícita.    | Gráfico focado em Dropouts (quando e por que saem).                                    | Retenção e LTV.                          |
-| 4  | Perfil Demográfico      | Tabelas.            | Gráficos de pirâmide etária e distribuição de gênero/região.                     | Conheça seu cliente (KYC).                |
-| 5  | Mapa de Calor de Notas   | Se houver notas.    | Heatmap de desempenho acadêmico por curso/turma.                                       | Monitoramento pedagógico.                 |
-| 6  | Financeiro do Aluno      | Não visível.      | Indicador de adimplência e valor total pago (LTV individual).                          | Saúde financeira da carteira.             |
-| 7  | Engajamento              | Não medido.        | (Se houver LMS) Dados de frequência/acessos à plataforma.                             | Previsão de evasão por falta de uso.     |
-| 8  | Origem da Matrícula     | Não visível.      | Gráfico de canais de aquisição (Orgânico, Pago, Indicação).                       | Eficiência de marketing.                  |
-| 9  | Satisfação (NPS)       | Não visível.      | Mostrar última nota de NPS dada pelo aluno.                                            | Monitoramento de experiência.             |
-| 10 | Histórico de Cursos     | Curso atual.        | Linha do tempo de todos os cursos feitos pelo aluno (Upsell/Cross-sell).                | Visão de fidelidade.                      |
-| 11 | Exportação para MKT    | Não existe.        | Botão "Exportar para Email Mkt" (segmento filtrado).                                   | Ação de reengajamento.                   |
-| 12 | Certificados             | Status.             | Indicador visual se certificado foi emitido/entregue.                                   | Controle de finalização.                 |
-| 13 | Suporte ao Aluno         | Não integrado.     | Listar últimos chamados abertos pelo aluno.                                            | Visão 360 do atendimento.                 |
-| 14 | Coorte de Retenção     | Não existe.        | Tabela de retenção por mês de entrada (Cohort Analysis).                             | Métrica chave de SaaS/Assinatura.         |
-| 15 | Previsão de Formatura   | Data fixa.          | Alertar alunos próximos da formatura para ação de renovação/pós.                  | Ciclo de vida estendido.                   |
-| 16 | Distribuição por Curso | Pizza simples.      | Treemap para visualizar cursos com mais alunos vs receita.                              | Análise de popularidade vs rentabilidade. |
-| 17 | Alunos em Risco          | Não identificados. | Algoritmo que marca alunos com faltas/notas baixas/pagamento atrasado.                  | Ação preventiva de retenção.           |
-| 18 | Busca Global             | Filtro.             | Barra de busca rápida por Nome/CPF/Email no topo.                                      | Atendimento rápido.                       |
-| 19 | Bulk Actions             | Um a um.            | Checkbox na tabela para ações em massa (ex: Enviar Msg).                              | Produtividade operacional.                 |
-| 20 | Integração WhatsApp    | Texto.              | Link "Click to Chat" no número do celular do aluno.                                    | Contato imediato.                          |
+## 25. Análise Unitária e Alunos
+1. Ficha do Aluno (Notas, Frequência, Financeiro).
+2. Histórico de matrículas.
+3. Risco de evasão (Dropout Prediction).
+4. Mapa de calor de residência dos alunos.
+5. Análise de satisfação (NPS do aluno).
+6. Perfil socioeconômico agregado.
+7. Desempenho acadêmico comparativo.
+8. Funil de conversão (Interessado -> Matriculado).
+9. Análise de motivos de cancelamento.
+10. LTV do aluno.
+11. Engajamento em plataforma EAD (se houver).
+12. Relatório de inadimplência por turma/curso.
+13. Análise de origem (Como conheceu a escola?).
+14. Taxa de aprovação/reprovação.
+15. Previsão de formandos.
+16. Monitoramento de presença.
+17. Histórico de atendimento ao aluno.
+18. Documentação acadêmica digitalizada.
+19. Segmentação de alunos para marketing.
+20. Análise de empregabilidade pós-curso.
+21. Clube de ex-alunos (Alumni).
+22. Portal do aluno (visão do admin sobre o que o aluno vê).
+23. Gestão de benefícios/bolsas.
+24. Análise de tickets médios por perfil.
+25. Cruzamento Aluno vs Parceiro (Quem trouxe?).
+26. Eficiência de canais de captação.
+27. Análise de feedbacks textuais.
+28. Ciclo de vida do aluno.
+29. Recomendações de cursos complementares (Cross-sell).
+30. Dashboard de retenção.
+
+## 26. Gráficos (Geral)
+1. Usar paleta de cores acessível (Colorblind friendly).
+2. Implementar interatividade (Zoom, Pan, Hover) em todos.
+3. Adicionar anotações automáticas em pontos críticos.
+4. Permitir download do gráfico como PNG/SVG.
+5. Padronizar fontes e tamanhos de títulos.
+6. Usar legendas claras e posicionadas corretamente.
+7. Evitar gráficos de pizza com muitas fatias (usar barras).
+8. Implementar gráficos combinados (Barra + Linha).
+9. Adicionar linhas de meta/referência.
+10. Suavizar linhas em gráficos de tendência (Spline).
+11. Formatadores de eixo (K, M, %) automáticos.
+12. Tooltips ricos com dados adicionais.
+13. Gráficos responsivos (ajustam ao container).
+14. Usar Sparklines para tendências em tabelas.
+15. Gráficos de dispersão com linha de regressão.
+16. Treemaps para dados hierárquicos.
+17. Sankey Diagrams para fluxos (Financeiro/Funil).
+18. Boxplots para distribuição estatística.
+19. Histogramas para análise de frequência.
+20. Radar Charts para comparação multidimensional.
+21. Waterfall charts para evolução financeira.
+22. Heatmaps para correlações ou calendários.
+23. Bullet charts para metas.
+24. Funnel charts para processos de venda.
+25. Otimizar performance WebGL para muitos pontos.
+26. Sincronizar eixos entre gráficos relacionados.
+27. Permitir alternar tipo de gráfico (Barra <-> Linha).
+28. Animações de transição de dados.
+29. Texto de resumo automático abaixo do gráfico.
+30. Gridlines sutis para facilitar leitura.
+
+## 27. Integração de Dados
+1. Substituir CSVs por banco SQL (PostgreSQL/MySQL).
+2. Criar pipeline ETL (Extract, Transform, Load) robusto (Airflow/Prefect).
+3. Validar schema dos dados na entrada (Pydantic/Pandera).
+4. Implementar Webhooks para dados em tempo real.
+5. Integração oficial com APIs de CRM (Salesforce, HubSpot).
+6. Integração com gateways de pagamento (Stripe, Asaas).
+7. Integração com ferramentas de marketing (RD Station).
+8. Data Lake para dados brutos/históricos (S3/GCS).
+9. Versionamento de datasets (DVC).
+10. Monitoramento de falhas na integração.
+11. Logs detalhados de ingestão de dados.
+12. Tratamento de duplicatas na importação.
+13. Normalização de dados (endereços, telefones).
+14. Enriquecimento de dados automático.
+15. API Gateway para expor dados internos.
+16. Cacheamento em Redis.
+17. Gerenciamento de chaves de API centralizado.
+18. Rate limiting para consumo de APIs externas.
+19. Retry policies (Exponential Backoff) para falhas de rede.
+20. Notificação de quebra de contrato de API.
+21. Documentação de linhagem de dados (Data Lineage).
+22. Catálogo de dados (Data Catalog).
+23. Integração com Active Directory/LDAP.
+24. Sandbox para testes de integração.
+25. Criptografia em trânsito (TLS 1.3).
+26. Mascaramento de dados em ambientes de dev.
+27. Suporte a GraphQL (futuro).
+28. Compressão de dados na transferência.
+29. Validação de consistência entre fontes.
+30. Painel de status das integrações.
+
+## 28. Mobile Experience
+1. Design "Mobile First" para novas telas.
+2. Menu hambúrguer otimizado.
+3. Tabelas responsivas (scroll horizontal ou cards).
+4. Botões maiores para toque (Touch targets > 44px).
+5. Gestos de swipe para navegação (se possível).
+6. Otimizar uso de dados móveis (imagens menores).
+7. Teclados virtuais corretos (numérico para valores).
+8. Remover hovers (não existem no touch).
+9. Testar em dispositivos reais (iOS/Android).
+10. PWA (Progressive Web App) manifest.
+11. Ícone de app para Home Screen.
+12. Splash screen de carregamento.
+13. Layout de coluna única em telas pequenas.
+14. Fontes legíveis sem zoom.
+15. Evitar popups intrusivos.
+16. Otimizar performance de bateria.
+17. Suporte a orientação paisagem/retrato.
+18. Acesso à câmera (para OCR/Fotos) se necessário.
+19. Geolocalização do dispositivo.
+20. Botões de ação flutuantes (FAB).
+21. Feedback tátil (vibração) para ações (se possível).
+22. Links de telefone clicáveis (`tel:`).
+23. Links de mapa clicáveis (abrir app de mapas).
+24. Prevenção de zoom acidental em inputs.
+25. Scroll infinito em vez de paginação.
+26. Cache offline para consulta básica.
+27. Notificações push nativas.
+28. Ajustar gráficos para caber na tela.
+29. Simplificar filtros para mobile.
+30. Testar em redes lentas (3G).
+
+## 29. Gestão de Erros e Logging
+1. Configurar Sentry ou GlitchTip para rastreamento de erros.
+2. Logging estruturado em JSON.
+3. Níveis de log apropriados (DEBUG, INFO, WARN, ERROR).
+4. Rastreamento de ID de correlação (Trace ID) entre serviços.
+5. Dashboard de logs (ELK Stack ou Grafana Loki).
+6. Alertas automáticos para picos de erros.
+7. Página de erro 404/500 personalizada ("Oops!").
+8. Tratamento global de exceções não capturadas.
+9. Logs de auditoria de segurança separados.
+10. Rotação e retenção de logs configuradas.
+11. Sanitização de logs (não logar senhas!).
+12. Contexto rico nos logs (User ID, URL, Timestamp).
+13. Captura de erros de frontend (JS) e envio para backend.
+14. Logs de performance (tempo de execução).
+15. Monitoramento de queries lentas.
+16. Feedback de erro claro para o usuário (sem tecniquês).
+17. Botão "Reportar Erro" para o usuário.
+18. Logs de deploy e startup.
+19. Análise de tendências de erros.
+20. Documentação de códigos de erro comuns.
+21. Testar recuperação de falhas (Chaos Engineering leve).
+22. Logs de jobs em background.
+23. Monitoramento de espaço em disco para logs.
+24. Integração de logs com tickets (Jira/GitHub Issues).
+25. Debug mode configurável via variável de ambiente.
+26. Logs de alterações de configuração.
+27. Rastreamento de chamadas de API externas.
+28. Logs de autenticação e autorização.
+29. Backup de logs críticos.
+30. Revisão periódica de logs para insights.
+
+## 30. Conformidade e Governança (LGPD)
+1. Mapeamento de dados pessoais (Data Mapping).
+2. Política de Privacidade visível e atualizada.
+3. Termos de Uso do sistema.
+4. Gestão de consentimento (Cookies/Dados).
+5. Mecanismo para "Direito ao Esquecimento" (Anomização).
+6. Relatório de Impacto à Proteção de Dados (RIPD).
+7. Controle de acesso granular (Princípio do Menor Privilégio).
+8. Logs de acesso a dados sensíveis.
+9. Treinamento de conscientização para equipe.
+10. Canal de contato com DPO (Encarregado).
+11. Procedimento de resposta a vazamento de dados.
+12. Revisão de contratos com processadores de dados (Google, etc).
+13. Classificação da informação (Pública, Interna, Confidencial).
+14. Retenção e descarte seguro de dados.
+15. Backup criptografado.
+16. Testes de intrusão periódicos.
+17. Gestão de vulnerabilidades.
+18. Auditoria de conformidade.
+19. Documentação de base legal para processamento.
+20. Interface para solicitação de dados pelo titular.
+21. Bloqueio de extração de dados em massa não autorizada.
+22. Marca d'água em documentos exportados (Rastreabilidade).
+23. Anonimização de dados em ambientes de teste.
+24. Validação de fornecedores terceiros.
+25. Revisão de código focada em privacidade.
+26. Monitoramento de transferência internacional de dados.
+27. Políticas de senha e bloqueio de tela.
+28. Inventário de ativos de software e hardware.
+29. Gestão de riscos de TI.
+30. Comitê de segurança da informação.
