@@ -26,8 +26,7 @@ class GeocodingService:
             )
             # Garantir índice na coluna key para performance (embora PK já crie índice implícito,
             # isso garante redundância caso o esquema mude)
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
 
     def get_coords(self, city: str, state: str) -> tuple[float | None, float | None]:
         if not city or not state:
@@ -37,8 +36,7 @@ class GeocodingService:
 
         # Check cache
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT lat, lon FROM cache WHERE key = ?", (key,))
+            cursor = conn.execute("SELECT lat, lon FROM cache WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row:
                 # If lat/lon are None in DB, it means we tried before and failed (negative cache)
@@ -73,10 +71,11 @@ class GeocodingService:
         except (GeocoderTimedOut, GeocoderUnavailable):
             # Don't cache timeout errors, we want to retry them later
             return None, None
+
     def get_coords_by_zip(self, zip_code: str) -> tuple[float | None, float | None]:
         if not zip_code:
             return None, None
-        
+
         # Clean zip code (keep only numbers)
         clean_zip = "".join(filter(str.isdigit, str(zip_code)))
         if not clean_zip:
@@ -86,8 +85,7 @@ class GeocodingService:
 
         # Check cache
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT lat, lon FROM cache WHERE key = ?", (key,))
+            cursor = conn.execute("SELECT lat, lon FROM cache WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row:
                 return row[0], row[1]
@@ -98,7 +96,7 @@ class GeocodingService:
         try:
             time.sleep(1.1)
             loc = self.geolocator.geocode(query, timeout=4)
-            
+
             lat, lon = None, None
             if loc:
                 lat, lon = loc.latitude, loc.longitude
@@ -117,4 +115,3 @@ class GeocodingService:
         except Exception as e:
             print(f"Geocoding error for zip {clean_zip}: {e}")
             return None, None
-

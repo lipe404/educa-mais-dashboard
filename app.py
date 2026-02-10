@@ -2,12 +2,21 @@ import streamlit as st
 import pandas as pd
 import os
 import logging
-from datetime import date
+from datetime import date, datetime
 from dotenv import load_dotenv
 
 import constants as C
 from services import data as data_service
-from ui import contracts_tab, map_tab, financial_tab, forecast_tab, opportunity_tab, partners_tab, unit_analysis_tab, students_tab
+from ui import (
+    contracts_tab,
+    map_tab,
+    financial_tab,
+    forecast_tab,
+    opportunity_tab,
+    partners_tab,
+    unit_analysis_tab,
+    students_tab,
+)
 
 # Setup Logging
 logging.basicConfig(
@@ -15,8 +24,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title=C.APP_TITLE,
-                   page_icon="icon-blue-to-pink.ico", layout="wide")
+st.set_page_config(
+    page_title=C.APP_TITLE, page_icon="icon-blue-to-pink.ico", layout="wide"
+)
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 
@@ -28,13 +38,23 @@ DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 st.sidebar.image("Ativo 10.png", width="stretch")
 
 st.sidebar.title(C.APP_TITLE)
+
+dados, ts_dados = data_service.get_dados(DEFAULT_SHEET_ID)
+faturamento, ts_faturamento = data_service.get_faturamento(DEFAULT_SHEET_ID)
+alunos, ts_alunos = data_service.get_alunos(DEFAULT_SHEET_ID)
+
+timestamps = [
+    t for t in [ts_dados, ts_faturamento, ts_alunos] if isinstance(t, datetime)
+]
+if timestamps:
+    last_updated = min(timestamps)
+    st.sidebar.markdown(f"🕒 **Atualizado:** {last_updated.strftime('%d/%m/%Y %H:%M')}")
+else:
+    st.sidebar.markdown("🕒 **Atualizado:** -")
+
 if st.sidebar.button(C.UI_LABEL_RELOAD_DATA):
     st.cache_data.clear()
     st.rerun()
-
-dados = data_service.get_dados(DEFAULT_SHEET_ID)
-faturamento = data_service.get_faturamento(DEFAULT_SHEET_ID)
-alunos = data_service.get_alunos(DEFAULT_SHEET_ID)
 
 if not data_service.validate_columns(dados, [C.COL_INT_DT, C.COL_INT_STATUS]):
     st.stop()
@@ -65,8 +85,7 @@ elif pd.notna(max_dt_dados):
 elif pd.notna(max_dt_fat):
     max_date = max_dt_fat.date()
 
-date_range = st.sidebar.date_input(
-    C.UI_LABEL_DATE_RANGE, value=(min_date, max_date))
+date_range = st.sidebar.date_input(C.UI_LABEL_DATE_RANGE, value=(min_date, max_date))
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start_date, end_date = date_range
 else:
@@ -79,8 +98,7 @@ else:
         start_date, end_date = min_date, max_date
 
 # Year and Month Filters
-all_dates = pd.concat(
-    [dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA]]).dropna()
+all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA]]).dropna()
 years = sorted(all_dates.dt.year.unique(), reverse=True)
 year_label = st.sidebar.selectbox(
     "Filtrar por Ano", [C.UI_LABEL_ALL] + [str(int(y)) for y in years]
@@ -108,15 +126,18 @@ if month_label != C.UI_LABEL_ALL:
             break
 
 # Contract Type Filter
-contract_type_options = [C.UI_LABEL_ALL,
-                         C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS]
+contract_type_options = [
+    C.UI_LABEL_ALL,
+    C.CONTRACT_TYPE_UI_TECNICO,
+    C.CONTRACT_TYPE_UI_POS,
+]
 selected_contract_type = st.sidebar.radio(
-    C.UI_LABEL_CONTRACT_TYPE, contract_type_options)
+    C.UI_LABEL_CONTRACT_TYPE, contract_type_options
+)
 
 # Geographic Filters
 unique_regions = sorted([r for r in dados[C.COL_INT_REGION].unique() if r])
-selected_regions = st.sidebar.multiselect(
-    C.UI_LABEL_FILTER_REGION, unique_regions)
+selected_regions = st.sidebar.multiselect(C.UI_LABEL_FILTER_REGION, unique_regions)
 
 # State Filter (dependent on Region)
 if selected_regions:
@@ -128,18 +149,18 @@ if selected_regions:
         ]
     )
 else:
-    available_states = sorted(
-        [s for s in dados[C.COL_INT_STATE].unique() if s])
+    available_states = sorted([s for s in dados[C.COL_INT_STATE].unique() if s])
 
-selected_states = st.sidebar.multiselect(
-    C.UI_LABEL_FILTER_STATE, available_states)
+selected_states = st.sidebar.multiselect(C.UI_LABEL_FILTER_STATE, available_states)
 
 # City Filter (dependent on State) - Cascading Filter
 if selected_states:
     available_cities = sorted(
         [
             c
-            for c in dados[dados[C.COL_INT_STATE].isin(selected_states)][C.COL_INT_CITY].unique()
+            for c in dados[dados[C.COL_INT_STATE].isin(selected_states)][
+                C.COL_INT_CITY
+            ].unique()
             if c
         ]
     )
@@ -147,8 +168,7 @@ else:
     # If no state selected, show all cities (or maybe none to avoid clutter, but let's show all for now)
     available_cities = sorted([c for c in dados[C.COL_INT_CITY].unique() if c])
 
-selected_cities = st.sidebar.multiselect(
-    "Filtrar por Cidade", available_cities)
+selected_cities = st.sidebar.multiselect("Filtrar por Cidade", available_cities)
 
 # Apply Filters
 # Using standard masking since index optimization requires more complex setup for two distinct frames
@@ -186,8 +206,10 @@ if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
 elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
     mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
 
-mask_fat = mask_fat_base & (faturamento[C.COL_INT_DATA].dt.date >= start_date) & (
-    faturamento[C.COL_INT_DATA].dt.date <= end_date
+mask_fat = (
+    mask_fat_base
+    & (faturamento[C.COL_INT_DATA].dt.date >= start_date)
+    & (faturamento[C.COL_INT_DATA].dt.date <= end_date)
 )
 if selected_year:
     mask_fat &= faturamento[C.COL_INT_DATA].dt.year == selected_year
@@ -293,12 +315,20 @@ st.markdown(
         }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
-    [C.TAB_NAME_CONTRACTS, C.TAB_NAME_MAP, C.TAB_NAME_FINANCIAL, C.TAB_NAME_FORECAST,
-        C.TAB_NAME_OPPORTUNITY, C.TAB_NAME_PARTNERS, C.TAB_NAME_UNIT_ANALYSIS, C.TAB_NAME_STUDENTS]
+    [
+        C.TAB_NAME_CONTRACTS,
+        C.TAB_NAME_MAP,
+        C.TAB_NAME_FINANCIAL,
+        C.TAB_NAME_FORECAST,
+        C.TAB_NAME_OPPORTUNITY,
+        C.TAB_NAME_PARTNERS,
+        C.TAB_NAME_UNIT_ANALYSIS,
+        C.TAB_NAME_STUDENTS,
+    ]
 )
 
 with t1:

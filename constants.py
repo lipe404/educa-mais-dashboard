@@ -126,63 +126,101 @@ ALGORITHM_HOLT_WINTERS = "Holt-Winters (Sazonal)"
 INSIGHT_GROWTH = "Crescimento acelerado"
 INSIGHT_SLOWDOWN = "Desaceleração recente"
 INSIGHT_STABLE = "Estabilidade"
-INSIGHT_POSITIVE = "O modelo (ajustado com otimismo) prevê uma performance sólida para o período."
+INSIGHT_POSITIVE = (
+    "O modelo (ajustado com otimismo) prevê uma performance sólida para o período."
+)
 INSIGHT_NEGATIVE = "O modelo prevê uma leve queda. Verifique campanhas ou sazonalidade."
 INSIGHT_NEUTRAL = "A previsão indica manutenção do ritmo atual de vendas."
 
 # Date & Time
 MONTH_NAMES = {
-    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-    5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
-    9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
+    1: "Janeiro",
+    2: "Fevereiro",
+    3: "Março",
+    4: "Abril",
+    5: "Maio",
+    6: "Junho",
+    7: "Julho",
+    8: "Agosto",
+    9: "Setembro",
+    10: "Outubro",
+    11: "Novembro",
+    12: "Dezembro",
 }
 
 # Educational Courses & Areas
 COURSES = {
     "Área da Saúde": [
-        "Técnico em Agente Comunitário de Saúde", "Técnico em Análises Clínicas",
-        "Técnico em Cuidados de Idosos", "Técnico em Enfermagem",
-        "Técnico em Equipamentos Biomédicos", "Técnico em Estética",
-        "Técnico em Farmácia", "Técnico em Gerência em Saúde",
-        "Técnico em Nutrição e Dietética", "Técnico em Química",
-        "Técnico em Radiologia", "Técnico em Saúde Bucal",
+        "Técnico em Agente Comunitário de Saúde",
+        "Técnico em Análises Clínicas",
+        "Técnico em Cuidados de Idosos",
+        "Técnico em Enfermagem",
+        "Técnico em Equipamentos Biomédicos",
+        "Técnico em Estética",
+        "Técnico em Farmácia",
+        "Técnico em Gerência em Saúde",
+        "Técnico em Nutrição e Dietética",
+        "Técnico em Química",
+        "Técnico em Radiologia",
+        "Técnico em Saúde Bucal",
         "Técnico em Veterinária",
     ],
     "Administração e Gestão": [
-        "Técnico em Administração", "Técnico em Contabilidade",
-        "Técnico em Logística", "Técnico em Marketing",
-        "Técnico em Qualidade", "Técnico em Recursos Humanos",
-        "Técnico em Secretariado Escolar", "Técnico em Segurança do Trabalho",
-        "Técnico em Serviços Jurídicos", "Técnico em Transações Imobiliárias",
-        "Técnico em Vendas", "Curso Técnico em Eventos",
+        "Técnico em Administração",
+        "Técnico em Contabilidade",
+        "Técnico em Logística",
+        "Técnico em Marketing",
+        "Técnico em Qualidade",
+        "Técnico em Recursos Humanos",
+        "Técnico em Secretariado Escolar",
+        "Técnico em Segurança do Trabalho",
+        "Técnico em Serviços Jurídicos",
+        "Técnico em Transações Imobiliárias",
+        "Técnico em Vendas",
+        "Curso Técnico em Eventos",
     ],
     "Engenharia e Manutenção": [
-        "Técnico em Automação Industrial", "Técnico em Eletromecânica",
-        "Técnico em Eletrotécnica", "Técnico em Eletrônica",
-        "Técnico em Manutenção de Máquinas Industriais", "Técnico em Máquinas Pesadas",
-        "Técnico em Metalurgia", "Técnico em Refrigeração e Climatização",
-        "Técnico em Soldagem", "Técnico em Manutenção de Máquinas Navais",
+        "Técnico em Automação Industrial",
+        "Técnico em Eletromecânica",
+        "Técnico em Eletrotécnica",
+        "Técnico em Eletrônica",
+        "Técnico em Manutenção de Máquinas Industriais",
+        "Técnico em Máquinas Pesadas",
+        "Técnico em Metalurgia",
+        "Técnico em Refrigeração e Climatização",
+        "Técnico em Soldagem",
+        "Técnico em Manutenção de Máquinas Navais",
     ],
     "Construção e Infraestrutura": [
-        "Técnico em Agrimensura", "Técnico em Edificações",
-        "Técnico em Mineração", "Técnico em Segurança do Trabalho",
-        "Técnico em Prevenção e Combate ao Incêndio", "Curso Técnico em Defesa Civil",
+        "Técnico em Agrimensura",
+        "Técnico em Edificações",
+        "Técnico em Mineração",
+        "Técnico em Segurança do Trabalho",
+        "Técnico em Prevenção e Combate ao Incêndio",
+        "Curso Técnico em Defesa Civil",
         "Curso Técnico em Trânsito",
     ],
     "Tecnologia e Informática": [
-        "Técnico em Biotecnologia", "Técnico em Design Gráfico",
-        "Técnico em Desenvolvimento de Sistemas", "Técnico em Informática para Internet",
-        "Técnico em Redes de Computadores", "Técnico em Sistemas de Energia Renovável",
+        "Técnico em Biotecnologia",
+        "Técnico em Design Gráfico",
+        "Técnico em Desenvolvimento de Sistemas",
+        "Técnico em Informática para Internet",
+        "Técnico em Redes de Computadores",
+        "Técnico em Sistemas de Energia Renovável",
         "Técnico em Telecomunicações",
     ],
     "Meio Ambiente e Agropecuária": [
-        "Técnico em Agricultura", "Técnico em Agropecuária",
-        "Técnico em Agroindústria", "Técnico em Aquicultura",
+        "Técnico em Agricultura",
+        "Técnico em Agropecuária",
+        "Técnico em Agroindústria",
+        "Técnico em Aquicultura",
         "Técnico em Meio Ambiente",
     ],
     "Área de Serviços": [
-        "Técnico em Gastronomia", "Técnico em Óptica",
-        "Técnico em Designer de Interiores", "Técnico em Guia de Turismo",
+        "Técnico em Gastronomia",
+        "Técnico em Óptica",
+        "Técnico em Designer de Interiores",
+        "Técnico em Guia de Turismo",
     ],
     "EJA": ["EJA Fundamental", "EJA Médio"],
 }
@@ -305,7 +343,9 @@ UI_LABEL_FORECAST = "Previsão"
 UI_LABEL_FORECAST_REVENUE = "Faturamento previsto"
 UI_LABEL_FORECAST_REVENUE_TITLE = "Previsão de Faturamento Diário"
 UI_LABEL_ERROR_FORECAST = "Erro ao gerar previsão"
-UI_LABEL_TIP_INSTALL = "Dica: Verifique se as bibliotecas 'prophet' e 'statsmodels' estão instaladas."
+UI_LABEL_TIP_INSTALL = (
+    "Dica: Verifique se as bibliotecas 'prophet' e 'statsmodels' estão instaladas."
+)
 
 # Partners Tab UI
 UI_LABEL_ACCESS_KEY = "Chave de acesso"
@@ -352,7 +392,9 @@ UI_LABEL_MARKET_ANALYSIS_SUBTITLE = "Identificação de polos potenciais baseada
 UI_LABEL_SELECT_AREA = "Selecione a Área"
 UI_LABEL_SELECT_COURSE = "Selecione o Curso"
 UI_LABEL_ANALYZE_POTENTIAL = "Analisar Potencial do Curso"
-UI_LABEL_ANALYZING_MARKET = "Analisando mercado e gerando insights para {course} ({area})..."
+UI_LABEL_ANALYZING_MARKET = (
+    "Analisando mercado e gerando insights para {course} ({area})..."
+)
 UI_LABEL_AI_ANALYSIS_TITLE = "#### 🤖 Análise de Proximidade e Contexto (IA)"
 UI_LABEL_TOP_SUGGESTED_CITIES = "#### Top Cidades Sugeridas"
 UI_LABEL_COL_POPULATION = "População"
@@ -420,11 +462,17 @@ MSG_INSIGHT_PREFIX = "> **Insight:**"
 LABEL_NEW_CONTRACTS = "novos contratos"
 
 # API URLs
-API_URL_IBGE_MUNICIPIOS = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+API_URL_IBGE_MUNICIPIOS = (
+    "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+)
 API_URL_IBGE_MALHA_MUNICIPO = "https://servicodados.ibge.gov.br/api/v3/malhas/municipios/{id}?formato=application/vnd.geo+json"
 API_URL_IBGE_MUNICIPIOS_UF = "https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios?orderBy=nome"
-API_URL_SIDRA_POP_2022 = "https://apisidra.ibge.gov.br/values/t/6579/n6/{ids}/v/9324/p/last"
-API_URL_SIDRA_POP_2022_ALL = "https://apisidra.ibge.gov.br/values/t/6579/n6/all/v/9324/p/last"
+API_URL_SIDRA_POP_2022 = (
+    "https://apisidra.ibge.gov.br/values/t/6579/n6/{ids}/v/9324/p/last"
+)
+API_URL_SIDRA_POP_2022_ALL = (
+    "https://apisidra.ibge.gov.br/values/t/6579/n6/all/v/9324/p/last"
+)
 
 # Geocoding
 GEO_DB_PATH = "geocache.db"

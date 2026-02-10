@@ -1,16 +1,23 @@
 import pytest
 import pandas as pd
 import numpy as np
-from services.data import parse_datetime_any, to_float_any, validate_columns, process_column
+from services.data import (
+    parse_datetime_any,
+    to_float_any,
+    validate_columns,
+    process_column,
+)
 
 
 class TestDataService:
     def test_parse_datetime_any(self):
         # Valid dates
-        assert parse_datetime_any(
-            "2023-01-01").date() == pd.Timestamp("2023-01-01").date()
-        assert parse_datetime_any(
-            "01/01/2023").date() == pd.Timestamp("2023-01-01").date()
+        assert (
+            parse_datetime_any("2023-01-01").date() == pd.Timestamp("2023-01-01").date()
+        )
+        assert (
+            parse_datetime_any("01/01/2023").date() == pd.Timestamp("2023-01-01").date()
+        )
 
         # Invalid dates
         assert parse_datetime_any("not a date") is None

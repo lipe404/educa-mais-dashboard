@@ -12,10 +12,7 @@ class TestForecasting:
     def test_optimistic_bias(self, mock_prophet_class):
         # Create synthetic historical data (last 30 days stable at 100)
         dates = pd.date_range(end=pd.Timestamp.today(), periods=60)
-        df = pd.DataFrame({
-            "date": dates,
-            "value": [100] * 60
-        })
+        df = pd.DataFrame({"date": dates, "value": [100] * 60})
 
         # Mock Prophet to return LOW forecast (e.g. 50)
         # Recent average is 100.
@@ -28,15 +25,10 @@ class TestForecasting:
 
         m = MagicMock()
         mock_prophet_class.return_value = m
-        future_dates = pd.date_range(
-            start=dates[-1] + pd.Timedelta(days=1), periods=30)
-        forecast_ret = pd.DataFrame({
-            "ds": future_dates,
-            "yhat": [50.0] * 30
-        })
+        future_dates = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=30)
+        forecast_ret = pd.DataFrame({"ds": future_dates, "yhat": [50.0] * 30})
         m.predict.return_value = forecast_ret
-        m.make_future_dataframe.return_value = pd.DataFrame(
-            {"ds": future_dates})
+        m.make_future_dataframe.return_value = pd.DataFrame({"ds": future_dates})
 
         with patch("forecasting.PROPHET_AVAILABLE", True):
             forecast_df = generate_forecast(
@@ -44,11 +36,10 @@ class TestForecasting:
                 date_col="date",
                 value_col="value",
                 algorithm=C.ALGORITHM_PROPHET,
-                full_horizon_days=30
+                full_horizon_days=30,
             )
 
-        future_forecast = forecast_df[forecast_df["Type"]
-                                      == "Previsão"]["value"]
+        future_forecast = forecast_df[forecast_df["Type"] == "Previsão"]["value"]
 
         # We expect values around 60 (50 * 1.2) + noise.
         # Noise std is based on history std.
@@ -63,17 +54,14 @@ class TestForecasting:
 
     def test_forecast_structure(self):
         dates = pd.date_range(start="2023-01-01", periods=10)
-        df = pd.DataFrame({
-            "date": dates,
-            "value": np.random.rand(10) * 100
-        })
+        df = pd.DataFrame({"date": dates, "value": np.random.rand(10) * 100})
 
         forecast_df = generate_forecast(
             df=df,
             date_col="date",
             value_col="value",
             algorithm="UNKNOWN_ALGO",
-            full_horizon_days=5
+            full_horizon_days=5,
         )
 
         # Check columns
@@ -101,10 +89,7 @@ class TestForecasting:
         # With constant history, noise is 0.
 
         dates = pd.date_range(end=pd.Timestamp.today(), periods=60)
-        df = pd.DataFrame({
-            "date": dates,
-            "value": [100] * 60
-        })
+        df = pd.DataFrame({"date": dates, "value": [100] * 60})
 
         # We need a scenario where forecast is generated as very low, say 10.
         # But `generate_forecast` uses Prophet/HoltWinters or Zeros.
@@ -119,7 +104,7 @@ class TestForecasting:
             date_col="date",
             value_col="value",
             algorithm="UNKNOWN_ALGO",
-            full_horizon_days=10
+            full_horizon_days=10,
         )
         future_vals = forecast_df[forecast_df["Type"] == "Previsão"]["value"]
         assert (future_vals >= 0).all()
@@ -132,20 +117,21 @@ class TestForecasting:
         df = pd.DataFrame({"date": dates, "value": values})
 
         # Mock forecast df
-        future_dates = pd.date_range(
-            start=dates[-1] + pd.Timedelta(days=1), periods=5)
-        forecast_df = pd.DataFrame({
-            "date": future_dates,
-            "value": [110, 115, 120, 125, 130],
-            "Type": ["Previsão"] * 5
-        })
+        future_dates = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=5)
+        forecast_df = pd.DataFrame(
+            {
+                "date": future_dates,
+                "value": [110, 115, 120, 125, 130],
+                "Type": ["Previsão"] * 5,
+            }
+        )
 
         insight = generate_smart_insights(
             df=df,
             date_col="date",
             value_col="value",
             forecast_df=forecast_df,
-            unit_label="contratos"
+            unit_label="contratos",
         )
 
         assert "🚀" in insight  # Growth emoji
@@ -155,14 +141,11 @@ class TestForecasting:
 
     def test_smart_insights_insufficient_data(self):
         dates = pd.date_range(end=pd.Timestamp.today(), periods=5)
-        df = pd.DataFrame({"date": dates, "value": [10]*5})
+        df = pd.DataFrame({"date": dates, "value": [10] * 5})
         forecast_df = pd.DataFrame()
 
         insight = generate_smart_insights(
-            df=df,
-            date_col="date",
-            value_col="value",
-            forecast_df=forecast_df
+            df=df, date_col="date", value_col="value", forecast_df=forecast_df
         )
 
         assert insight == C.MSG_INSUFFICIENT_DATA
@@ -177,16 +160,12 @@ class TestForecasting:
         df_down = pd.DataFrame({"date": dates, "value": values_down})
 
         # Forecast showing decrease (Negative insight)
-        future_dates = pd.date_range(
-            start=dates[-1] + pd.Timedelta(days=1), periods=5)
-        forecast_down = pd.DataFrame({
-            "date": future_dates,
-            "value": [5, 4, 3, 2, 1],
-            "Type": ["Previsão"] * 5
-        })
+        future_dates = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=5)
+        forecast_down = pd.DataFrame(
+            {"date": future_dates, "value": [5, 4, 3, 2, 1], "Type": ["Previsão"] * 5}
+        )
 
-        insight = generate_smart_insights(
-            df_down, "date", "value", forecast_down)
+        insight = generate_smart_insights(df_down, "date", "value", forecast_down)
         assert "⚠️" in insight
         assert C.INSIGHT_NEGATIVE in insight
 
@@ -195,14 +174,11 @@ class TestForecasting:
         df_stable = pd.DataFrame({"date": dates, "value": values_stable})
 
         # Forecast showing stability (Neutral insight)
-        forecast_stable = pd.DataFrame({
-            "date": future_dates,
-            "value": [100] * 5,
-            "Type": ["Previsão"] * 5
-        })
+        forecast_stable = pd.DataFrame(
+            {"date": future_dates, "value": [100] * 5, "Type": ["Previsão"] * 5}
+        )
 
-        insight = generate_smart_insights(
-            df_stable, "date", "value", forecast_stable)
+        insight = generate_smart_insights(df_stable, "date", "value", forecast_stable)
         assert "⚖️" in insight
         assert C.INSIGHT_NEUTRAL in insight
 
@@ -214,25 +190,19 @@ class TestForecasting:
 
         # Mock predict return
         future_dates = pd.date_range(start="2023-01-11", periods=5)
-        forecast_ret = pd.DataFrame({
-            "ds": future_dates,
-            "yhat": [10, 11, 12, 13, 14]
-        })
+        forecast_ret = pd.DataFrame({"ds": future_dates, "yhat": [10, 11, 12, 13, 14]})
         m.predict.return_value = forecast_ret
 
-        df = pd.DataFrame({
-            "date": pd.date_range(start="2023-01-01", periods=10),
-            "value": [10] * 10
-        })
+        df = pd.DataFrame(
+            {"date": pd.date_range(start="2023-01-01", periods=10), "value": [10] * 10}
+        )
 
         # Mock global PROPHET_AVAILABLE
         # Since we mock the class, we assume the import check passes or we bypass it.
         # But generate_forecast checks the flag.
         # We can patch the flag in the module.
         with patch("forecasting.PROPHET_AVAILABLE", True):
-            forecast_df = generate_forecast(
-                df, "date", "value", C.ALGORITHM_PROPHET, 5
-            )
+            forecast_df = generate_forecast(df, "date", "value", C.ALGORITHM_PROPHET, 5)
 
         assert len(forecast_df[forecast_df["Type"] == "Previsão"]) == 5
         # 10 history + 5 forecast = 15
@@ -243,15 +213,11 @@ class TestForecasting:
     def test_run_backtest_insufficient_data(self):
         # Create small dataframe (5 days)
         dates = pd.date_range(end=pd.Timestamp.today(), periods=5)
-        df = pd.DataFrame({"date": dates, "value": [10]*5})
+        df = pd.DataFrame({"date": dates, "value": [10] * 5})
 
         # Request 30 days backtest
         result = forecasting.run_backtest(
-            df=df,
-            date_col="date",
-            value_col="value",
-            algorithm="Naive",
-            test_days=30
+            df=df, date_col="date", value_col="value", algorithm="Naive", test_days=30
         )
 
         assert "error" in result
@@ -261,7 +227,7 @@ class TestForecasting:
         # Create ample data (60 days)
         dates = pd.date_range(end=pd.Timestamp.today(), periods=60)
         # Constant value to make prediction easy (Naive uses mean)
-        df = pd.DataFrame({"date": dates, "value": [100.0]*60})
+        df = pd.DataFrame({"date": dates, "value": [100.0] * 60})
 
         # Test last 10 days
         result = forecasting.run_backtest(
@@ -269,7 +235,7 @@ class TestForecasting:
             date_col="date",
             value_col="value",
             algorithm="Naive",  # Should predict mean (~100)
-            test_days=10
+            test_days=10,
         )
 
         assert "error" not in result
@@ -292,11 +258,23 @@ class TestForecasting:
         dates = pd.date_range(start="2023-01-01", periods=10)  # 10 days total
         # Split: 5 train, 5 test
 
-        df = pd.DataFrame({
-            "date": dates,
-            "value": [10, 10, 10, 10, 10,  # Train
-                      20, 20, 20, 20, 20]  # Test (Actuals)
-        })
+        df = pd.DataFrame(
+            {
+                "date": dates,
+                "value": [
+                    10,
+                    10,
+                    10,
+                    10,
+                    10,  # Train
+                    20,
+                    20,
+                    20,
+                    20,
+                    20,
+                ],  # Test (Actuals)
+            }
+        )
 
         # We want predicted to be 15 for the test period
         # Error = |20 - 15| = 5
@@ -311,17 +289,17 @@ class TestForecasting:
             # History (train) dates: Jan 1 to Jan 5
             # Forecast (test) dates: Jan 6 to Jan 10
 
-            history_df = pd.DataFrame({
-                "date": dates[:5],
-                "value": [10]*5,
-                "Type": [C.UI_LABEL_HISTORY]*5
-            })
+            history_df = pd.DataFrame(
+                {"date": dates[:5], "value": [10] * 5, "Type": [C.UI_LABEL_HISTORY] * 5}
+            )
 
-            forecast_df = pd.DataFrame({
-                "date": dates[5:],
-                "value": [15.0]*5,  # Predicted
-                "Type": [C.UI_LABEL_FORECAST]*5
-            })
+            forecast_df = pd.DataFrame(
+                {
+                    "date": dates[5:],
+                    "value": [15.0] * 5,  # Predicted
+                    "Type": [C.UI_LABEL_FORECAST] * 5,
+                }
+            )
 
             mock_gen.return_value = pd.concat([history_df, forecast_df])
 
@@ -330,7 +308,7 @@ class TestForecasting:
                 date_col="date",
                 value_col="value",
                 algorithm="Dummy",
-                test_days=5
+                test_days=5,
             )
 
             assert result["mae"] == 5.0
@@ -344,22 +322,20 @@ class TestForecasting:
         # Test Actuals: [0, 100]
         # Predicted: [10, 10]
 
-        df = pd.DataFrame({
-            "date": dates,
-            "value": [10, 10, 0, 100]
-        })
+        df = pd.DataFrame({"date": dates, "value": [10, 10, 0, 100]})
 
         with patch("forecasting.generate_forecast") as mock_gen:
-            forecast_df = pd.DataFrame({
-                "date": dates[2:],
-                "value": [10.0, 10.0],
-                "Type": [C.UI_LABEL_FORECAST]*2
-            })
+            forecast_df = pd.DataFrame(
+                {
+                    "date": dates[2:],
+                    "value": [10.0, 10.0],
+                    "Type": [C.UI_LABEL_FORECAST] * 2,
+                }
+            )
             # We don't strictly need history in return for backtest logic, but good practice
             mock_gen.return_value = forecast_df
 
-            result = forecasting.run_backtest(
-                df, "date", "value", "Dummy", test_days=2)
+            result = forecasting.run_backtest(df, "date", "value", "Dummy", test_days=2)
 
             # MAPE Calculation:
             # Day 1: Actual=0, Pred=10. Skipped for MAPE?
@@ -377,10 +353,9 @@ class TestForecasting:
         mock_es_class.return_value.fit.return_value = model_fit
         model_fit.forecast.return_value = pd.Series([10, 11, 12, 13, 14])
 
-        df = pd.DataFrame({
-            "date": pd.date_range(start="2023-01-01", periods=10),
-            "value": [10] * 10
-        })
+        df = pd.DataFrame(
+            {"date": pd.date_range(start="2023-01-01", periods=10), "value": [10] * 10}
+        )
 
         with patch("forecasting.STATSMODELS_AVAILABLE", True):
             forecast_df = generate_forecast(

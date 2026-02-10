@@ -3,20 +3,24 @@ import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
 from io import StringIO
+from datetime import datetime
 import constants as C
-from services import data as data_service
+import services.data as data_service
 
 
 class TestDataService:
     # --- Helper Function Tests ---
 
     def test_parse_datetime_any_valid(self):
-        assert data_service.parse_datetime_any(
-            "2023-01-01") == pd.Timestamp("2023-01-01")
-        assert data_service.parse_datetime_any(
-            "01/01/2023") == pd.Timestamp("2023-01-01")
-        assert data_service.parse_datetime_any(
-            "2023-01-01 12:00:00") == pd.Timestamp("2023-01-01 12:00:00")
+        assert data_service.parse_datetime_any("2023-01-01") == pd.Timestamp(
+            "2023-01-01"
+        )
+        assert data_service.parse_datetime_any("01/01/2023") == pd.Timestamp(
+            "2023-01-01"
+        )
+        assert data_service.parse_datetime_any("2023-01-01 12:00:00") == pd.Timestamp(
+            "2023-01-01 12:00:00"
+        )
 
     def test_parse_datetime_any_invalid(self):
         assert data_service.parse_datetime_any("invalid-date") is None
@@ -64,7 +68,7 @@ class TestDataService:
         mock_response.text = csv_content
         mock_get.return_value = mock_response
 
-        df = data_service.load_sheet("dummy_id", "dummy_sheet")
+        df, ts = data_service.load_sheet("dummy_id", "dummy_sheet")
         assert not df.empty
         assert len(df) == 1
         assert df.iloc[0]["col1"] == "val1"
@@ -75,7 +79,7 @@ class TestDataService:
 
         # We also need to patch st.error since load_sheet calls it
         with patch("streamlit.error") as mock_st_error:
-            df = data_service.load_sheet("dummy_id_fail", "dummy_sheet_fail")
+            df, ts = data_service.load_sheet("dummy_id_fail", "dummy_sheet_fail")
             assert df.empty
             mock_st_error.assert_called()
 
@@ -93,13 +97,19 @@ class TestDataService:
         }
         mock_df = pd.DataFrame(raw_data)
         # Ensure column order matches insertion order (for safe iloc usage in test)
-        cols = ["Partner Name", C.COL_SRC_TIMESTAMP, C.COL_SRC_STATUS,
-                C.COL_SRC_CAPTADOR, C.COL_SRC_STATE, C.COL_SRC_CITY]
+        cols = [
+            "Partner Name",
+            C.COL_SRC_TIMESTAMP,
+            C.COL_SRC_STATUS,
+            C.COL_SRC_CAPTADOR,
+            C.COL_SRC_STATE,
+            C.COL_SRC_CITY,
+        ]
         mock_df = mock_df[cols]
 
-        mock_load_sheet.return_value = mock_df
+        mock_load_sheet.return_value = (mock_df, datetime.now())
 
-        df = data_service.get_dados("dummy_id")
+        df, ts = data_service.get_dados("dummy_id")
 
         assert not df.empty
         assert df.iloc[0][C.COL_INT_STATUS] == "ASSINADO"
@@ -117,13 +127,12 @@ class TestDataService:
             C.COL_SRC_DATA: ["01/01/2023"],
         }
         mock_df = pd.DataFrame(raw_data)
-        cols = ["Partner Name", C.COL_SRC_VALOR,
-                C.COL_SRC_COMISSAO, C.COL_SRC_DATA]
+        cols = ["Partner Name", C.COL_SRC_VALOR, C.COL_SRC_COMISSAO, C.COL_SRC_DATA]
         mock_df = mock_df[cols]
 
-        mock_load_sheet.return_value = mock_df
+        mock_load_sheet.return_value = (mock_df, datetime.now())
 
-        df = data_service.get_faturamento("dummy_id")
+        df, ts = data_service.get_faturamento("dummy_id")
 
         assert not df.empty
         assert df.iloc[0][C.COL_INT_VALOR] == 1000.50

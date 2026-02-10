@@ -11,8 +11,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
 
     status_counts = df[C.COL_INT_STATUS].value_counts()
     signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed_df_full["_pid"] = signed_df_full[C.COL_INT_PARTNER].astype(
-        str).str.strip()
+    signed_df_full["_pid"] = signed_df_full[C.COL_INT_PARTNER].astype(str).str.strip()
     signed_df_full["_pid"] = signed_df_full["_pid"].where(
         signed_df_full["_pid"] != "",
         signed_df_full[C.COL_INT_CEP].astype(str).str.strip(),
@@ -49,14 +48,12 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     month_mask = (signed_df[C.COL_INT_DT].dt.year == focus_year) & (
         signed_df[C.COL_INT_DT].dt.month == focus_month
     )
-    month_count = signed_df[month_mask].drop_duplicates(
-        subset=["_pid"]).shape[0]
+    month_count = signed_df[month_mask].drop_duplicates(subset=["_pid"]).shape[0]
 
     week_end_date = end_date if isinstance(end_date, date) else date.today()
     week_start_date = week_end_date - timedelta(days=week_end_date.weekday())
     week_mask = (signed_df[C.COL_INT_DT].dt.date >= week_start_date) & (
-        signed_df[C.COL_INT_DT].dt.date <= (
-            week_start_date + timedelta(days=6))
+        signed_df[C.COL_INT_DT].dt.date <= (week_start_date + timedelta(days=6))
     )
     week_count = signed_df[week_mask].drop_duplicates(subset=["_pid"]).shape[0]
 
@@ -65,15 +62,13 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
 
     today_date = end_date if isinstance(end_date, date) else date.today()
     today_mask = signed_df[C.COL_INT_DT].dt.date == today_date
-    today_count = signed_df[today_mask].drop_duplicates(
-        subset=["_pid"]).shape[0]
+    today_count = signed_df[today_mask].drop_duplicates(subset=["_pid"]).shape[0]
     h1, h2, h3 = st.columns(3)
     h1.metric(C.UI_LABEL_SIGNED_TODAY, today_count)
 
     last_week_start = week_start_date - timedelta(days=7)
     last_week_mask = (signed_df[C.COL_INT_DT].dt.date >= last_week_start) & (
-        signed_df[C.COL_INT_DT].dt.date <= (
-            last_week_start + timedelta(days=6))
+        signed_df[C.COL_INT_DT].dt.date <= (last_week_start + timedelta(days=6))
     )
     last_week_count = (
         signed_df[last_week_mask].drop_duplicates(subset=["_pid"]).shape[0]
@@ -83,14 +78,9 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         (week_count / last_week_count * 100.0) if last_week_count > 0 else None
     )
     h2.metric(
-        (
-            C.UI_LABEL_VS_LAST_WEEK_UP
-            if diff_week > 0
-            else C.UI_LABEL_VS_LAST_WEEK_DOWN
-        ),
+        (C.UI_LABEL_VS_LAST_WEEK_UP if diff_week > 0 else C.UI_LABEL_VS_LAST_WEEK_DOWN),
         abs(diff_week),
-        delta=(
-            f"{progress_pct_week:.1f}%" if progress_pct_week is not None else None),
+        delta=(f"{progress_pct_week:.1f}%" if progress_pct_week is not None else None),
     )
 
     prev_year = focus_year if focus_month > 1 else focus_year - 1
@@ -106,7 +96,11 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         (month_count / last_month_count * 100.0) if last_month_count > 0 else None
     )
     h3.metric(
-        C.UI_LABEL_VS_LAST_MONTH_UP if diff_month > 0 else C.UI_LABEL_VS_LAST_MONTH_DOWN,
+        (
+            C.UI_LABEL_VS_LAST_MONTH_UP
+            if diff_month > 0
+            else C.UI_LABEL_VS_LAST_MONTH_DOWN
+        ),
         abs(diff_month),
         delta=(
             f"{progress_pct_month:.1f}%" if progress_pct_month is not None else None
@@ -134,8 +128,9 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     )
 
     g1, g2, g3 = st.columns([1, 1, 1])
-    g1.plotly_chart(gauge_chart(month_count, 30,
-                    C.UI_LABEL_GOAL_MONTHLY), width="stretch")
+    g1.plotly_chart(
+        gauge_chart(month_count, 30, C.UI_LABEL_GOAL_MONTHLY), width="stretch"
+    )
     g2.plotly_chart(
         gauge_chart(quarterly_count, 90, C.UI_LABEL_GOAL_QUARTERLY), width="stretch"
     )
@@ -146,8 +141,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[
         [C.COL_INT_CAPTADOR, "_pid"]
     ]
-    by_captador = by_captador_base[C.COL_INT_CAPTADOR].value_counts(
-    ).reset_index()
+    by_captador = by_captador_base[C.COL_INT_CAPTADOR].value_counts().reset_index()
     by_captador.columns = [C.UI_LABEL_CAPTADOR, C.UI_LABEL_PARTNERS]
     pie_fig = px.pie(
         by_captador,
@@ -170,8 +164,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         + "|"
         + df_status[C.COL_INT_STATE].astype(str).str.strip(),
     )
-    rank_map = {C.STATUS_ASSINADO: 2,
-                C.STATUS_AGUARDANDO: 1, C.STATUS_CANCELADO: 0}
+    rank_map = {C.STATUS_ASSINADO: 2, C.STATUS_AGUARDANDO: 1, C.STATUS_CANCELADO: 0}
     df_status["_rank"] = df_status[C.COL_INT_STATUS].map(rank_map).fillna(-1)
     df_partner = df_status.sort_values("_rank", ascending=False).drop_duplicates(
         subset=["_pid"]
@@ -182,8 +175,9 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     ).reset_index()
     status_df.columns = [C.UI_LABEL_STATUS, C.UI_LABEL_QUANTITY]
     bar_fig = px.bar(
-        status_df[status_df[C.UI_LABEL_STATUS].isin(
-            [C.STATUS_ASSINADO, C.STATUS_AGUARDANDO])],
+        status_df[
+            status_df[C.UI_LABEL_STATUS].isin([C.STATUS_ASSINADO, C.STATUS_AGUARDANDO])
+        ],
         x=C.UI_LABEL_STATUS,
         y=C.UI_LABEL_QUANTITY,
         title=C.UI_LABEL_SIGNED_VS_WAITING,
@@ -197,8 +191,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
 
     signed_only = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
     signed_only = signed_only.dropna(subset=[C.COL_INT_DT])
-    signed_only["_pid"] = signed_only[C.COL_INT_PARTNER].astype(
-        str).str.strip()
+    signed_only["_pid"] = signed_only[C.COL_INT_PARTNER].astype(str).str.strip()
     signed_only["_pid"] = signed_only["_pid"].where(
         signed_only["_pid"] != "",
         signed_only[C.COL_INT_CEP].astype(str).str.strip(),
@@ -211,8 +204,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     )
     signed_only["_ano"] = signed_only[C.COL_INT_DT].dt.year
     signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
-    monthly = signed_only.groupby(["_ano", "_mes"])[
-        ["_pid"]].nunique().reset_index()
+    monthly = signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
     monthly = monthly.rename(columns={"_pid": C.UI_LABEL_CONTRACTS})
 
     if not monthly.empty:
@@ -221,7 +213,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
             axis=1,
         )
     else:
-        monthly[C.UI_LABEL_MONTH] = pd.Series(dtype='string')
+        monthly[C.UI_LABEL_MONTH] = pd.Series(dtype="string")
 
     monthly = monthly.sort_values(["_ano", "_mes"])
     fig_month = px.bar(
@@ -239,7 +231,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         line_dash="dash",
         line_color="green",
         annotation_text="Meta",
-        annotation_position="top right"
+        annotation_position="top right",
     )
 
     # Detalhamento Diário (Interativo)
@@ -248,7 +240,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         width="stretch",
         on_select="rerun",
         selection_mode="points",
-        key="monthly_chart_click"
+        key="monthly_chart_click",
     )
 
     target_year = None
@@ -276,7 +268,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
             x_val = point["x"]
             try:
                 # Expected format: "MonthName Year"
-                parts = x_val.split(' ')
+                parts = x_val.split(" ")
                 if len(parts) == 2:
                     m_name = parts[0]
                     y_str = parts[1]
@@ -292,12 +284,16 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
 
     if target_year and target_month:
         daily_mask = (signed_only["_ano"] == target_year) & (
-            signed_only["_mes"] == target_month)
+            signed_only["_mes"] == target_month
+        )
         daily_df = signed_only[daily_mask].copy()
 
         # Agrupar por dia
-        daily_counts = daily_df.groupby(daily_df[C.COL_INT_DT].dt.day)[
-            C.COL_INT_PARTNER].nunique().reset_index()
+        daily_counts = (
+            daily_df.groupby(daily_df[C.COL_INT_DT].dt.day)[C.COL_INT_PARTNER]
+            .nunique()
+            .reset_index()
+        )
         daily_counts.columns = ["Dia", C.UI_LABEL_CONTRACTS]
 
         month_name = C.MONTH_NAMES.get(target_month, str(target_month))
@@ -308,7 +304,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
             y=C.UI_LABEL_CONTRACTS,
             title=f"{C.UI_LABEL_DAILY_SALES} - {month_name}/{target_year}",
             color_discrete_sequence=[C.COLOR_SECONDARY],
-            text=C.UI_LABEL_CONTRACTS
+            text=C.UI_LABEL_CONTRACTS,
         )
-        fig_daily.update_traces(textposition='outside')
+        fig_daily.update_traces(textposition="outside")
         st.plotly_chart(fig_daily, width="stretch")

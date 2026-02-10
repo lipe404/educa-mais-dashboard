@@ -176,11 +176,7 @@ def generate_forecast(
 
 
 def run_backtest(
-    df: pd.DataFrame,
-    date_col: str,
-    value_col: str,
-    algorithm: str,
-    test_days: int = 30
+    df: pd.DataFrame, date_col: str, value_col: str, algorithm: str, test_days: int = 30
 ) -> dict:
     """
     Runs a backtest by splitting data into train/test, training the model,
@@ -219,8 +215,9 @@ def run_backtest(
     )
 
     # Extract forecast part
-    forecast_only = forecast_result[forecast_result["Type"]
-                                    == C.UI_LABEL_FORECAST].copy()
+    forecast_only = forecast_result[
+        forecast_result["Type"] == C.UI_LABEL_FORECAST
+    ].copy()
 
     # Align dates
     # generate_forecast generates dates starting from train_df.max() + 1 day
@@ -232,7 +229,7 @@ def run_backtest(
         forecast_only[[date_col, value_col]],
         on=date_col,
         how="inner",
-        suffixes=("_actual", "_predicted")
+        suffixes=("_actual", "_predicted"),
     )
 
     # Calculate Metrics
@@ -240,14 +237,16 @@ def run_backtest(
     y_pred = comparison[f"{value_col}_predicted"]
 
     mae = np.mean(np.abs(y_true - y_pred))
-    rmse = np.sqrt(np.mean((y_true - y_pred)**2))
+    rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
 
     # MAPE (avoid div by zero)
     # Add epsilon or filter zeros
     non_zero = y_true != 0
     if non_zero.any():
-        mape = np.mean(
-            np.abs((y_true[non_zero] - y_pred[non_zero]) / y_true[non_zero])) * 100
+        mape = (
+            np.mean(np.abs((y_true[non_zero] - y_pred[non_zero]) / y_true[non_zero]))
+            * 100
+        )
     else:
         mape = 0.0
 
@@ -256,7 +255,7 @@ def run_backtest(
         "rmse": rmse,
         "mape": mape,
         "comparison_df": comparison,
-        "train_last_date": train_df[date_col].max()
+        "train_last_date": train_df[date_col].max(),
     }
 
 
@@ -303,8 +302,9 @@ def generate_smart_insights(
         trend_pct = ((recent_avg - prev_avg) / prev_avg) * 100
 
     # 2. Forecast Analysis
-    future_only = forecast_df[forecast_df[C.COL_FORECAST_TYPE]
-                              == C.LABEL_FORECAST_TYPE_FORECAST]
+    future_only = forecast_df[
+        forecast_df[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST
+    ]
     future_sum = future_only[value_col].sum()
     future_daily_avg = future_only[value_col].mean()
 
@@ -324,9 +324,7 @@ def generate_smart_insights(
         emoji = "⚖️"
         trend_desc = C.INSIGHT_STABLE
 
-    text += (
-        f"{C.MSG_RECENT_TREND} {trend_desc} ({trend_pct:+.1f}%) {emoji}\n\n"
-    )
+    text += f"{C.MSG_RECENT_TREND} {trend_desc} ({trend_pct:+.1f}%) {emoji}\n\n"
 
     text += C.MSG_FORECAST_NEXT_DAYS.format(horizon_days=horizon_days)
 
@@ -335,7 +333,9 @@ def generate_smart_insights(
         text += f"- {C.MSG_EXPECTED_DAILY_AVG} R$ {future_daily_avg:,.2f}/dia\n\n"
     else:
         text += f"- {C.MSG_ESTIMATED_TOTAL} {int(future_sum)} {unit_label}\n"
-        text += f"- {C.MSG_EXPECTED_DAILY_AVG} {future_daily_avg:.1f} {unit_label}/dia\n\n"
+        text += (
+            f"- {C.MSG_EXPECTED_DAILY_AVG} {future_daily_avg:.1f} {unit_label}/dia\n\n"
+        )
 
     if future_daily_avg > recent_avg * 1.05:
         text += f"{C.MSG_INSIGHT_PREFIX} {C.INSIGHT_POSITIVE}"

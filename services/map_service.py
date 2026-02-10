@@ -11,10 +11,15 @@ def normalize_string(s: str) -> str:
     """Normalize string: lowercase, remove accents."""
     if not isinstance(s, str):
         return ""
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', s)
-        if unicodedata.category(c) != 'Mn'
-    ).lower().strip()
+    return (
+        "".join(
+            c
+            for c in unicodedata.normalize("NFD", s)
+            if unicodedata.category(c) != "Mn"
+        )
+        .lower()
+        .strip()
+    )
 
 
 @st.cache_data(ttl=86400)  # Cache for 24h
@@ -44,16 +49,18 @@ def get_ibge_code(city: str, state: str) -> str:
         mun_state = None
 
         try:
-            if mun.get('microrregiao'):
-                mun_state = mun['microrregiao']['mesorregiao']['UF']['sigla']
-            elif mun.get('regiao-imediata'):
-                mun_state = mun['regiao-imediata']['regiao-intermediaria']['UF']['sigla']
+            if mun.get("microrregiao"):
+                mun_state = mun["microrregiao"]["mesorregiao"]["UF"]["sigla"]
+            elif mun.get("regiao-imediata"):
+                mun_state = mun["regiao-imediata"]["regiao-intermediaria"]["UF"][
+                    "sigla"
+                ]
         except (KeyError, TypeError):
             continue
 
         if mun_state and normalize_string(mun_state) == norm_state:
-            if normalize_string(mun['nome']) == norm_city:
-                return str(mun['id'])
+            if normalize_string(mun["nome"]) == norm_city:
+                return str(mun["id"])
 
     return None
 

@@ -5,6 +5,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 ---
 
 ## 1. UX (Experiência do Usuário)
+
 1. Implementar `st.spinner()` granular para cada gráfico que carrega dados pesados.
 2. Adicionar "skeletons" (placeholders visuais) enquanto os dados carregam.
 3. Criar persistência de filtros na URL (`st.query_params`) para compartilhamento de visões.
@@ -21,22 +22,22 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 14. Criar atalhos de teclado para ações comuns (ex: 'R' para recarregar).
 15. Melhorar o texto dos botões para serem orientados a ação (ex: "Gerar Relatório" vs "Ok").
 16. Adicionar confirmação antes de ações destrutivas ou pesadas.
-17. Exibir data da última atualização dos dados visivelmente no cabeçalho.
-18. Permitir que o usuário personalize a ordem dos cards no dashboard (se possível via session state).
-19. Adicionar modo de "Foco" que esconde a sidebar e cabeçalhos.
-20. Implementar busca global (Cmd+K) para encontrar funcionalidades ou parceiros.
-21. Usar linguagem consistente em todo o app (ex: "Receita" vs "Faturamento").
-22. Adicionar indicadores de progresso para tarefas longas (ex: Geocodificação).
-23. Permitir download de tabelas em múltiplos formatos (CSV, Excel, JSON).
-24. Adicionar opção de "Favoritar" filtros ou visões específicas.
-25. Melhorar a legibilidade de textos longos com espaçamento adequado.
-26. Evitar reloads da página inteira ao alterar filtros secundários (`st.form`).
-27. Notificar o usuário quando a sessão expirar.
-28. Adicionar links diretos para documentação em pontos de dúvida.
-29. Implementar histórico de "Visto Recentemente" para parceiros.
-30. Criar página de "Configurações de Usuário" para preferências locais.
+17. Permitir que o usuário personalize a ordem dos cards no dashboard (se possível via session state).
+18. Adicionar modo de "Foco" que esconde a sidebar e cabeçalhos.
+19. Implementar busca global (Cmd+K) para encontrar funcionalidades ou parceiros.
+20. Usar linguagem consistente em todo o app (ex: "Receita" vs "Faturamento").
+21. Adicionar indicadores de progresso para tarefas longas (ex: Geocodificação).
+22. Permitir download de tabelas em múltiplos formatos (CSV, Excel, JSON).
+23. Adicionar opção de "Favoritar" filtros ou visões específicas.
+24. Melhorar a legibilidade de textos longos com espaçamento adequado.
+25. Evitar reloads da página inteira ao alterar filtros secundários (`st.form`).
+26. Notificar o usuário quando a sessão expirar.
+27. Adicionar links diretos para documentação em pontos de dúvida.
+28. Implementar histórico de "Visto Recentemente" para parceiros.
+29. Criar página de "Configurações de Usuário" para preferências locais.
 
 ## 2. UI (Interface do Usuário)
+
 1. Centralizar a paleta de cores em `constants.py` ou `theme.toml`.
 2. Criar um Design System básico (cores, tipografia, espaçamentos).
 3. Estilizar cards de métricas com CSS customizado (bordas arredondadas, sombra).
@@ -69,6 +70,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Criar uma página de "Style Guide" interna para desenvolvedores.
 
 ## 3. Frontend (Streamlit)
+
 1. Modularizar cada aba em funções `render()` isoladas (já iniciado, aprofundar).
 2. Usar `st.session_state` para gerenciar estado global complexo.
 3. Implementar `st.fragment` (Streamlit 1.37+) para atualizações parciais.
@@ -101,6 +103,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Usar `st.logo` (novo) para gestão de marca.
 
 ## 4. Segurança
+
 1. Mover todas as credenciais para `st.secrets` (TOML).
 2. Implementar autenticação robusta (Login/Senha) com hash.
 3. Configurar RBAC (Controle de Acesso Baseado em Função).
@@ -133,6 +136,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Criar plano de resposta a incidentes de segurança.
 
 ## 5. Infraestrutura
+
 1. Dockerizar a aplicação (`Dockerfile` e `docker-compose`).
 2. Configurar ambiente de Staging e Produção.
 3. Usar Redis para cache distribuído (substituir cache em memória local).
@@ -165,6 +169,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Implementar "Graceful Shutdown" da aplicação.
 
 ## 6. Performance
+
 1. Vetorizar operações Pandas (remover `apply` e loops).
 2. Converter colunas de string para `category` onde aplicável.
 3. Usar `parquet` em vez de CSV para cache local.
@@ -197,6 +202,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Testar performance com carga de múltiplos usuários.
 
 ## 7. Testes e QA
+
 1. Criar suite de testes unitários (`pytest`) para funções de serviço.
 2. Implementar testes de integração para APIs (IBGE, Sheets).
 3. Criar testes de interface (E2E) com Playwright ou Selenium.
@@ -229,6 +235,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Criar dashboard de resultados de testes.
 
 ## 8. Acessibilidade
+
 1. Adicionar textos alternativos (`alt`) em todas as imagens.
 2. Garantir contraste de cores suficiente (Ratio 4.5:1).
 3. Permitir navegação completa via teclado.
@@ -261,6 +268,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Disponibilizar mapa do site ou índice de navegação.
 
 ## 9. Analytics e BI
+
 1. Definir KPIs claros para cada página (já iniciado, expandir).
 2. Implementar análise de Cohort para retenção de alunos.
 3. Criar visualização de Funil de Vendas (Oportunidade -> Contrato).
@@ -293,6 +301,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Integrar dados de concorrentes (se disponíveis).
 
 ## 10. Notificações
+
 1. Implementar central de notificações na UI.
 2. Criar alertas de "Meta Batida" (toasts/confetti).
 3. Notificar sobre dados desatualizados.
@@ -325,6 +334,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Testar sistema de notificações em staging.
 
 ## 11. Qualidade do Código
+
 1. Adicionar Type Hints (mypy) em todo o projeto.
 2. Configurar linter rigoroso (Ruff ou Pylint).
 3. Formatar código automaticamente (Black ou Ruff format).
@@ -357,6 +367,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Realizar Code Reviews periódicos.
 
 ## 12. Documentação
+
 1. Criar `README.md` detalhado (instalação, uso, arquitetura).
 2. Documentar API interna (se houver endpoints).
 3. Criar Wiki ou `docs/` com guias de negócio.
@@ -389,6 +400,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Documentar plano de rollback.
 
 ## 13. IA (Inteligência Artificial)
+
 1. Implementar previsão de demanda com Prophet/NeuralProphet.
 2. Criar chatbot (LLM) para "conversar" com os dados ("Qual faturamento de ontem?").
 3. Usar NLP para analisar sentimentos em feedbacks de alunos.
@@ -421,6 +433,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Validar ética e viés dos modelos utilizados.
 
 ## 14. Página de Contratos
+
 1. Visualizar funil de status (Enviado -> Assinado -> Pago).
 2. Adicionar filtros avançados (Data, Valor, Responsável).
 3. Permitir busca textual por nome do contrato/ID.
@@ -453,6 +466,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Relatório de renovações automáticas.
 
 ## 15. Página de Mapas
+
 1. Implementar clusterização de marcadores (MarkerCluster) para performance.
 2. Adicionar camadas (Layers) alternáveis (Satélite, Rua, Dark).
 3. Filtrar pontos visíveis por raio ou desenho livre.
@@ -485,6 +499,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Análise de "espaços em branco" (White space analysis).
 
 ## 16. Página de Faturamento
+
 1. Adicionar comparativo Ano contra Ano (YoY).
 2. Implementar gráfico de cascata (Waterfall) para explicar resultado líquido.
 3. Visualizar composição da receita por categoria (Pie/Treemap).
@@ -517,6 +532,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Dashboard específico para comissões.
 
 ## 17. Página de Previsões
+
 1. Implementar múltiplos algoritmos (Prophet, ARIMA, Holt-Winters, XGBoost).
 2. Permitir ajuste manual de parâmetros do modelo (com explicações).
 3. Exibir intervalos de confiança (Cenário Otimista/Pessimista).
@@ -549,6 +565,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Visualizar histórico de revisões de previsão.
 
 ## 18. Análise de Oportunidade (Geral)
+
 1. Cruzar dados internos com dados de mercado (IBGE/SIDRA).
 2. Calcular índice de saturação de mercado.
 3. Identificar "Oceano Azul" (Alta demanda, baixa oferta).
@@ -581,6 +598,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Relatório de impacto social potencial.
 
 ## 19. Visão Geral (Overview)
+
 1. Dashboard de "Health Check" do negócio (KPIs vitais).
 2. Widgets personalizáveis (Drag & Drop se possível).
 3. Resumo de atividades recentes.
@@ -613,6 +631,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Modo de apresentação (slideshow de KPIs).
 
 ## 20. Análise Detalhada (Oportunidade)
+
 1. Ficha completa do município (População, Economia, Educação).
 2. Pirâmide etária da cidade.
 3. Evolução do PIB e População nos últimos anos.
@@ -645,6 +664,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Relatório PDF consolidado da cidade.
 
 ## 21. Análise por Curso (Oportunidade)
+
 1. Demanda específica por área de conhecimento.
 2. Cruzamento Curso vs Vagas de Emprego locais.
 3. Concorrência específica (quantas escolas ofertam o curso?).
@@ -677,6 +697,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Ranking de cursos mais rentáveis para a cidade.
 
 ## 22. Geo Clustering (Oportunidade)
+
 1. Algoritmo K-Means para agrupar cidades similares.
 2. DBSCAN para identificar clusters geográficos densos.
 3. Visualização de clusters no mapa com cores distintas.
@@ -709,6 +730,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Relatório consolidado de inteligência regional.
 
 ## 23. Análise de Regressão (Oportunidade)
+
 1. Identificar variáveis que mais impactam o faturamento (Feature Importance).
 2. Regressão Linear Múltipla para prever potencial.
 3. Random Forest Regressor para capturar não-linearidades.
@@ -741,6 +763,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Relatório automático de insights estatísticos.
 
 ## 24. Página de Parceiros
+
 1. Perfil 360º do parceiro (Vendas, Financeiro, Qualidade).
 2. Histórico de interações (CRM).
 3. Ranking de parceiros (Gamificação).
@@ -773,6 +796,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Plano de ação corretiva (se performance baixa).
 
 ## 25. Análise Unitária e Alunos
+
 1. Ficha do Aluno (Notas, Frequência, Financeiro).
 2. Histórico de matrículas.
 3. Risco de evasão (Dropout Prediction).
@@ -805,6 +829,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Dashboard de retenção.
 
 ## 26. Gráficos (Geral)
+
 1. Usar paleta de cores acessível (Colorblind friendly).
 2. Implementar interatividade (Zoom, Pan, Hover) em todos.
 3. Adicionar anotações automáticas em pontos críticos.
@@ -837,6 +862,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Gridlines sutis para facilitar leitura.
 
 ## 27. Integração de Dados
+
 1. Substituir CSVs por banco SQL (PostgreSQL/MySQL).
 2. Criar pipeline ETL (Extract, Transform, Load) robusto (Airflow/Prefect).
 3. Validar schema dos dados na entrada (Pydantic/Pandera).
@@ -869,6 +895,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Painel de status das integrações.
 
 ## 28. Mobile Experience
+
 1. Design "Mobile First" para novas telas.
 2. Menu hambúrguer otimizado.
 3. Tabelas responsivas (scroll horizontal ou cards).
@@ -901,6 +928,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Testar em redes lentas (3G).
 
 ## 29. Gestão de Erros e Logging
+
 1. Configurar Sentry ou GlitchTip para rastreamento de erros.
 2. Logging estruturado em JSON.
 3. Níveis de log apropriados (DEBUG, INFO, WARN, ERROR).
@@ -933,6 +961,7 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 30. Revisão periódica de logs para insights.
 
 ## 30. Conformidade e Governança (LGPD)
+
 1. Mapeamento de dados pessoais (Data Mapping).
 2. Política de Privacidade visível e atualizada.
 3. Termos de Uso do sistema.

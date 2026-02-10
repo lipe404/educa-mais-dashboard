@@ -49,7 +49,7 @@ def get_populacao_2022_municipios(ids: List[str]) -> pd.DataFrame:
         return pd.DataFrame(columns=["id", "pop_2022"])
     batch = []
     for i in range(0, len(ids), 40):
-        batch_ids = ids[i: i + 40]
+        batch_ids = ids[i : i + 40]
         url = SIDRA_POP_2022.format(ids="|".join(batch_ids))
         try:
             r = requests.get(url, timeout=15)
@@ -99,8 +99,7 @@ def get_populacao_2022_all() -> pd.DataFrame:
         rows = []
         for row in j[1:]:
             rows.append(
-                {"id": str(row.get("D1C", "")),
-                 "pop_2022": int(float(row.get("V", 0)))}
+                {"id": str(row.get("D1C", "")), "pop_2022": int(float(row.get("V", 0)))}
             )
         return pd.DataFrame(rows)
     except Exception:
@@ -170,8 +169,7 @@ def build_oportunidade_por_uf(
         pd.concat(frames, ignore_index=True)
         if frames
         else pd.DataFrame(
-            columns=["id", "nome", "uf", "regiao",
-                     "pop_2022", "presenca", "score"]
+            columns=["id", "nome", "uf", "regiao", "pop_2022", "presenca", "score"]
         )
     )
     return out.sort_values(["uf", "score"], ascending=[True, False])

@@ -1,4 +1,3 @@
-
 import pytest
 import pandas as pd
 import numpy as np
@@ -12,10 +11,12 @@ class TestDataServiceExpanded:
 
     def test_parse_datetime_any_edge_cases(self):
         # Mixed formats
-        assert data_service.parse_datetime_any(
-            "2023/01/01") == pd.Timestamp("2023-01-01")
-        assert data_service.parse_datetime_any(
-            "01-01-2023") == pd.Timestamp("2023-01-01")
+        assert data_service.parse_datetime_any("2023/01/01") == pd.Timestamp(
+            "2023-01-01"
+        )
+        assert data_service.parse_datetime_any("01-01-2023") == pd.Timestamp(
+            "2023-01-01"
+        )
 
         # Non-string inputs that are convertible
         # parser might handle this or fail depending on implementation details, but let's check basic robustness
@@ -82,7 +83,7 @@ class TestDataServiceExpanded:
             "Partner Name": ["P1", "P2", "P3"],
             # SP=Sudeste, BA=Nordeste, XX=Unknown
             C.COL_SRC_STATE: ["SP", "BA", "XX"],
-            C.COL_SRC_TIMESTAMP: ["01/01/2023"] * 3
+            C.COL_SRC_TIMESTAMP: ["01/01/2023"] * 3,
         }
         mock_df = pd.DataFrame(raw_data)
         mock_load_sheet.return_value = mock_df
@@ -108,7 +109,7 @@ class TestDataServiceExpanded:
             "Partner Name": ["P1", "P2"],
             C.COL_SRC_VALOR: ["1000,00", "invalid"],
             C.COL_SRC_COMISSAO: ["10,0", "nan"],
-            C.COL_SRC_DATA: ["01/01/2023", "invalid-date"]
+            C.COL_SRC_DATA: ["01/01/2023", "invalid-date"],
         }
         mock_df = pd.DataFrame(raw_data)
         mock_load_sheet.return_value = mock_df

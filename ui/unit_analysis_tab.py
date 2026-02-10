@@ -17,8 +17,9 @@ def render(dados_df: pd.DataFrame):
 
     if not st.session_state["unit_analysis_access"]:
         st.info(C.UI_LABEL_ENTER_KEY_MSG)
-        key = st.text_input(C.UI_LABEL_ACCESS_KEY,
-                            type="password", key="unit_analysis_access_key")
+        key = st.text_input(
+            C.UI_LABEL_ACCESS_KEY, type="password", key="unit_analysis_access_key"
+        )
         if st.button("Acessar", key="btn_unit_access"):
             # Load env vars
             load_dotenv()
@@ -40,7 +41,8 @@ def render(dados_df: pd.DataFrame):
     # 1. Partner Selection
     # Get unique partners sorted
     partners = sorted(
-        [str(p) for p in dados_df[C.COL_INT_PARTNER].unique() if p and str(p).strip()])
+        [str(p) for p in dados_df[C.COL_INT_PARTNER].unique() if p and str(p).strip()]
+    )
 
     if not partners:
         st.warning(C.UI_LABEL_NO_PARTNERS_FOUND)
@@ -58,8 +60,7 @@ def render(dados_df: pd.DataFrame):
         return
 
     # Determine Base Location (Latest contract)
-    partner_data_sorted = partner_data.sort_values(
-        C.COL_INT_DT, ascending=False)
+    partner_data_sorted = partner_data.sort_values(C.COL_INT_DT, ascending=False)
     latest_entry = partner_data_sorted.iloc[0]
 
     city = str(latest_entry.get(C.COL_INT_CITY, "")).strip()
@@ -74,22 +75,25 @@ def render(dados_df: pd.DataFrame):
 
     # 2. AI Analysis Trigger
     st.markdown("####  Inteligência de Mercado")
-    st.write("Utilize nossa IA para cruzar dados geográficos, demográficos e de contratos para gerar insights personalizados.")
+    st.write(
+        "Utilize nossa IA para cruzar dados geográficos, demográficos e de contratos para gerar insights personalizados."
+    )
 
     if st.button("✨ Gerar Análise Unitária (IA)"):
         if not city or not state:
             st.error("Cidade ou Estado não identificados para este parceiro.")
             return
 
-        with st.spinner(f"Analisando contexto de {city}-{state} e buscando oportunidades..."):
+        with st.spinner(
+            f"Analisando contexto de {city}-{state} e buscando oportunidades..."
+        ):
 
             # A. Geolocation of Partner
             geo = GeocodingService()
             lat_p, lon_p = geo.get_coords(city, state)
 
             if not lat_p or not lon_p:
-                st.error(
-                    f"Não foi possível geocodificar a cidade base: {city}-{state}")
+                st.error(f"Não foi possível geocodificar a cidade base: {city}-{state}")
                 # Fallback to State center? No, user needs specific context.
             else:
                 # B. Build Opportunity Context for the State
@@ -101,8 +105,11 @@ def render(dados_df: pd.DataFrame):
                 # and if possible, we could filter by proximity if we had coords for all.
                 # For now, we show "Top Oportunidades no Estado" highlighting those with high population.
 
-                opportunities = opp_df[opp_df["presenca"] == 0].sort_values(
-                    "score", ascending=False).head(15)
+                opportunities = (
+                    opp_df[opp_df["presenca"] == 0]
+                    .sort_values("score", ascending=False)
+                    .head(15)
+                )
 
                 # C. Generate Insights
                 st.markdown("###  Insights Estratégicos")
@@ -110,8 +117,8 @@ def render(dados_df: pd.DataFrame):
                 # Metric 1: Local Market Saturation
                 # Check if there are other partners in the same city
                 partners_in_city = dados_df[
-                    (dados_df[C.COL_INT_CITY] == city) &
-                    (dados_df[C.COL_INT_STATE] == state)
+                    (dados_df[C.COL_INT_CITY] == city)
+                    & (dados_df[C.COL_INT_STATE] == state)
                 ][C.COL_INT_PARTNER].nunique()
 
                 saturation_msg = ""
@@ -123,21 +130,29 @@ def render(dados_df: pd.DataFrame):
                 # Metric 2: State Potential
                 total_pop_opp = opportunities["pop_2022"].sum()
 
-                st.info(f"""
+                st.info(
+                    f"""
                 **Análise de Perfil:**
                 - {saturation_msg}
                 - **Potencial de Expansão**: Identificamos **{len(opportunities)} cidades** prioritárias no estado com um público potencial de **{total_pop_opp:,.0f}** habitantes sem cobertura.
-                """)
+                """
+                )
 
                 # D. Map Visualization
                 st.markdown("####  Mapa de Expansão Sugerida")
 
                 map_data = []
                 # Add Partner
-                map_data.append({
-                    "lat": lat_p, "lon": lon_p, "nome": f"BASE: {city}",
-                    "type": "Sua Base", "size": 15, "color": "blue"
-                })
+                map_data.append(
+                    {
+                        "lat": lat_p,
+                        "lon": lon_p,
+                        "nome": f"BASE: {city}",
+                        "type": "Sua Base",
+                        "size": 15,
+                        "color": "blue",
+                    }
+                )
 
                 # Geocode Opportunities
                 progress_text = "Mapeando oportunidades próximas..."
@@ -155,15 +170,19 @@ def render(dados_df: pd.DataFrame):
 
                     olat, olon = geo.get_coords(o_city, o_uf)
                     if olat and olon:
-                        map_data.append({
-                            "lat": olat, "lon": olon,
-                            "nome": f"{o_city} (Pop: {o_pop})",
-                            "type": "Oportunidade", "size": 10, "color": "green"
-                        })
+                        map_data.append(
+                            {
+                                "lat": olat,
+                                "lon": olon,
+                                "nome": f"{o_city} (Pop: {o_pop})",
+                                "type": "Oportunidade",
+                                "size": 10,
+                                "color": "green",
+                            }
+                        )
                         valid_opps += 1
 
-                    my_bar.progress(
-                        (i + 1) / len(opportunities), text=progress_text)
+                    my_bar.progress((i + 1) / len(opportunities), text=progress_text)
 
                 my_bar.empty()
 
@@ -171,14 +190,24 @@ def render(dados_df: pd.DataFrame):
 
                 if not map_df.empty:
                     fig = px.scatter_mapbox(
-                        map_df, lat="lat", lon="lon", hover_name="nome", color="type", size="size",
+                        map_df,
+                        lat="lat",
+                        lon="lon",
+                        hover_name="nome",
+                        color="type",
+                        size="size",
                         color_discrete_map={
-                            "Sua Base": "#2d9fff", "Oportunidade": "#00ff7f"},
-                        zoom=6, center={"lat": lat_p, "lon": lon_p},
-                        title="Sua Base vs. Polos de Oportunidade"
+                            "Sua Base": "#2d9fff",
+                            "Oportunidade": "#00ff7f",
+                        },
+                        zoom=6,
+                        center={"lat": lat_p, "lon": lon_p},
+                        title="Sua Base vs. Polos de Oportunidade",
                     )
                     fig.update_layout(
-                        mapbox_style="open-street-map", margin={"r": 0, "t": 40, "l": 0, "b": 0})
+                        mapbox_style="open-street-map",
+                        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+                    )
                     st.plotly_chart(fig, width="stretch")
 
                 # E. Course Recommendations
@@ -201,7 +230,8 @@ def render(dados_df: pd.DataFrame):
                     pop_val = partner_city_pop_row.iloc[0]["pop_2022"]
 
                 st.write(
-                    f"Baseado no perfil demográfico de **{city}** (Pop. est: {pop_val:,.0f}):")
+                    f"Baseado no perfil demográfico de **{city}** (Pop. est: {pop_val:,.0f}):"
+                )
 
                 cols = st.columns(3)
                 recommendations = []
@@ -210,21 +240,25 @@ def render(dados_df: pd.DataFrame):
                     recommendations = [
                         ("Técnico em Enfermagem", "Alta demanda em centros urbanos."),
                         ("Técnico em Radiologia", "Setor de saúde em expansão."),
-                        ("Técnico em Administração",
-                         "Empresas locais necessitam de gestão.")
+                        (
+                            "Técnico em Administração",
+                            "Empresas locais necessitam de gestão.",
+                        ),
                     ]
                 elif pop_val > 40000:
                     recommendations = [
                         ("Técnico em Vendas", "Comércio local ativo."),
                         ("Técnico em Farmácia", "Drogarias em expansão."),
-                        ("EJA Médio", "Qualificação básica necessária.")
+                        ("EJA Médio", "Qualificação básica necessária."),
                     ]
                 else:
                     recommendations = [
-                        ("EJA Fundamental/Médio",
-                         "Alta demanda de regularização escolar."),
+                        (
+                            "EJA Fundamental/Médio",
+                            "Alta demanda de regularização escolar.",
+                        ),
                         ("Técnico em Agropecuária", "Forte vocação regional."),
-                        ("Agente Comunitário de Saúde", "Programas municipais.")
+                        ("Agente Comunitário de Saúde", "Programas municipais."),
                     ]
 
                 for idx, (course, reason) in enumerate(recommendations):
@@ -233,4 +267,5 @@ def render(dados_df: pd.DataFrame):
 
                 st.markdown("---")
                 st.caption(
-                    "Análise gerada automaticamente com base em dados do IBGE (Censo 2022) e histórico de vendas.")
+                    "Análise gerada automaticamente com base em dados do IBGE (Censo 2022) e histórico de vendas."
+                )
