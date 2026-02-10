@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import date
 import datetime
 import constants as C
@@ -50,53 +51,201 @@ def render(
     
     if show_comparison:
         show_cumulative = st.toggle("Comparativo de Cumulativo", value=False)
-
-        # 1. Prepare Current Month Data (Aligned to Day 1-31)
-        # Use 'df' if it represents the current month view, or filter 'full_df' if 'df' is weird.
-        # Assuming 'df' contains the filtered data user is looking at.
-        # But for M-o-M comparison, we usually want the FULL current month vs FULL prev month.
-        # Let's use 'full_df' (which is fat_filtered_base) for both to ensure apples-to-apples comparison of the months.
         
-        # Filter Current Month (from full_df to get full month context)
+        # 1. Prepare Data
         curr_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (full_df[C.COL_INT_DATA].dt.month == focus_month)
         df_curr = full_df[curr_mask].copy()
         
-        # Filter Previous Month
         prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (full_df[C.COL_INT_DATA].dt.month == prev_month)
         df_prev = full_df[prev_mask].copy()
         
+        # Calculate Total Previous Month for Milestone
+        total_prev_month = df_prev[C.COL_INT_VALOR].sum()
+
         # Group by Day
         daily_curr = df_curr.groupby(df_curr[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR].sum().reset_index()
         daily_curr.columns = ["Dia", "Valor"]
-        daily_curr["Período"] = f"Mês Atual ({focus_month:02d}/{focus_year})"
         
         daily_prev = df_prev.groupby(df_prev[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR].sum().reset_index()
         daily_prev.columns = ["Dia", "Valor"]
-        daily_prev["Período"] = f"Mês Anterior ({prev_month:02d}/{prev_year})"
         
-        if show_cumulative:
-            daily_curr["Valor"] = daily_curr["Valor"].cumsum()
-            daily_prev["Valor"] = daily_prev["Valor"].cumsum()
-            chart_title = f"Comparativo Cumulativo: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
-        else:
-            chart_title = f"Comparativo Diário: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+        # Create full range 1-31 for merging
+        all_days = pd.DataFrame({"Dia": range(1, 32)})
+        
+        # Merge Daily Data
+        merged = all_days.merge(daily_curr, on="Dia", how="left").rename(columns={"Valor": "Atual"})
+        merged = merged.merge(daily_prev, on="Dia", how="left").rename(columns={"Valor": "Anterior"})
+        
+        # Fill NaN with 0 only for calculations, but keep track of valid days for plotting
+        merged_calc = merged.fillna(0)
 
-        # Combine
-        combined = pd.concat([daily_curr, daily_prev])
+        # Milestone: Check when we surpassed previous month total
+        milestone_day = None
+        milestone_val = 0
+        current_cumulative_series = merged_calc["Atual"].cumsum()
         
-        # Ensure X-axis covers 1-31
-        # (Optional: Fill missing days with 0? Plotly handles gaps okay, but 0 is better for revenue)
-        # Let's just plot what we have.
+        # Find first day where cumulative current > total_prev_month
+        surpassed_mask = current_cumulative_series > total_prev_month
+        if surpassed_mask.any():
+            idx = surpassed_mask.idxmax()
+            milestone_day = merged_calc.iloc[idx]["Dia"]
+            milestone_val = current_cumulative_series.iloc[idx]
+
+        if show_cumulative:
+            # --- CUMULATIVE: LINE CHART ---
+            chart_title = f"Comparativo Cumulativo: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+            
+            # Prepare Cumulative Data
+            # For Current month: We want cumulative sum up to the last valid day, then NaN
+            # Identify last valid index for current month
+            last_valid_idx = merged["Atual"].last_valid_index()
+            
+            cum_atual = merged_calc["Atual"].cumsum()
+            cum_anterior = merged_calc["Anterior"].cumsum()
+            
+            # Mask future days for Current Month
+            if last_valid_idx is not None:
+                cum_atual[last_valid_idx+1:] = None
+            else:
+                # If no data at all for current month
+                cum_atual[:] = None
+
+            fig = go.Figure()
+
+            # Previous Month Line
+            fig.add_trace(go.Scatter(
+                x=merged["Dia"], 
+                y=cum_anterior, 
+                mode='lines', 
+                name=f"Mês Anterior ({prev_month:02d}/{prev_year})",
+                line=dict(color='gray', dash='dot', width=2),
+                hovertemplate="Dia %{x}: R$ %{y:,.2f}<extra></extra>"
+            ))
+            
+            # Current Month Line
+            fig.add_trace(go.Scatter(
+                x=merged["Dia"], 
+                y=cum_atual, 
+                mode='lines+markers', 
+                name=f"Mês Atual ({focus_month:02d}/{focus_year})",
+                line=dict(color=C.COLOR_PRIMARY, width=3),
+                marker=dict(size=6),
+                hovertemplate="Dia %{x}: R$ %{y:,.2f}<extra></extra>"
+            ))
+            
+            # Milestone Annotation (Meta Batida)
+            if milestone_day:
+                fig.add_vline(
+                    x=milestone_day, 
+                    line_width=2, 
+                    line_dash="dash", 
+                    line_color="green",
+                    annotation_text=f"Meta Batida (Dia {int(milestone_day)})", 
+                    annotation_position="top left"
+                )
+                st.success(f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!")
+
+            # Equivalence Indicator: "Where were we last month with today's revenue?"
+            # Get latest cumulative value for current month
+            if last_valid_idx is not None:
+                current_val = cum_atual[last_valid_idx]
+                current_day = merged.iloc[last_valid_idx]["Dia"]
+                
+                # Find day in previous month where cumulative >= current_val
+                # We search in cum_anterior
+                equiv_mask = cum_anterior >= current_val
+                if equiv_mask.any():
+                    equiv_idx = equiv_mask.idxmax()
+                    equiv_day = merged.iloc[equiv_idx]["Dia"]
+                    equiv_val = cum_anterior[equiv_idx]
+                    
+                    # Add Horizontal Line from Current Point to Previous Curve
+                    fig.add_shape(
+                        type="line",
+                        x0=current_day, y0=current_val,
+                        x1=equiv_day, y1=current_val,
+                        line=dict(color="orange", width=1, dash="dot"),
+                    )
+                    
+                    # Add Annotation
+                    fig.add_annotation(
+                        x=equiv_day, y=current_val,
+                        text=f"Mesmo fat. no dia {int(equiv_day)}",
+                        showarrow=True,
+                        arrowhead=1,
+                        ax=0, ay=-20,
+                        bgcolor="rgba(255, 165, 0, 0.2)"
+                    )
+                    
+            fig.update_layout(
+                title=chart_title,
+                xaxis_title="Dia",
+                yaxis_title="Valor Acumulado (R$)",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+
+        else:
+            # --- DAILY: BAR CHART ---
+            chart_title = f"Comparativo Diário: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+            
+            # Use data with 0s for bars
+            merged_plot = merged_calc
+
+            fig = go.Figure()
+
+            # Previous Month (Bar - Gray/Muted)
+            fig.add_trace(go.Bar(
+                x=merged_plot["Dia"],
+                y=merged_plot["Anterior"],
+                name=f"Mês Anterior ({prev_month:02d}/{prev_year})",
+                marker_color='lightgray',
+                opacity=0.7
+            ))
+
+            # Current Month (Bar - Colored)
+            fig.add_trace(go.Bar(
+                x=merged_plot["Dia"],
+                y=merged_plot["Atual"],
+                name=f"Mês Atual ({focus_month:02d}/{focus_year})",
+                marker_color=C.COLOR_PRIMARY,
+                textposition='auto'
+            ))
+
+            # Add "Winner" indicators
+            winning_days = merged_plot[merged_plot["Atual"] > merged_plot["Anterior"]]
+            if not winning_days.empty:
+                fig.add_trace(go.Scatter(
+                    x=winning_days["Dia"],
+                    y=winning_days["Atual"],
+                    mode='markers',
+                    marker=dict(symbol='star', size=10, color='gold', line=dict(width=1, color='darkorange')),
+                    name="Superou Mês Anterior",
+                    hoverinfo='skip'
+                ))
+
+            # Add Milestone Annotation
+            if milestone_day:
+                fig.add_vline(
+                    x=milestone_day, 
+                    line_width=2, 
+                    line_dash="dash", 
+                    line_color="green",
+                    annotation_text=f"Meta Batida (Dia {int(milestone_day)})", 
+                    annotation_position="top right"
+                )
+                st.success(f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!")
+
+            fig.update_layout(
+                title=chart_title,
+                xaxis_title="Dia",
+                yaxis_title="Valor (R$)",
+                barmode='group', 
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
         
-        fig = px.line(
-            combined, 
-            x="Dia", 
-            y="Valor", 
-            color="Período", 
-            title=chart_title,
-            markers=True
-        )
-        fig.update_xaxes(range=[1, 31]) # Force 31 days view
+        fig.update_xaxes(range=[0.5, 31.5], dtick=1) 
         st.plotly_chart(fig, width="stretch")
         
     else:
