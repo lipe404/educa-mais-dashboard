@@ -53,6 +53,59 @@ def _render_kpis(kpis: dict):
     c4.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
 
 
+def _render_waterfall_chart(kpis: dict):
+    """
+    Renders a Waterfall chart explaining how we get from Total Revenue to Net Revenue.
+    """
+    # Prepare data
+    y_values = [
+        kpis["total"],
+        -kpis["parceiros"],
+        -kpis["equipe"],
+        0,  # Placeholder for total, plotly calculates it
+    ]
+    
+    x_labels = [
+        "Faturamento Bruto",
+        "Comissão Parceiros",
+        "Comissão Equipe",
+        "Resultado Líquido"
+    ]
+    
+    measure = ["absolute", "relative", "relative", "total"]
+    
+    text_values = [
+        f"R$ {kpis['total']:,.2f}",
+        f"-R$ {kpis['parceiros']:,.2f}",
+        f"-R$ {kpis['equipe']:,.2f}",
+        f"R$ {kpis['liquido']:,.2f}"
+    ]
+
+    fig = go.Figure(
+        go.Waterfall(
+            name="Resultado",
+            orientation="v",
+            measure=measure,
+            x=x_labels,
+            textposition="auto",
+            text=text_values,
+            y=y_values,
+            connector={"line": {"color": "rgb(63, 63, 63)"}},
+            decreasing={"marker": {"color": "#EF553B"}},  # Red for expenses
+            increasing={"marker": {"color": "#00CC96"}},  # Green for revenue
+            totals={"marker": {"color": C.COLOR_PRIMARY}}, # Brand color for result
+        )
+    )
+
+    fig.update_layout(
+        title="Demonstração do Resultado Líquido (Waterfall)",
+        showlegend=False,
+        waterfallgap=0.3,
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def _render_daily_comparison_chart(
     full_df: pd.DataFrame, df: pd.DataFrame, focus_year: int, focus_month: int, prev_year: int, prev_month: int
 ):
@@ -434,6 +487,9 @@ def render(
     # 1. Calculate and Render Main KPIs
     kpis = _calculate_kpis(df)
     _render_kpis(kpis)
+
+    with st.expander("Ver Detalhes do Resultado (Waterfall)", expanded=False):
+        _render_waterfall_chart(kpis)
 
     st.divider()
 

@@ -473,33 +473,8 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 
 ## 16. Página de Faturamento
 
-1. Adicionar comparativo Ano contra Ano (YoY).
-2. Implementar gráfico de cascata (Waterfall) para explicar resultado líquido.
-3. Visualizar composição da receita por categoria (Pie/Treemap).
-4. Adicionar linhas de tendência e média móvel.
-5. Permitir drill-down (Ano -> Mês -> Dia -> Transação).
-6. Calcular e exibir margem de lucro/contribuição.
-7. Gráfico de Pareto de produtos/serviços.
-8. Simulador de faturamento (como já implementado, mas expandir cenários).
-9. Analisar sazonalidade mensal/semanal.
-10. Visualizar inadimplência e contas a receber.
-11. Exportar relatório financeiro formatado (PDF).
-12. Adicionar indicadores de meta (Gauges/Bullets).
-13. Comparar faturamento Realizado vs Orçado.
-14. Analisar Ticket Médio ao longo do tempo.
-15. Visualizar fluxo de caixa (Entradas vs Saídas).
-16. Adicionar anotações em picos ou quedas (ex: "Black Friday").
-17. Tabela detalhada com Sparklines.
-18. Analisar faturamento por forma de pagamento.
-19. Calcular CAC (Custo de Aquisição) se houver dados de custo.
-20. Visualizar distribuição de faturamento por estado/região.
-21. Gráfico de "Corrida de Barras" (Bar Chart Race) temporal.
-22. Analisar concentração de receita em clientes (Risco).
-23. Ajustar valores pela inflação (IPCA) para comparação real.
-24. Previsão de fechamento do mês atual.
-25. Destaque para "Melhor dia" e "Pior dia".
-26. Análise de coorte de receita (Vintage Analysis).
-27. Visualizar descontos concedidos vs Receita Bruta.
-28. Integração com API bancária para saldo real (futuro).
-29. Alertas de desvios significativos do padrão.
-30. Dashboard específico para comissões.
+1. Adicionar linhas de tendência e média móvel.
+2. Tabela detalhada com Sparklines.
+3. Gráfico de "Corrida de Barras" (Bar Chart Race) temporal.
+4. Destaque para "Melhor dia" e "Pior dia".
+5. Análise de coorte de receita (Vintage Analysis).
