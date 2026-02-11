@@ -18,25 +18,14 @@ def _check_authentication(access_key: str) -> bool:
     Returns:
         bool: True if authenticated, False otherwise.
     """
-    if "unit_analysis_access" not in st.session_state:
-        st.session_state["unit_analysis_access"] = False
-
-    if not st.session_state["unit_analysis_access"]:
-        st.info(C.UI_LABEL_ENTER_KEY_MSG)
-        key = st.text_input(
-            C.UI_LABEL_ACCESS_KEY, type="password", key="unit_analysis_access_key"
-        )
-        if st.button("Acessar", key="btn_unit_access"):
-            if not access_key:
-                st.error("Erro de configuração: KEY_API não definida no ambiente.")
-                return False
-
-            if key == access_key:
-                st.session_state["unit_analysis_access"] = True
-                st.rerun()
-            else:
-                st.error("Chave de acesso inválida.")
+    key = st.text_input(
+        C.UI_LABEL_ACCESS_KEY, type="password", key="unit_analysis_access_key"
+    )
+    
+    if key != access_key:
+        st.warning(C.UI_LABEL_ENTER_KEY_MSG)
         return False
+        
     return True
 
 
