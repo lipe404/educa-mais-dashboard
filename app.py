@@ -6,7 +6,12 @@ from datetime import date, datetime
 from dotenv import load_dotenv
 
 import constants as C
+import forecasting
+from geocoding_service import GeocodingService
 from services import data as data_service
+from services import map_service
+from services import opportunity as opportunity_service
+from services import industry as industry_service
 from ui import (
     contracts_tab,
     map_tab,
@@ -29,6 +34,7 @@ st.set_page_config(
 )
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
+KEY_API = os.getenv("KEY_API")
 
 # -----------------------------------------------------------------------------
 # Main App Logic
@@ -318,6 +324,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+geo_service = GeocodingService()
+
 t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
     [
         C.TAB_NAME_CONTRACTS,
@@ -334,16 +342,37 @@ t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
 with t1:
     contracts_tab.render(dados_filtered, end_date, selected_month)
 with t2:
-    map_tab.render(dados_filtered)
+    map_tab.render(
+        dados_filtered,
+        map_service.get_ibge_code,
+        map_service.get_municipality_geojson,
+        geo_service.get_coords,
+    )
 with t3:
     financial_tab.render(fat_filtered, fat_filtered_base, end_date, selected_month)
 with t4:
-    forecast_tab.render(dados_filtered, fat_filtered)
+    forecast_tab.render(
+        dados_filtered,
+        fat_filtered,
+        forecasting.run_backtest,
+        forecasting.generate_forecast,
+        forecasting.generate_smart_insights,
+    )
 with t5:
-    opportunity_tab.render(dados_filtered)
+    opportunity_tab.render(
+        dados_filtered,
+        opportunity_service.build_oportunidade_por_uf,
+        industry_service.get_unidades_locais,
+        industry_service.get_cnae_sections,
+        KEY_API,
+    )
 with t6:
-    partners_tab.render(fat_filtered)
+    partners_tab.render(fat_filtered, KEY_API)
 with t7:
-    unit_analysis_tab.render(dados_filtered)
+    unit_analysis_tab.render(
+        dados_filtered, opportunity_service.build_oportunidade_por_uf, KEY_API
+    )
 with t8:
-    students_tab.render(alunos, DEFAULT_SHEET_ID)
+    students_tab.render(
+        alunos, data_service.get_students_general_data, KEY_API, DEFAULT_SHEET_ID
+    )

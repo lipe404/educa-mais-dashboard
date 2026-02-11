@@ -1,27 +1,16 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os
-from dotenv import load_dotenv
 import constants as C
-from services import data as data_service
+from typing import Callable, Tuple, Optional
+from datetime import datetime
 from geocoding_service import GeocodingService
 
-load_dotenv()
-API_KEY = os.getenv("KEY_API")
 
-
-def render_analysis(students_df: pd.DataFrame):
-    st.markdown("### Análise de Alunos e Cursos")
-
+def _filter_students_data(students_df: pd.DataFrame) -> pd.DataFrame:
+    """Filters and cleans students data for analysis."""
     if students_df.empty:
-        st.info("Nenhum dado de alunos disponível.")
-        return
-
-    # Filter out POS
-    # User requested: "descarte tudo que esteja em POS"
-    # Assuming 'POS' is in C.COL_INT_FINANCIAL_TYPE
-    # We should normalize comparison to be safe (upper case)
+        return pd.DataFrame()
 
     filtered_df = students_df.copy()
 
@@ -30,18 +19,14 @@ def render_analysis(students_df: pd.DataFrame):
         filtered_df[C.COL_INT_FINANCIAL_TYPE].astype(str).str.upper()
     )
 
-    # Filter logic: Keep only what is NOT 'POS' (or strictly keep 'TECNICO' if that was the requirement)
-    # Broader check for any variation of POS/PÓS
+    # Filter logic: Keep only what is NOT 'POS'
     mask_pos = filtered_df[C.COL_INT_FINANCIAL_TYPE].str.contains(
         "POS|PÓS", case=False, na=False
     )
     filtered_df = filtered_df[~mask_pos]
 
     if filtered_df.empty:
-        st.info(
-            "Nenhum dado encontrado após aplicar o filtro (removendo Pós-Graduação)."
-        )
-        return
+        return pd.DataFrame()
 
     # Split multiple courses in the same cell (separated by ';')
     filtered_df[C.COL_INT_COURSE] = (
@@ -50,7 +35,6 @@ def render_analysis(students_df: pd.DataFrame):
     filtered_df = filtered_df.explode(C.COL_INT_COURSE)
 
     # Clean up course names
-    # Ensure it's string, uppercase, strip whitespace, and normalize internal spaces
     filtered_df[C.COL_INT_COURSE] = (
         filtered_df[C.COL_INT_COURSE]
         .astype(str)
@@ -59,24 +43,23 @@ def render_analysis(students_df: pd.DataFrame):
         .str.replace(r"\s+", " ", regex=True)
     )
 
-    # Filter out invalid course names (nan, empty, etc.)
-    # The user explicitly wants to remove empty/nan lines
+    # Filter out invalid course names
     mask_valid_course = ~filtered_df[C.COL_INT_COURSE].isin(
         ["NAN", "NONE", "", "CURSO NÃO IDENTIFICADO"]
     )
     filtered_df = filtered_df[mask_valid_course]
 
-    if filtered_df.empty:
-        st.info("Nenhum dado válido de cursos encontrado após limpeza.")
-        return
+    return filtered_df
 
-    # --- Chart 1: Cursos mais vendidos ---
+
+def _render_top_courses_chart(filtered_df: pd.DataFrame) -> None:
+    """Renders the top 10 courses chart."""
     st.markdown("#### Cursos Mais Vendidos")
 
     course_counts = filtered_df[C.COL_INT_COURSE].value_counts().reset_index()
     course_counts.columns = [C.COL_INT_COURSE, "Quantidade"]
 
-    # Limit to Top 10 courses to avoid clutter if there are many
+    # Limit to Top 10 courses
     top_courses = course_counts.head(10)
 
     fig_courses = px.bar(
@@ -91,15 +74,12 @@ def render_analysis(students_df: pd.DataFrame):
     )
     fig_courses.update_layout(yaxis={"categoryorder": "total ascending"})
     st.plotly_chart(fig_courses, width="stretch")
-
     st.divider()
 
-    # --- Chart 2: Cursos mais vendidos por parceiros ---
-    st.markdown("#### Cursos Mais Vendidos por Parceiro")
 
-    # Group by Partner and Course
-    # We might want to filter partners with very few sales to keep chart clean?
-    # Or show all. Let's try showing top 20 partners by volume first if too many.
+def _render_partner_courses_chart(filtered_df: pd.DataFrame) -> None:
+    """Renders the courses by partner chart."""
+    st.markdown("#### Cursos Mais Vendidos por Parceiro")
 
     partner_counts = (
         filtered_df.groupby([C.COL_INT_PARTNER, C.COL_INT_COURSE])
@@ -107,7 +87,7 @@ def render_analysis(students_df: pd.DataFrame):
         .reset_index(name="Quantidade")
     )
 
-    # Get Top N partners by total quantity to sort the axis
+    # Get Top 20 partners by total quantity
     top_partners = (
         partner_counts.groupby(C.COL_INT_PARTNER)["Quantidade"]
         .sum()
@@ -135,10 +115,11 @@ def render_analysis(students_df: pd.DataFrame):
     )
     fig_partner_courses.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_partner_courses, width="stretch")
-
     st.divider()
 
-    # Raw Data Expander
+
+def _render_raw_data_expander(filtered_df: pd.DataFrame) -> None:
+    """Renders the raw data expander."""
     with st.expander("Ver dados detalhados"):
         st.dataframe(
             filtered_df[
@@ -153,17 +134,29 @@ def render_analysis(students_df: pd.DataFrame):
         )
 
 
-def render_general(sheet_id: str):
-    st.markdown("### Dados Gerais de Alunos")
+def _render_analysis_tab(students_df: pd.DataFrame) -> None:
+    """Renders the Students Analysis tab."""
+    st.markdown("### Análise de Alunos e Cursos")
 
-    with st.spinner("Carregando dados gerais de alunos..."):
-        df, ts = data_service.get_students_general_data(sheet_id)
-
-    if df.empty:
-        st.warning("Não foi possível carregar os dados gerais de alunos.")
+    if students_df.empty:
+        st.info("Nenhum dado de alunos disponível.")
         return
 
-    # Metrics
+    filtered_df = _filter_students_data(students_df)
+
+    if filtered_df.empty:
+        st.info(
+            "Nenhum dado encontrado após aplicar o filtro (removendo Pós-Graduação e cursos inválidos)."
+        )
+        return
+
+    _render_top_courses_chart(filtered_df)
+    _render_partner_courses_chart(filtered_df)
+    _render_raw_data_expander(filtered_df)
+
+
+def _render_general_metrics(df: pd.DataFrame) -> None:
+    """Renders general metrics for the General Data tab."""
     total_students = len(df)
     unique_cities = df[C.COL_INT_GEN_CITY].nunique()
     unique_states = df[C.COL_INT_GEN_STATE].nunique()
@@ -172,10 +165,12 @@ def render_general(sheet_id: str):
     c1.metric("Total de Alunos", total_students)
     c2.metric("Cidades Atendidas", unique_cities)
     c3.metric("Estados Atendidos", unique_states)
-
     st.divider()
 
-    # 1. Estados com mais alunos
+
+def _render_general_charts(df: pd.DataFrame) -> None:
+    """Renders charts for the General Data tab."""
+    # 1. States with most students
     st.markdown("#### Estados com mais Alunos")
     state_counts = df[C.COL_INT_GEN_STATE].value_counts().reset_index()
     state_counts.columns = ["Estado", "Quantidade"]
@@ -190,10 +185,9 @@ def render_general(sheet_id: str):
         color_continuous_scale="Blues",
     )
     st.plotly_chart(fig_states, width="stretch")
-
     st.divider()
 
-    # 2. Cidades com mais alunos
+    # 2. Cities with most students
     st.markdown("#### Top 10 Cidades com mais Alunos")
     city_counts = df[C.COL_INT_GEN_CITY].value_counts().head(10).reset_index()
     city_counts.columns = ["Cidade", "Quantidade"]
@@ -210,10 +204,9 @@ def render_general(sheet_id: str):
     )
     fig_cities.update_layout(yaxis={"categoryorder": "total ascending"})
     st.plotly_chart(fig_cities, width="stretch")
-
     st.divider()
 
-    # 3. Regiões com mais alunos
+    # 3. Regions with most students
     st.markdown("#### Alunos por Região")
     if C.COL_INT_REGION in df.columns:
         region_counts = df[C.COL_INT_REGION].value_counts().reset_index()
@@ -229,86 +222,115 @@ def render_general(sheet_id: str):
         st.plotly_chart(fig_regions, width="stretch")
     else:
         st.warning("Informação de região não disponível.")
-
     st.divider()
 
-    # 4. Mapa de Pontos (CEP)
+
+def _render_geo_distribution_map(df: pd.DataFrame) -> None:
+    """Renders the geographic distribution map."""
     st.markdown("#### Distribuição Geográfica (Mapa de Pontos)")
 
-    if C.COL_INT_GEN_ZIP in df.columns:
-        # Checkbox to enable map generation (as it can be slow)
-        if st.checkbox("Gerar Mapa de Distribuição (Baseado no CEP)"):
-            geo_service = GeocodingService()
+    if C.COL_INT_GEN_ZIP not in df.columns:
+        st.warning("Coluna de CEP não encontrada.")
+        st.divider()
+        return
 
-            # Extract unique ZIPs and counts
-            zip_counts = df[C.COL_INT_GEN_ZIP].value_counts().reset_index()
-            zip_counts.columns = ["cep", "count"]
+    # Checkbox to enable map generation
+    if not st.checkbox("Gerar Mapa de Distribuição (Baseado no CEP)"):
+        st.divider()
+        return
 
-            total_zips = len(zip_counts)
-            st.info(
-                f"Total de CEPs únicos encontrados: {total_zips}. A geocodificação pode demorar se não estiver em cache."
+    geo_service = GeocodingService()
+
+    # Extract unique ZIPs and counts
+    zip_counts = df[C.COL_INT_GEN_ZIP].value_counts().reset_index()
+    zip_counts.columns = ["cep", "count"]
+
+    total_zips = len(zip_counts)
+    st.info(
+        f"Total de CEPs únicos encontrados: {total_zips}. A geocodificação pode demorar se não estiver em cache."
+    )
+
+    # Progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    coords_data = []
+
+    for i, row in zip_counts.iterrows():
+        cep = row["cep"]
+        count = row["count"]
+        status_text.text(f"Processando CEP: {cep} ({i+1}/{len(zip_counts)})")
+
+        lat, lon = geo_service.get_coords_by_zip(cep)
+        if lat is not None and lon is not None:
+            coords_data.append(
+                {"lat": lat, "lon": lon, "cep": cep, "alunos": count}
             )
 
-            # Progress bar
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            coords_data = []
+        progress_bar.progress((i + 1) / len(zip_counts))
 
-            for i, row in zip_counts.iterrows():
-                cep = row["cep"]
-                count = row["count"]
-                status_text.text(f"Processando CEP: {cep} ({i+1}/{len(zip_counts)})")
+    progress_bar.empty()
+    status_text.empty()
 
-                lat, lon = geo_service.get_coords_by_zip(cep)
-                if lat is not None and lon is not None:
-                    coords_data.append(
-                        {"lat": lat, "lon": lon, "cep": cep, "alunos": count}
-                    )
+    if coords_data:
+        map_df = pd.DataFrame(coords_data)
 
-                progress_bar.progress((i + 1) / len(zip_counts))
+        # Using Plotly Scatter Mapbox
+        fig_map = px.scatter_mapbox(
+            map_df,
+            lat="lat",
+            lon="lon",
+            size="alunos",
+            hover_name="cep",
+            hover_data={"alunos": True, "lat": False, "lon": False},
+            color_discrete_sequence=["blue"],
+            zoom=3,
+            height=500,
+            size_max=15,
+        )
+        fig_map.update_layout(mapbox_style="open-street-map")
+        fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
-            progress_bar.empty()
-            status_text.empty()
-
-            if coords_data:
-                map_df = pd.DataFrame(coords_data)
-
-                # Using Plotly Scatter Mapbox
-                fig_map = px.scatter_mapbox(
-                    map_df,
-                    lat="lat",
-                    lon="lon",
-                    size="alunos",
-                    hover_name="cep",
-                    hover_data={"alunos": True, "lat": False, "lon": False},
-                    color_discrete_sequence=["blue"],
-                    zoom=3,
-                    height=500,
-                    size_max=15,
-                )
-                fig_map.update_layout(mapbox_style="open-street-map")
-                fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
-
-                st.plotly_chart(fig_map, width="stretch")
-            else:
-                st.warning(
-                    "Não foi possível obter coordenadas para os CEPs fornecidos."
-                )
+        st.plotly_chart(fig_map, width="stretch")
     else:
-        st.warning("Coluna de CEP não encontrada.")
-
+        st.warning(
+            "Não foi possível obter coordenadas para os CEPs fornecidos."
+        )
     st.divider()
+
+
+def _render_general_tab(
+    sheet_id: str, fetch_data: Callable[[str], Tuple[pd.DataFrame, datetime]]
+) -> None:
+    """Renders the General Data tab."""
+    st.markdown("### Dados Gerais de Alunos")
+
+    with st.spinner("Carregando dados gerais de alunos..."):
+        df, ts = fetch_data(sheet_id)
+
+    if df.empty:
+        st.warning("Não foi possível carregar os dados gerais de alunos.")
+        return
+
+    _render_general_metrics(df)
+    _render_general_charts(df)
+    _render_geo_distribution_map(df)
 
     # Show raw data option
     with st.expander("Visualizar Dados Brutos (ALUNOS_GERAL)"):
         st.dataframe(df)
 
 
-def render(students_df: pd.DataFrame, sheet_id: str = None):
+def render(
+    students_df: pd.DataFrame,
+    fetch_general_data: Callable[[str], Tuple[pd.DataFrame, datetime]],
+    access_key: str,
+    sheet_id: str = None,
+) -> None:
+    """Main render function for the Students Tab."""
     key = st.text_input(
         C.UI_LABEL_ACCESS_KEY, type="password", key="students_access_key"
     )
-    if key != API_KEY:
+    if key != access_key:
         st.warning(C.UI_LABEL_ENTER_KEY_MSG)
         return
 
@@ -322,10 +344,10 @@ def render(students_df: pd.DataFrame, sheet_id: str = None):
     st.divider()
 
     if view_mode == "Análise de Cursos (Planilha Alunos)":
-        render_analysis(students_df)
+        _render_analysis_tab(students_df)
     else:
         if sheet_id:
-            render_general(sheet_id)
+            _render_general_tab(sheet_id, fetch_general_data)
         else:
             st.error(
                 "ID da planilha não configurado. Verifique as variáveis de ambiente."

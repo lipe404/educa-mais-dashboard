@@ -45,47 +45,35 @@ Este documento contém uma lista exaustiva e reescrita de sugestões de melhoria
 8. Alinhar verticalmente gráficos e métricas em colunas adjacentes.
 9. Criar componentes de alerta (`st.info`, `st.warning`) personalizados.
 10. Adicionar animações sutis de fade-in ao carregar elementos.
-11. Ajustar margens e padding globais para reduzir "espaço em branco" excessivo ou falta dele.
-12. Estilizar inputs de texto e selectboxes (bordas, foco).
-13. Usar fontes monospaced apenas para dados técnicos ou código.
-14. Criar layout responsivo que se adapta a telas ultrawide.
-15. Adicionar imagens de fundo sutis ou padrões geométricos em áreas vazias.
-16. Melhorar a visualização de gauges/velocímetros (tamanho reduzido).
-17. Padronizar a opacidade de elementos desabilitados.
-18. Criar uma página de "Style Guide" interna para desenvolvedores.
+11. Adicionar imagens de fundo sutis ou padrões geométricos em áreas vazias.
 
 ## 3. Frontend (Streamlit)
 
-1. Modularizar cada aba em funções `render()` isoladas (já iniciado, aprofundar).
-2. Usar `st.session_state` para gerenciar estado global complexo.
-3. Implementar `st.fragment` (Streamlit 1.37+) para atualizações parciais.
-4. Otimizar o uso de `st.columns` para layouts complexos.
-5. Usar `st.expander` para esconder detalhes técnicos ou filtros avançados.
-6. Implementar `st.popover` para menus de contexto.
-7. Substituir `st.radio` por `st.pills` (novo componente) onde apropriado.
-8. Usar `st.data_editor` para permitir edições rápidas (se permitido).
-9. Implementar callbacks (`on_change`) para inputs para reatividade imediata.
-10. Usar `st.container(height=...)` para áreas com scroll interno.
-11. Criar componentes customizados (Custom Components) se necessário (ex: Navbar).
-12. Gerenciar cache de recursos estáticos (imagens).
-13. Implementar lógica de "rerun" controlada para evitar loops.
-14. Usar `st.status` para logs de processos longos.
-15. Refatorar sidebar para usar `st.sidebar` context managers.
-16. Implementar upload de arquivos drag-and-drop robusto.
-17. Usar `st.chat_input` se adicionar funcionalidades de IA.
-18. Adicionar suporte a temas dinâmicos via `config.toml`.
-19. Otimizar a renderização de dataframes grandes (paginação no backend).
-20. Usar `st.image` com otimização de largura.
-21. Implementar "Tabs" aninhadas com cuidado para não poluir a UI.
-22. Usar `st.code` para exibir logs ou JSONs de debug.
-23. Capturar exceções de frontend e exibir em container dedicado.
-24. Adicionar suporte a query parameters para deeplinking.
-25. Usar `st.toast` para notificações não intrusivas.
-26. Implementar layout fluido (`layout="wide"`) como padrão configurável.
-27. Criar wrappers para widgets comuns para padronizar parâmetros.
-28. Evitar uso de `st.write` genérico, preferir componentes específicos.
-29. Implementar `st.metric` com deltas automáticos.
-30. Usar `st.logo` (novo) para gestão de marca.
+1. Otimizar o uso de `st.columns` para layouts complexos.
+2. Substituir `st.radio` por `st.pills` (novo componente) onde apropriado.
+3. Usar `st.data_editor` para permitir edições rápidas (se permitido).
+4. Implementar callbacks (`on_change`) para inputs para reatividade imediata.
+5. Usar `st.container(height=...)` para áreas com scroll interno.
+6. Criar componentes customizados (Custom Components) se necessário (ex: Navbar).
+7. Gerenciar cache de recursos estáticos (imagens).
+8. Implementar lógica de "rerun" controlada para evitar loops.
+9. Usar `st.status` para logs de processos longos.
+10. Refatorar sidebar para usar `st.sidebar` context managers.
+11. Implementar upload de arquivos drag-and-drop robusto.
+12. Usar `st.chat_input` se adicionar funcionalidades de IA.
+13. Adicionar suporte a temas dinâmicos via `config.toml`.
+14. Otimizar a renderização de dataframes grandes (paginação no backend).
+15. Usar `st.image` com otimização de largura.
+16. Implementar "Tabs" aninhadas com cuidado para não poluir a UI.
+17. Usar `st.code` para exibir logs ou JSONs de debug.
+18. Capturar exceções de frontend e exibir em container dedicado.
+19. Adicionar suporte a query parameters para deeplinking.
+20. Usar `st.toast` para notificações não intrusivas.
+21. Implementar layout fluido (`layout="wide"`) como padrão configurável.
+22. Criar wrappers para widgets comuns para padronizar parâmetros.
+23. Evitar uso de `st.write` genérico, preferir componentes específicos.
+24. Implementar `st.metric` com deltas automáticos.
+25. Usar `st.logo` (novo) para gestão de marca.
 
 ## 4. Segurança
 

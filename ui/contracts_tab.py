@@ -6,45 +6,41 @@ import constants as C
 from ui.components import gauge_chart
 
 
-def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
-    col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-
-    status_counts = df[C.COL_INT_STATUS].value_counts()
-    signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed_df_full["_pid"] = signed_df_full[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed_df_full["_pid"] = signed_df_full["_pid"].where(
-        signed_df_full["_pid"] != "",
-        signed_df_full[C.COL_INT_CEP].astype(str).str.strip(),
+def _enrich_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Adds helper columns like _pid for unique identification."""
+    df = df.copy()
+    df["_pid"] = df[C.COL_INT_PARTNER].astype(str).str.strip()
+    df["_pid"] = df["_pid"].where(
+        df["_pid"] != "",
+        df[C.COL_INT_CEP].astype(str).str.strip(),
     )
-    signed_df_full["_pid"] = signed_df_full["_pid"].where(
-        signed_df_full["_pid"] != "",
-        signed_df_full[C.COL_INT_CITY].astype(str).str.strip()
+    df["_pid"] = df["_pid"].where(
+        df["_pid"] != "",
+        df[C.COL_INT_CITY].astype(str).str.strip()
         + "|"
-        + signed_df_full[C.COL_INT_STATE].astype(str).str.strip(),
+        + df[C.COL_INT_STATE].astype(str).str.strip(),
     )
+    return df
+
+
+def _calculate_kpis(
+    df: pd.DataFrame, end_date: date, selected_month: int | None
+) -> dict:
+    status_counts = df[C.COL_INT_STATUS].value_counts()
+    
+    # Full dataset logic for "Assinado"
+    signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
+    signed_df_full = _enrich_df(signed_df_full)
     signed_count = signed_df_full.drop_duplicates(subset=["_pid"]).shape[0]
     waiting_count = int(status_counts.get(C.STATUS_AGUARDANDO, 0))
-
-    col_a.metric(C.UI_LABEL_CONTRACTS_SIGNED, signed_count)
-    col_b.metric(C.UI_LABEL_CONTRACTS_WAITING, waiting_count)
 
     now = date.today()
     focus_year = end_date.year if isinstance(end_date, date) else now.year
     focus_month = selected_month if selected_month is not None else now.month
 
-    signed_df = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
-    signed_df["_pid"] = signed_df[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed_df["_pid"] = signed_df["_pid"].where(
-        signed_df["_pid"] != "",
-        signed_df[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    signed_df["_pid"] = signed_df["_pid"].where(
-        signed_df["_pid"] != "",
-        signed_df[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + signed_df[C.COL_INT_STATE].astype(str).str.strip(),
-    )
-
+    # Filtered dataset for time-based metrics
+    signed_df = signed_df_full  # Already filtered by status=Assinado and enriched
+    
     month_mask = (signed_df[C.COL_INT_DT].dt.year == focus_year) & (
         signed_df[C.COL_INT_DT].dt.month == focus_month
     )
@@ -57,14 +53,38 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     )
     week_count = signed_df[week_mask].drop_duplicates(subset=["_pid"]).shape[0]
 
-    col_c.metric(C.UI_LABEL_SIGNED_MONTH, month_count)
-    col_d.metric(C.UI_LABEL_SIGNED_WEEK, week_count)
+    return {
+        "signed_count": signed_count,
+        "waiting_count": waiting_count,
+        "month_count": month_count,
+        "week_count": week_count,
+        "focus_year": focus_year,
+        "focus_month": focus_month,
+        "signed_df": signed_df,
+        "week_start_date": week_start_date,
+    }
 
-    st.divider()
+
+def _render_kpi_metrics(kpis: dict):
+    col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
+    col_a.metric(C.UI_LABEL_CONTRACTS_SIGNED, kpis["signed_count"])
+    col_b.metric(C.UI_LABEL_CONTRACTS_WAITING, kpis["waiting_count"])
+    col_c.metric(C.UI_LABEL_SIGNED_MONTH, kpis["month_count"])
+    col_d.metric(C.UI_LABEL_SIGNED_WEEK, kpis["week_count"])
+
+
+def _render_detailed_metrics(kpis: dict, end_date: date):
+    signed_df = kpis["signed_df"]
+    week_count = kpis["week_count"]
+    month_count = kpis["month_count"]
+    focus_year = kpis["focus_year"]
+    focus_month = kpis["focus_month"]
+    week_start_date = kpis["week_start_date"]
 
     today_date = end_date if isinstance(end_date, date) else date.today()
     today_mask = signed_df[C.COL_INT_DT].dt.date == today_date
     today_count = signed_df[today_mask].drop_duplicates(subset=["_pid"]).shape[0]
+    
     h1, h2, h3 = st.columns(3)
     h1.metric(C.UI_LABEL_SIGNED_TODAY, today_count)
 
@@ -109,7 +129,12 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         ),
     )
 
-    st.divider()
+
+def _render_gauges(kpis: dict):
+    signed_df = kpis["signed_df"]
+    focus_year = kpis["focus_year"]
+    focus_month = kpis["focus_month"]
+    month_count = kpis["month_count"]
 
     q_start = ((focus_month - 1) // 3) * 3 + 1
     quarterly_mask = (
@@ -142,8 +167,11 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         gauge_chart(semiannual_count, 180, C.UI_LABEL_GOAL_SEMIANNUAL), width="stretch"
     )
 
-    st.divider()
 
+def _render_captador_pie(df: pd.DataFrame):
+    signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
+    signed_df_full = _enrich_df(signed_df_full)
+    
     by_captador_base = signed_df_full.drop_duplicates(subset=["_pid"])[
         [C.COL_INT_CAPTADOR, "_pid"]
     ]
@@ -158,20 +186,10 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     )
     st.plotly_chart(pie_fig, width="stretch")
 
-    st.divider()
 
+def _render_status_bar(df: pd.DataFrame):
     df_status = df.copy()
-    df_status["_pid"] = df_status[C.COL_INT_PARTNER].astype(str).str.strip()
-    df_status["_pid"] = df_status["_pid"].where(
-        df_status["_pid"] != "",
-        df_status[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    df_status["_pid"] = df_status["_pid"].where(
-        df_status["_pid"] != "",
-        df_status[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + df_status[C.COL_INT_STATE].astype(str).str.strip(),
-    )
+    df_status = _enrich_df(df_status)
     rank_map = {C.STATUS_ASSINADO: 2, C.STATUS_AGUARDANDO: 1, C.STATUS_CANCELADO: 0}
     df_status["_rank"] = df_status[C.COL_INT_STATUS].map(rank_map).fillna(-1)
     df_partner = df_status.sort_values("_rank", ascending=False).drop_duplicates(
@@ -197,19 +215,12 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     )
     st.plotly_chart(bar_fig, width="stretch")
 
+
+def _render_monthly_evolution(df: pd.DataFrame):
     signed_only = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
     signed_only = signed_only.dropna(subset=[C.COL_INT_DT])
-    signed_only["_pid"] = signed_only[C.COL_INT_PARTNER].astype(str).str.strip()
-    signed_only["_pid"] = signed_only["_pid"].where(
-        signed_only["_pid"] != "",
-        signed_only[C.COL_INT_CEP].astype(str).str.strip(),
-    )
-    signed_only["_pid"] = signed_only["_pid"].where(
-        signed_only["_pid"] != "",
-        signed_only[C.COL_INT_CITY].astype(str).str.strip()
-        + "|"
-        + signed_only[C.COL_INT_STATE].astype(str).str.strip(),
-    )
+    signed_only = _enrich_df(signed_only)
+    
     signed_only["_ano"] = signed_only[C.COL_INT_DT].dt.year
     signed_only["_mes"] = signed_only[C.COL_INT_DT].dt.month
     monthly = signed_only.groupby(["_ano", "_mes"])[["_pid"]].nunique().reset_index()
@@ -250,9 +261,13 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         selection_mode="points",
         key="monthly_chart_click",
     )
+    return event, signed_only
 
-    st.divider()
 
+def _render_daily_drilldown(event, signed_only: pd.DataFrame, kpis: dict, selected_month: int | None):
+    focus_year = kpis["focus_year"]
+    focus_month = kpis["focus_month"]
+    
     target_year = None
     target_month = None
 
@@ -318,3 +333,34 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
         )
         fig_daily.update_traces(textposition="outside")
         st.plotly_chart(fig_daily, width="stretch")
+
+
+def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
+    # 1. Metrics Top Row
+    kpis = _calculate_kpis(df, end_date, selected_month)
+    _render_kpi_metrics(kpis)
+    
+    # 2. Detailed Metrics (Comparison)
+    _render_detailed_metrics(kpis, end_date)
+    
+    st.divider()
+
+    # 3. Gauges
+    _render_gauges(kpis)
+
+    st.divider()
+
+    # 4. Pie Chart
+    _render_captador_pie(df)
+    
+    st.divider()
+
+    # 5. Status Bar Chart
+    _render_status_bar(df)
+
+    # 6. Monthly Evolution & Daily Drilldown
+    event, signed_only = _render_monthly_evolution(df)
+    
+    st.divider()
+    
+    _render_daily_drilldown(event, signed_only, kpis, selected_month)
