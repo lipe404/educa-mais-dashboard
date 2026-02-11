@@ -30,6 +30,36 @@ def _check_authentication(access_key: str) -> bool:
     return True
 
 
+def _get_base_location(partner_data: pd.DataFrame) -> Tuple[str, str]:
+    """Determines the base location (City, State) for a partner."""
+    if partner_data.empty:
+        return "", ""
+    try:
+        city = partner_data[C.COL_INT_CITY].mode().iloc[0]
+        state = partner_data[C.COL_INT_STATE].mode().iloc[0]
+        return str(city), str(state)
+    except (IndexError, KeyError, ValueError):
+        # Fallback to first row
+        try:
+            city = partner_data[C.COL_INT_CITY].iloc[0]
+            state = partner_data[C.COL_INT_STATE].iloc[0]
+            return str(city), str(state)
+        except (IndexError, KeyError):
+            return "", ""
+
+
+def _run_ai_analysis(
+    city: str,
+    state: str,
+    dados_df: pd.DataFrame,
+    build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
+    geo_service: GeocodingService,
+) -> None:
+    """Runs the AI analysis for the selected unit."""
+    st.info(f"Análise de Inteligência de Mercado para {city}-{state} em desenvolvimento.")
+    st.warning("Esta funcionalidade estará disponível em breve.")
+
+
 def _render_partner_header(dados_df: pd.DataFrame) -> Tuple[Optional[str], Optional[pd.DataFrame], Optional[str], Optional[str]]:
     """Renders the partner selection and info header."""
     partners = sorted(
