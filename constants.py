@@ -121,6 +121,7 @@ GOAL_MONTHLY_CONTRACTS = 30  # Default monthly goal for contracts
 # Forecasting Algorithms
 ALGORITHM_PROPHET = "Prophet (Facebook AI)"
 ALGORITHM_HOLT_WINTERS = "Holt-Winters (Sazonal)"
+ALGORITHM_XGBOOST = "XGBoost (Gradient Boosting)"
 
 # Forecasting Insights
 INSIGHT_GROWTH = "Crescimento acelerado"

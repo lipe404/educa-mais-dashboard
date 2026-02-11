@@ -19,7 +19,38 @@ try:
 except ImportError:
     STATSMODELS_AVAILABLE = False
 
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def _create_features(df: pd.DataFrame, date_col: str, value_col: str, lags: list = None) -> pd.DataFrame:
+    """
+    Creates time series features for XGBoost (lags, rolling windows, date parts).
+    """
+    df = df.copy()
+    if lags is None:
+        lags = [1, 7, 14, 30]
+
+    # Date features
+    df["day_of_week"] = df[date_col].dt.dayofweek
+    df["day_of_month"] = df[date_col].dt.day
+    df["month"] = df[date_col].dt.month
+    df["is_weekend"] = df["day_of_week"].apply(lambda x: 1 if x >= 5 else 0)
+
+    # Lag features
+    for lag in lags:
+        df[f"lag_{lag}"] = df[value_col].shift(lag)
+
+    # Rolling mean features
+    for window in [7, 30]:
+        df[f"rolling_mean_{window}"] = df[value_col].rolling(window=window).mean()
+
+    return df
 
 
 def generate_forecast(
@@ -110,6 +141,57 @@ def generate_forecast(
         )
         fit = model.fit()
         forecast_values = fit.forecast(full_horizon_days).values
+
+    elif algorithm == C.ALGORITHM_XGBOOST:
+        if not XGBOOST_AVAILABLE:
+            raise ImportError("Biblioteca xgboost não instalada.")
+
+        # Prepare features for training
+        # We need a copy to not mess up the original 'daily' yet
+        train_df = _create_features(daily, date_col, value_col)
+        
+        # Drop rows with NaN (due to lags) for training
+        train_df = train_df.dropna()
+        
+        features = [c for c in train_df.columns if c not in [date_col, value_col, "Type"]]
+        X_train = train_df[features]
+        y_train = train_df[value_col]
+        
+        model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=1000, learning_rate=0.05)
+        model.fit(X_train, y_train)
+        
+        # Recursive Forecasting
+        # Start with the full daily history to compute lags for the first future day
+        current_history = daily.copy()
+        
+        preds = []
+        for i in range(full_horizon_days):
+            next_date = last_date + timedelta(days=i + 1)
+            
+            # Append a placeholder row for the next date
+            # We use 0 as value initially, but it doesn't matter as we don't use it for prediction features of ITSELF
+            # But we DO need it to calculate lags/rolling for THIS row based on PREVIOUS rows.
+            new_row = pd.DataFrame({date_col: [next_date], value_col: [0]})
+            temp_df = pd.concat([current_history, new_row], ignore_index=True)
+            
+            # Re-compute features for the whole series (or just the tail efficiently)
+            # Re-computing whole series is safer for rolling means consistency
+            df_with_features = _create_features(temp_df, date_col, value_col)
+            
+            # The row to predict is the last one
+            row_to_predict = df_with_features.iloc[[-1]][features]
+            
+            pred_val = model.predict(row_to_predict)[0]
+            # Ensure non-negative
+            pred_val = max(0, pred_val)
+            preds.append(pred_val)
+            
+            # Update the placeholder value in current_history with the predicted value
+            # so next iteration uses this prediction for lags
+            temp_df.iloc[-1, temp_df.columns.get_loc(value_col)] = pred_val
+            current_history = temp_df
+            
+        forecast_values = np.array(preds)
 
     else:
         # Default fallback (Naive average)

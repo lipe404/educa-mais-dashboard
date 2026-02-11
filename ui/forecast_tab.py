@@ -96,7 +96,7 @@ def _render_contracts_tab(
     with c1:
         algo = st.selectbox(
             C.UI_LABEL_ALGORITHM,
-            [C.ALGORITHM_PROPHET, C.ALGORITHM_HOLT_WINTERS],
+            [C.ALGORITHM_PROPHET, C.ALGORITHM_HOLT_WINTERS, C.ALGORITHM_XGBOOST],
             key="forecast_algo_contracts",
         )
     with c2:
@@ -193,7 +193,7 @@ def _render_financial_tab(
     with c1:
         algo_f = st.selectbox(
             C.UI_LABEL_ALGORITHM,
-            [C.ALGORITHM_PROPHET, C.ALGORITHM_HOLT_WINTERS],
+            [C.ALGORITHM_PROPHET, C.ALGORITHM_HOLT_WINTERS, C.ALGORITHM_XGBOOST],
             key="forecast_algo_faturamento",
         )
     with c2:
