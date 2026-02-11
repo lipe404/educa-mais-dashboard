@@ -277,6 +277,7 @@ TAB_NAME_OPPORTUNITY = "Análise de Oportunidade"
 TAB_NAME_PARTNERS = "Parceiros"
 TAB_NAME_STUDENTS = "Alunos"
 TAB_NAME_UNIT_ANALYSIS = "Análise Unitária"
+TAB_NAME_COMMISSIONS = "Cálculo de Comissões"
 
 # Contracts Tab UI
 UI_LABEL_CONTRACTS_SIGNED = "Contratos assinados"

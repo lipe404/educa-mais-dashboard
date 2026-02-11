@@ -21,6 +21,7 @@ from ui import (
     partners_tab,
     unit_analysis_tab,
     students_tab,
+    commissions_tab,
 )
 
 # Setup Logging
@@ -319,6 +320,11 @@ st.markdown(
         div[data-testid="stTabs"] button:nth-of-type(8) > div > p::before {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10v6M2 10l10-5 10 5-10 5z'%3E%3C/path%3E%3Cpath d='M6 12v5c3 3 9 3 12 0v-5'%3E%3C/path%3E%3C/svg%3E");
         }
+
+        /* 9. Comissões - Calculator */
+        div[data-testid="stTabs"] button:nth-of-type(9) > div > p::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='2' width='16' height='20' rx='2'%3E%3C/rect%3E%3Cline x1='8' y1='6' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='16' y1='14' x2='16' y2='14'%3E%3C/line%3E%3Cline x1='12' y1='14' x2='12' y2='14'%3E%3C/line%3E%3Cline x1='8' y1='14' x2='8' y2='14'%3E%3C/line%3E%3Cline x1='16' y1='18' x2='16' y2='18'%3E%3C/line%3E%3Cline x1='12' y1='18' x2='12' y2='18'%3E%3C/line%3E%3Cline x1='8' y1='18' x2='8' y2='18'%3E%3C/line%3E%3C/svg%3E");
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -326,7 +332,7 @@ st.markdown(
 
 geo_service = GeocodingService()
 
-t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
+t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs(
     [
         C.TAB_NAME_CONTRACTS,
         C.TAB_NAME_MAP,
@@ -336,6 +342,7 @@ t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
         C.TAB_NAME_PARTNERS,
         C.TAB_NAME_UNIT_ANALYSIS,
         C.TAB_NAME_STUDENTS,
+        C.TAB_NAME_COMMISSIONS,
     ]
 )
 
@@ -376,3 +383,6 @@ with t8:
     students_tab.render(
         alunos, data_service.get_students_general_data, KEY_API, DEFAULT_SHEET_ID
     )
+with t9:
+    # Pass faturamento dataframe because it has the financial data
+    commissions_tab.render(faturamento, KEY_API)
