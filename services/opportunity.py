@@ -45,6 +45,15 @@ def get_municipios_por_uf(uf: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_populacao_2022_municipios(ids: List[str]) -> pd.DataFrame:
+    """
+    Fetches 2022 Census population data for a list of municipality IDs.
+
+    Args:
+        ids (List[str]): List of municipality IDs.
+
+    Returns:
+        pd.DataFrame: DataFrame containing 'id' and 'pop_2022'.
+    """
     if not ids:
         return pd.DataFrame(columns=["id", "pop_2022"])
     batch = []
@@ -108,6 +117,15 @@ def get_populacao_2022_all() -> pd.DataFrame:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_municipios_por_uf_simple(uf: str) -> pd.DataFrame:
+    """
+    Fetches a simplified list of municipalities for a given state (UF).
+
+    Args:
+        uf (str): The 2-letter state code.
+
+    Returns:
+        pd.DataFrame: DataFrame containing columns ['id', 'nome', 'uf', 'regiao'].
+    """
     try:
         r = requests.get(IBGE_MUNICIPIOS_UF.format(uf=uf), timeout=10)
         r.raise_for_status()
@@ -130,6 +148,18 @@ def get_municipios_por_uf_simple(uf: str) -> pd.DataFrame:
 def build_oportunidade_por_uf(
     dados_df: pd.DataFrame, selected_ufs: List[str]
 ) -> pd.DataFrame:
+    """
+    Builds the opportunity analysis DataFrame for selected states.
+
+    Calculates a score based on population and presence of the partner.
+
+    Args:
+        dados_df (pd.DataFrame): The input DataFrame containing city and state columns.
+        selected_ufs (List[str]): List of selected state codes.
+
+    Returns:
+        pd.DataFrame: A DataFrame with opportunity scores, sorted by state and score.
+    """
     presentes = (
         dados_df[["_cidade", "_estado"]]
         .dropna()

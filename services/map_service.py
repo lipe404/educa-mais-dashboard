@@ -8,7 +8,15 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_string(s: str) -> str:
-    """Normalize string: lowercase, remove accents."""
+    """
+    Normalizes a string by lowercasing and removing accents.
+
+    Args:
+        s (str): The string to normalize.
+
+    Returns:
+        str: The normalized string.
+    """
     if not isinstance(s, str):
         return ""
     return (
@@ -24,7 +32,12 @@ def normalize_string(s: str) -> str:
 
 @st.cache_data(ttl=86400)  # Cache for 24h
 def get_all_municipios():
-    """Fetch all municipalities from IBGE to build a lookup table."""
+    """
+    Fetches all municipalities from IBGE to build a lookup table.
+
+    Returns:
+        list: A list of dictionaries containing municipality data from IBGE.
+    """
     try:
         response = requests.get(C.API_URL_IBGE_MUNICIPIOS)
         response.raise_for_status()
@@ -36,7 +49,16 @@ def get_all_municipios():
 
 @st.cache_data(ttl=86400)
 def get_ibge_code(city: str, state: str) -> str:
-    """Find IBGE code for a city/state pair."""
+    """
+    Finds the IBGE code for a given city and state pair.
+
+    Args:
+        city (str): The city name.
+        state (str): The state code (UF) or name.
+
+    Returns:
+        str | None: The IBGE code if found, otherwise None.
+    """
     all_mun = get_all_municipios()
 
     norm_city = normalize_string(city)
@@ -67,7 +89,15 @@ def get_ibge_code(city: str, state: str) -> str:
 
 @st.cache_data(ttl=86400)
 def get_municipality_geojson(ibge_code: str):
-    """Fetch GeoJSON for a specific municipality code."""
+    """
+    Fetches GeoJSON for a specific municipality code.
+
+    Args:
+        ibge_code (str): The IBGE municipality code.
+
+    Returns:
+        dict | None: The GeoJSON data if found, otherwise None.
+    """
     if not ibge_code:
         return None
 

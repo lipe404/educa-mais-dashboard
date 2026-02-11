@@ -31,6 +31,16 @@ logger = logging.getLogger(__name__)
 def _create_features(df: pd.DataFrame, date_col: str, value_col: str, lags: list = None) -> pd.DataFrame:
     """
     Creates time series features for XGBoost (lags, rolling windows, date parts).
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing historical data.
+        date_col (str): The name of the column containing date values.
+        value_col (str): The name of the column containing the target numeric values.
+        lags (list, optional): List of lag periods to generate features for. 
+                               Defaults to [1, 7, 14, 30].
+
+    Returns:
+        pd.DataFrame: A new DataFrame with additional columns for the generated features.
     """
     df = df.copy()
     if lags is None:
@@ -263,6 +273,22 @@ def run_backtest(
     """
     Runs a backtest by splitting data into train/test, training the model,
     and comparing forecasts against actuals.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing historical data.
+        date_col (str): The name of the column containing date values.
+        value_col (str): The name of the column containing the target numeric values.
+        algorithm (str): The algorithm to use for forecasting (e.g., 'Prophet', 'Holt-Winters').
+        test_days (int, optional): The number of days to hold out for testing. Defaults to 30.
+
+    Returns:
+        dict: A dictionary containing performance metrics:
+            - 'mae' (float): Mean Absolute Error.
+            - 'rmse' (float): Root Mean Squared Error.
+            - 'mape' (float): Mean Absolute Percentage Error.
+            - 'comparison_df' (pd.DataFrame): DataFrame comparing actual vs predicted values.
+            - 'train_last_date' (pd.Timestamp): The last date used in the training set.
+            - 'error' (str, optional): Error message if backtesting fails (e.g., insufficient data).
     """
     # Prepare Data
     daily = df.groupby(df[date_col].dt.date)[value_col].sum().reset_index()

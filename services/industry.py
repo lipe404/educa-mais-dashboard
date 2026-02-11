@@ -11,6 +11,16 @@ SIDRA_VALUES = "https://apisidra.ibge.gov.br/values/t/{t}/n6/{ids}/v/{v}/p/last"
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_variable_id_by_name(agregado: str, contains: str) -> str | None:
+    """
+    Fetches the variable ID for a given aggregate and search string from IBGE API.
+
+    Args:
+        agregado (str): The aggregate ID (e.g., "1685").
+        contains (str): The string to search for in the variable name.
+
+    Returns:
+        str | None: The variable ID if found, otherwise None.
+    """
     try:
         url = AGREGADOS_VARIAVEIS.format(ag=agregado)
         r = requests.get(url, timeout=15)
@@ -30,8 +40,12 @@ def get_variable_id_by_name(agregado: str, contains: str) -> str | None:
 def get_cnae_sections() -> Dict[str, str]:
     """
     Returns a map of 'Letter Description' -> 'Category ID' for CNAE 2.0 Sections.
+
     Currently returns empty dict because Table 1685 metadata is flaky.
     Code kept for interface compatibility but logic disabled.
+
+    Returns:
+        Dict[str, str]: A dictionary mapping CNAE section descriptions to IDs.
     """
     return {}
 
@@ -40,7 +54,15 @@ def get_cnae_sections() -> Dict[str, str]:
 def get_unidades_locais(ids: List[str], cnae_cat_id: str = "all") -> pd.DataFrame:
     """
     Fetches local units for given municipalities.
+
     If cnae_cat_id is provided but fails (or is 'all'), fetches TOTAL units.
+
+    Args:
+        ids (List[str]): List of municipality IDs.
+        cnae_cat_id (str, optional): CNAE category ID. Defaults to "all".
+
+    Returns:
+        pd.DataFrame: DataFrame containing 'id' and 'unidades_locais'.
     """
     if not ids:
         return pd.DataFrame(columns=["id", "unidades_locais"])

@@ -5,6 +5,15 @@ from typing import Callable, Any, Dict
 
 
 def _render_backtest_results(bt_results: Dict[str, Any], y_col: str, y_label: str, is_currency: bool = False):
+    """
+    Renders the backtest results including metrics (MAE, RMSE, MAPE) and a comparison chart.
+
+    Args:
+        bt_results (Dict[str, Any]): Dictionary containing backtest results and metrics.
+        y_col (str): The name of the target column in the dataframe.
+        y_label (str): Label for the target variable to be used in the chart.
+        is_currency (bool, optional): If True, formats metrics as currency. Defaults to False.
+    """
     if "error" in bt_results:
         st.error(bt_results["error"])
     else:
@@ -52,6 +61,21 @@ def _render_forecast_results(
     title, 
     is_currency=False
 ):
+    """
+    Renders the forecast results including key metrics and a line chart.
+
+    Args:
+        final_df (pd.DataFrame): DataFrame containing historical and forecasted data.
+        total_predicted (float): Total predicted value for the forecast horizon.
+        total_final (float): Total cumulative value (historical + predicted).
+        horizon_label (str): Label describing the forecast horizon (e.g., "1 Month").
+        algo (str): Name of the algorithm used for forecasting.
+        x_col (str): Name of the date column.
+        y_col (str): Name of the target variable column.
+        y_label (str): Label for the target variable.
+        title (str): Title for the forecast chart.
+        is_currency (bool, optional): If True, formats values as currency. Defaults to False.
+    """
     m1, m2 = st.columns(2)
     
     val_fmt = f"R$ {total_predicted:,.2f}" if is_currency else f"{int(total_predicted)}"
@@ -92,6 +116,15 @@ def _render_contracts_tab(
     generate_forecast: Callable,
     generate_smart_insights: Callable,
 ):
+    """
+    Renders the Contracts forecasting sub-tab.
+
+    Args:
+        contracts_df (pd.DataFrame): DataFrame containing contracts data.
+        run_backtest (Callable): Function to run backtesting.
+        generate_forecast (Callable): Function to generate forecasts.
+        generate_smart_insights (Callable): Function to generate smart insights from forecast data.
+    """
     c1, c2 = st.columns(2)
     with c1:
         algo = st.selectbox(
@@ -189,6 +222,15 @@ def _render_financial_tab(
     generate_forecast: Callable,
     generate_smart_insights: Callable,
 ):
+    """
+    Renders the Financial forecasting sub-tab.
+
+    Args:
+        faturamento_df (pd.DataFrame): DataFrame containing financial data.
+        run_backtest (Callable): Function to run backtesting.
+        generate_forecast (Callable): Function to generate forecasts.
+        generate_smart_insights (Callable): Function to generate smart insights from forecast data.
+    """
     c1, c2 = st.columns(2)
     with c1:
         algo_f = st.selectbox(
@@ -297,6 +339,16 @@ def render(
     generate_forecast: Callable,
     generate_smart_insights: Callable,
 ):
+    """
+    Renders the main Forecast tab, containing sub-tabs for Contracts and Financial forecasting.
+
+    Args:
+        contracts_df (pd.DataFrame): DataFrame containing contracts data.
+        faturamento_df (pd.DataFrame): DataFrame containing financial data.
+        run_backtest (Callable): Function to run backtesting.
+        generate_forecast (Callable): Function to generate forecasts.
+        generate_smart_insights (Callable): Function to generate smart insights from forecast data.
+    """
     t1, t2 = st.tabs([C.TAB_NAME_CONTRACTS, C.TAB_NAME_FINANCIAL])
 
     with t1:

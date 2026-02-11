@@ -6,6 +6,11 @@ import constants as C
 
 
 def test_advanced_forecast():
+    """
+    Tests the availability and functionality of advanced forecasting libraries (Prophet, Statsmodels).
+
+    Prints the status of library installations and runs basic forecast tests.
+    """
     try:
         from prophet import Prophet
 

@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 def parse_datetime_any(s: str):
+    """
+    Parses a date string using dateutil.parser with fallback strategies.
+
+    Args:
+        s (str): The date string to parse.
+
+    Returns:
+        datetime | None: The parsed datetime object, or None if parsing fails.
+    """
     if pd.isna(s):
         return None
     try:
@@ -27,6 +36,15 @@ def parse_datetime_any(s: str):
 
 
 def to_float_any(x):
+    """
+    Converts a value to float, handling comma separators and errors.
+
+    Args:
+        x (Any): The value to convert.
+
+    Returns:
+        float: The converted float value, or NaN if conversion fails.
+    """
     try:
         return float(str(x).replace(",", "."))
     except Exception:
@@ -34,6 +52,16 @@ def to_float_any(x):
 
 
 def validate_columns(df: pd.DataFrame, required: list[str]) -> bool:
+    """
+    Validates that a DataFrame contains the required columns.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to validate.
+        required (list[str]): List of required column names.
+
+    Returns:
+        bool: True if all required columns are present, False otherwise.
+    """
     missing = [c for c in required if c not in df.columns]
     if missing:
         logger.error(f"Missing columns: {missing}")
@@ -51,6 +79,18 @@ def process_column(
     aliases: list = None,
     index: int = None,
 ):
+    """
+    Processes a column in the DataFrame, mapping source to destination with optional transformation.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to modify.
+        src (str): The primary source column name to look for.
+        dest (str): The destination column name.
+        func (callable, optional): Transformation function to apply. Defaults to None.
+        default (Any, optional): Default value if source is missing or error occurs. Defaults to None.
+        aliases (list, optional): List of alternative source column names. Defaults to None.
+        index (int, optional): Fallback column index if name matching fails. Defaults to None.
+    """
     # Determine the actual source column name
     actual_src = None
     if src in df.columns:
@@ -100,6 +140,17 @@ def process_column(
 def load_sheet(
     sheet_id: str, sheet_name: str, gid: str = None
 ) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads a Google Sheet as a DataFrame.
+
+    Args:
+        sheet_id (str): The Google Sheet ID.
+        sheet_name (str): The name of the sheet (tab) to load.
+        gid (str, optional): The GID of the sheet (for direct CSV export). Defaults to None.
+
+    Returns:
+        Tuple[pd.DataFrame, datetime]: A tuple containing the loaded DataFrame and the timestamp of loading.
+    """
     if gid:
         url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     else:
@@ -127,6 +178,15 @@ def load_sheet(
 
 @st.cache_data(show_spinner=False, ttl=600)
 def get_dados(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads and processes the main data sheet.
+
+    Args:
+        sheet_id (str): The Google Sheet ID.
+
+    Returns:
+        Tuple[pd.DataFrame, datetime]: A tuple containing the processed DataFrame and timestamp.
+    """
     df, ts = load_sheet(sheet_id, C.SHEET_NAME_DATA)
     if df.empty:
         return df, ts
@@ -170,6 +230,15 @@ def get_dados(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
 
 @st.cache_data(show_spinner=False, ttl=600)
 def get_faturamento(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads and processes the financial (faturamento) sheet.
+
+    Args:
+        sheet_id (str): The Google Sheet ID.
+
+    Returns:
+        Tuple[pd.DataFrame, datetime]: A tuple containing the processed DataFrame and timestamp.
+    """
     df, ts = load_sheet(sheet_id, C.SHEET_NAME_FINANCIAL)
     if df.empty:
         return df, ts
@@ -317,6 +386,15 @@ def get_alunos(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
 
 @st.cache_data(show_spinner=False, ttl=600)
 def get_students_general_data(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads and processes the general students data sheet.
+
+    Args:
+        sheet_id (str): The Google Sheet ID.
+
+    Returns:
+        Tuple[pd.DataFrame, datetime]: A tuple containing the processed DataFrame and timestamp.
+    """
     df, ts = load_sheet(
         sheet_id, C.SHEET_NAME_STUDENTS_GENERAL, gid=C.GID_STUDENTS_GENERAL
     )

@@ -7,12 +7,25 @@ import constants as C
 
 
 class GeocodingService:
+    """
+    Service for geocoding addresses and caching results in a SQLite database.
+    """
+
     def __init__(self, db_path=C.GEO_DB_PATH):
+        """
+        Initialize the GeocodingService.
+
+        Args:
+            db_path (str, optional): Path to the SQLite cache database. Defaults to C.GEO_DB_PATH.
+        """
         self.db_path = db_path
         self._init_db()
         self.geolocator = Nominatim(user_agent=C.GEO_USER_AGENT)
 
     def _init_db(self):
+        """
+        Initialize the SQLite database and create the cache table if it doesn't exist.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -29,6 +42,19 @@ class GeocodingService:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
 
     def get_coords(self, city: str, state: str) -> tuple[float | None, float | None]:
+        """
+        Get coordinates (latitude, longitude) for a given city and state.
+
+        Checks the local cache first; if not found, queries the Nominatim API.
+
+        Args:
+            city (str): The city name.
+            state (str): The state name or abbreviation.
+
+        Returns:
+            tuple[float | None, float | None]: A tuple containing (latitude, longitude),
+                                               or (None, None) if not found.
+        """
         if not city or not state:
             return None, None
 
@@ -73,6 +99,18 @@ class GeocodingService:
             return None, None
 
     def get_coords_by_zip(self, zip_code: str) -> tuple[float | None, float | None]:
+        """
+        Get coordinates (latitude, longitude) for a given zip code.
+
+        Checks the local cache first; if not found, queries the Nominatim API.
+
+        Args:
+            zip_code (str): The zip code string.
+
+        Returns:
+            tuple[float | None, float | None]: A tuple containing (latitude, longitude),
+                                               or (None, None) if not found.
+        """
         if not zip_code:
             return None, None
 

@@ -6,7 +6,15 @@ from typing import Optional
 
 
 def _check_authentication(access_key: str) -> bool:
-    """Handles access control for the Partners tab."""
+    """
+    Handles access control for the Partners tab by verifying the provided access key.
+
+    Args:
+        access_key (str): The expected correct access key.
+
+    Returns:
+        bool: True if the user enters the correct key, False otherwise.
+    """
     key = st.text_input(
         C.UI_LABEL_ACCESS_KEY, type="password", key="partners_access_key"
     )
@@ -17,7 +25,16 @@ def _check_authentication(access_key: str) -> bool:
 
 
 def _aggregate_partner_sales(fat_df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregates sales and revenue by partner."""
+    """
+    Aggregates sales and revenue by partner.
+
+    Args:
+        fat_df (pd.DataFrame): DataFrame containing financial/sales data.
+
+    Returns:
+        pd.DataFrame: A DataFrame with columns 'Parceiro', 'total_vendas', and 'total_faturamento',
+                      aggregated by partner. Returns an empty DataFrame if input is empty.
+    """
     if fat_df.empty:
         return pd.DataFrame()
 
@@ -36,7 +53,12 @@ def _aggregate_partner_sales(fat_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _render_sales_chart(partner_sales: pd.DataFrame) -> None:
-    """Renders the top 10 partners by number of sales."""
+    """
+    Renders a bar chart showing the top 10 partners by number of sales.
+
+    Args:
+        partner_sales (pd.DataFrame): Aggregated DataFrame containing partner sales data.
+    """
     # Sort by total sales (descending)
     partner_sales_sorted = partner_sales.sort_values("total_vendas", ascending=False)
     top_sales = partner_sales_sorted.head(10)
@@ -59,7 +81,12 @@ def _render_sales_chart(partner_sales: pd.DataFrame) -> None:
 
 
 def _render_revenue_chart(partner_sales: pd.DataFrame) -> None:
-    """Renders the top 10 partners by total revenue."""
+    """
+    Renders a bar chart showing the top 10 partners by total revenue.
+
+    Args:
+        partner_sales (pd.DataFrame): Aggregated DataFrame containing partner sales data.
+    """
     # Sort by total revenue (descending)
     partner_sales_rev = partner_sales.sort_values("total_faturamento", ascending=False)
     top_revenue = partner_sales_rev.head(10)
@@ -82,7 +109,12 @@ def _render_revenue_chart(partner_sales: pd.DataFrame) -> None:
 
 
 def _render_summary_metrics(partner_sales: pd.DataFrame) -> None:
-    """Renders summary metrics for partners."""
+    """
+    Renders summary metrics for partners, including total count and top performers.
+
+    Args:
+        partner_sales (pd.DataFrame): Aggregated DataFrame containing partner sales data.
+    """
     top_sales = partner_sales.sort_values("total_vendas", ascending=False).head(1)
     top_revenue = partner_sales.sort_values("total_faturamento", ascending=False).head(1)
 
@@ -116,6 +148,13 @@ def _render_detailed_table(partner_sales: pd.DataFrame) -> None:
 
 
 def render(fat_df: pd.DataFrame, access_key: str):
+    """
+    Renders the Partners Analysis tab.
+
+    Args:
+        fat_df (pd.DataFrame): DataFrame containing financial/sales data.
+        access_key (str): The access key required to view this tab.
+    """
     if not _check_authentication(access_key):
         return
 

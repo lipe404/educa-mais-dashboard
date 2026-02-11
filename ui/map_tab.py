@@ -8,7 +8,20 @@ import constants as C
 
 
 def _prepare_map_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Prepares the dataframe for map visualization."""
+    """
+    Prepares the dataframe for map visualization.
+
+    Filters for signed contracts and enriches the data with a unique identifier (`_pid`)
+    based on partner, CEP, or City/State.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing all contract data.
+
+    Returns:
+        Tuple[pd.DataFrame, pd.DataFrame]: A tuple containing:
+            - signed (pd.DataFrame): The filtered dataframe with only signed contracts.
+            - signed_unique (pd.DataFrame): A dataframe with unique locations/partners.
+    """
     signed = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
     # Region is already in df from data service
     signed["_pid"] = signed[C.COL_INT_PARTNER].astype(str).str.strip()
@@ -26,7 +39,12 @@ def _prepare_map_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def _render_map_kpis(signed_unique: pd.DataFrame) -> None:
-    """Renders the top KPIs for the map tab."""
+    """
+    Renders the top KPIs for the map tab (States and Cities present).
+
+    Args:
+        signed_unique (pd.DataFrame): The dataframe containing unique signed contract locations.
+    """
     k1, k2 = st.columns([1, 1])
     k1.metric(
         C.UI_LABEL_STATES_PRESENT,
@@ -44,7 +62,14 @@ def _render_boundary_map(
     get_ibge_code: Callable[[str, str], str],
     get_municipality_geojson: Callable[[str], Dict[str, Any]],
 ) -> None:
-    """Renders the Folium map with municipality boundaries."""
+    """
+    Renders the Folium map with municipality boundaries (GeoJSON).
+
+    Args:
+        unique_locations (pd.DataFrame): Dataframe with unique city/state combinations.
+        get_ibge_code (Callable[[str, str], str]): Function to retrieve IBGE code for a city.
+        get_municipality_geojson (Callable[[str], Dict[str, Any]]): Function to retrieve GeoJSON for a city.
+    """
     st.info(
         "Carregando limites territoriais... Isso pode levar alguns segundos na primeira execução."
     )
@@ -109,7 +134,14 @@ def _render_point_map(
     signed_unique: pd.DataFrame,
     get_coords: Callable[[str, str], Tuple[float | None, float | None]],
 ) -> None:
-    """Renders the Plotly scatter mapbox with points."""
+    """
+    Renders the Plotly scatter mapbox with points representing partner locations.
+
+    Args:
+        unique_locations (pd.DataFrame): Dataframe with unique city/state combinations.
+        signed_unique (pd.DataFrame): Dataframe with unique signed contract locations.
+        get_coords (Callable[[str, str], Tuple[float | None, float | None]]): Function to get lat/lon for a city.
+    """
     location_map = {}
     for _, row in unique_locations.iterrows():
         c, s = row[C.COL_INT_CITY], row[C.COL_INT_STATE]
@@ -154,7 +186,12 @@ def _render_point_map(
 
 
 def _render_city_search(signed_unique: pd.DataFrame) -> None:
-    """Renders the city search functionality."""
+    """
+    Renders the city search functionality to check for partner presence.
+
+    Args:
+        signed_unique (pd.DataFrame): The dataframe containing unique signed contract locations.
+    """
     st.markdown("### Pesquisar Cidade")
     search_col1, search_col2 = st.columns([2, 1])
     with search_col1:
@@ -197,7 +234,12 @@ def _render_city_search(signed_unique: pd.DataFrame) -> None:
 
 
 def _render_distribution_charts(signed_unique: pd.DataFrame) -> None:
-    """Renders distribution charts (by state, partners per state, city, region)."""
+    """
+    Renders distribution charts (by state, partners per state, city, region).
+
+    Args:
+        signed_unique (pd.DataFrame): The dataframe containing unique signed contract locations.
+    """
     # 1. Partners by State
     counts_state = signed_unique[C.COL_INT_STATE].value_counts().reset_index()
     counts_state.columns = [C.UI_LABEL_COL_STATE, C.UI_LABEL_COL_PARTNERS]
@@ -273,7 +315,12 @@ def _render_distribution_charts(signed_unique: pd.DataFrame) -> None:
 
 
 def _render_missing_states_table(signed_unique: pd.DataFrame) -> None:
-    """Renders table of states without partners."""
+    """
+    Renders table of states without partners.
+
+    Args:
+        signed_unique (pd.DataFrame): The dataframe containing unique signed contract locations.
+    """
     all_states = sorted(list(C.ESTADO_REGIAO.keys()))
     present_states = (
         signed_unique[C.COL_INT_STATE].replace("", pd.NA).dropna().unique().tolist()
@@ -298,7 +345,18 @@ def render(
     get_municipality_geojson: Callable[[str], Dict[str, Any]],
     get_coords: Callable[[str, str], Tuple[float | None, float | None]],
 ) -> None:
-    """Main render function for the Map Tab."""
+    """
+    Main render function for the Map Tab.
+
+    Orchestrates the preparation of data, rendering of KPIs, maps (boundary or point),
+    search functionality, and distribution charts.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing all contract data.
+        get_ibge_code (Callable): Service function to get IBGE codes.
+        get_municipality_geojson (Callable): Service function to get GeoJSON boundaries.
+        get_coords (Callable): Service function to get lat/lon coordinates.
+    """
     
     # 1. Prepare Data
     _, signed_unique = _prepare_map_data(df)

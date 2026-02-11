@@ -26,6 +26,18 @@ def _enrich_df(df: pd.DataFrame) -> pd.DataFrame:
 def _calculate_kpis(
     df: pd.DataFrame, end_date: date, selected_month: int | None
 ) -> dict:
+    """
+    Calculates key performance indicators (KPIs) for contracts.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing contract data.
+        end_date (date): The end date for the analysis period.
+        selected_month (int | None): The selected month for filtering, or None for current month.
+
+    Returns:
+        dict: A dictionary containing calculated KPIs such as signed count, waiting count,
+              monthly/weekly counts, and reference dates.
+    """
     status_counts = df[C.COL_INT_STATUS].value_counts()
     
     # Full dataset logic for "Assinado"
@@ -66,6 +78,12 @@ def _calculate_kpis(
 
 
 def _render_kpi_metrics(kpis: dict):
+    """
+    Renders the top-level KPI metrics (Signed, Waiting, Month, Week).
+
+    Args:
+        kpis (dict): A dictionary containing calculated KPIs from `_calculate_kpis`.
+    """
     col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
     col_a.metric(C.UI_LABEL_CONTRACTS_SIGNED, kpis["signed_count"])
     col_b.metric(C.UI_LABEL_CONTRACTS_WAITING, kpis["waiting_count"])
@@ -74,6 +92,13 @@ def _render_kpi_metrics(kpis: dict):
 
 
 def _render_detailed_metrics(kpis: dict, end_date: date):
+    """
+    Renders detailed comparison metrics (Today vs Last Week vs Last Month).
+
+    Args:
+        kpis (dict): A dictionary containing calculated KPIs from `_calculate_kpis`.
+        end_date (date): The reference date for "today" calculation.
+    """
     signed_df = kpis["signed_df"]
     week_count = kpis["week_count"]
     month_count = kpis["month_count"]
@@ -131,6 +156,12 @@ def _render_detailed_metrics(kpis: dict, end_date: date):
 
 
 def _render_gauges(kpis: dict):
+    """
+    Renders gauge charts for Monthly, Quarterly, and Semiannual goals.
+
+    Args:
+        kpis (dict): A dictionary containing calculated KPIs from `_calculate_kpis`.
+    """
     signed_df = kpis["signed_df"]
     focus_year = kpis["focus_year"]
     focus_month = kpis["focus_month"]
@@ -169,6 +200,12 @@ def _render_gauges(kpis: dict):
 
 
 def _render_captador_pie(df: pd.DataFrame):
+    """
+    Renders a pie chart showing contract distribution by 'Captador'.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing contract data.
+    """
     signed_df_full = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
     signed_df_full = _enrich_df(signed_df_full)
     
@@ -188,6 +225,12 @@ def _render_captador_pie(df: pd.DataFrame):
 
 
 def _render_status_bar(df: pd.DataFrame):
+    """
+    Renders a bar chart comparing Signed vs Waiting contracts.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing contract data.
+    """
     df_status = df.copy()
     df_status = _enrich_df(df_status)
     rank_map = {C.STATUS_ASSINADO: 2, C.STATUS_AGUARDANDO: 1, C.STATUS_CANCELADO: 0}
@@ -217,6 +260,15 @@ def _render_status_bar(df: pd.DataFrame):
 
 
 def _render_monthly_evolution(df: pd.DataFrame):
+    """
+    Renders a bar chart showing the monthly evolution of signed contracts.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing contract data.
+
+    Returns:
+        tuple: A tuple containing the plotly event object and the filtered dataframe of signed contracts.
+    """
     signed_only = df[df[C.COL_INT_STATUS] == C.STATUS_ASSINADO].copy()
     signed_only = signed_only.dropna(subset=[C.COL_INT_DT])
     signed_only = _enrich_df(signed_only)
@@ -265,6 +317,15 @@ def _render_monthly_evolution(df: pd.DataFrame):
 
 
 def _render_daily_drilldown(event, signed_only: pd.DataFrame, kpis: dict, selected_month: int | None):
+    """
+    Renders a daily drilldown chart based on user selection or default month.
+
+    Args:
+        event: The plotly selection event from the monthly evolution chart.
+        signed_only (pd.DataFrame): The dataframe containing only signed contracts.
+        kpis (dict): A dictionary containing calculated KPIs from `_calculate_kpis`.
+        selected_month (int | None): The selected month for filtering, or None.
+    """
     focus_year = kpis["focus_year"]
     focus_month = kpis["focus_month"]
     
@@ -336,6 +397,16 @@ def _render_daily_drilldown(event, signed_only: pd.DataFrame, kpis: dict, select
 
 
 def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
+    """
+    Main render function for the Contracts Tab.
+
+    Orchestrates the rendering of all sub-components: KPIs, Charts, and Detailed Tables.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing contract data.
+        end_date (date): The end date for the analysis period.
+        selected_month (int | None): The selected month for filtering, or None.
+    """
     # 1. Metrics Top Row
     kpis = _calculate_kpis(df, end_date, selected_month)
     _render_kpi_metrics(kpis)

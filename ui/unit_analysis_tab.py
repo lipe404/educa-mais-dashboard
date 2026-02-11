@@ -7,7 +7,17 @@ from geocoding_service import GeocodingService
 
 
 def _check_authentication(access_key: str) -> bool:
-    """Handles access control for the Unit Analysis tab."""
+    """
+    Handles access control for the Unit Analysis tab.
+    
+    Manages session state for access authorization and renders the login form.
+
+    Args:
+        access_key (str): The correct access key required for authentication.
+
+    Returns:
+        bool: True if authenticated, False otherwise.
+    """
     if "unit_analysis_access" not in st.session_state:
         st.session_state["unit_analysis_access"] = False
 
@@ -31,7 +41,15 @@ def _check_authentication(access_key: str) -> bool:
 
 
 def _get_base_location(partner_data: pd.DataFrame) -> Tuple[str, str]:
-    """Determines the base location (City, State) for a partner."""
+    """
+    Determines the base location (City, State) for a partner based on the mode of the data.
+
+    Args:
+        partner_data (pd.DataFrame): Dataframe containing partner's contract data.
+
+    Returns:
+        Tuple[str, str]: A tuple containing (City, State). Returns empty strings if data is missing.
+    """
     if partner_data.empty:
         return "", ""
     try:
@@ -55,13 +73,37 @@ def _run_ai_analysis(
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
     geo_service: GeocodingService,
 ) -> None:
-    """Runs the AI analysis for the selected unit."""
+    """
+    Runs the AI analysis for the selected unit.
+    
+    Note: This feature is currently in development.
+
+    Args:
+        city (str): The city of the unit.
+        state (str): The state of the unit.
+        dados_df (pd.DataFrame): The main dataframe.
+        build_oportunidade_por_uf (Callable): Function to build opportunity data.
+        geo_service (GeocodingService): Service for geocoding operations.
+    """
     st.info(f"Análise de Inteligência de Mercado para {city}-{state} em desenvolvimento.")
     st.warning("Esta funcionalidade estará disponível em breve.")
 
 
 def _render_partner_header(dados_df: pd.DataFrame) -> Tuple[Optional[str], Optional[pd.DataFrame], Optional[str], Optional[str]]:
-    """Renders the partner selection and info header."""
+    """
+    Renders the partner selection widget and displays header information.
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing all partner data.
+
+    Returns:
+        Tuple[Optional[str], Optional[pd.DataFrame], Optional[str], Optional[str]]:
+            - Selected partner name
+            - Partner's data dataframe
+            - City
+            - State
+            Returns (None, None, None, None) if no partner is selected or found.
+    """
     partners = sorted(
         [str(p) for p in dados_df[C.COL_INT_PARTNER].unique() if p and str(p).strip()]
     )
@@ -96,6 +138,14 @@ def render(
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
     access_key: str,
 ):
+    """
+    Renders the Unit Analysis tab.
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe.
+        build_oportunidade_por_uf (Callable): Function to build opportunity data.
+        access_key (str): The access key required to view this tab.
+    """
     st.header(C.TAB_NAME_UNIT_ANALYSIS)
 
     if not _check_authentication(access_key):

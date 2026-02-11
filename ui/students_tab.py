@@ -8,7 +8,18 @@ from geocoding_service import GeocodingService
 
 
 def _filter_students_data(students_df: pd.DataFrame) -> pd.DataFrame:
-    """Filters and cleans students data for analysis."""
+    """
+    Filters and cleans students data for analysis.
+    
+    Removes 'POS' financial types, splits multiple courses, cleans course names,
+    and removes invalid entries.
+
+    Args:
+        students_df (pd.DataFrame): Raw dataframe containing student data.
+
+    Returns:
+        pd.DataFrame: Cleaned and filtered dataframe ready for analysis.
+    """
     if students_df.empty:
         return pd.DataFrame()
 
@@ -53,7 +64,12 @@ def _filter_students_data(students_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _render_top_courses_chart(filtered_df: pd.DataFrame) -> None:
-    """Renders the top 10 courses chart."""
+    """
+    Renders a bar chart showing the top 10 most sold courses.
+
+    Args:
+        filtered_df (pd.DataFrame): Filtered dataframe containing student course data.
+    """
     st.markdown("#### Cursos Mais Vendidos")
 
     course_counts = filtered_df[C.COL_INT_COURSE].value_counts().reset_index()
@@ -78,7 +94,12 @@ def _render_top_courses_chart(filtered_df: pd.DataFrame) -> None:
 
 
 def _render_partner_courses_chart(filtered_df: pd.DataFrame) -> None:
-    """Renders the courses by partner chart."""
+    """
+    Renders a stacked bar chart showing course sales distribution by partner.
+
+    Args:
+        filtered_df (pd.DataFrame): Filtered dataframe containing student course data.
+    """
     st.markdown("#### Cursos Mais Vendidos por Parceiro")
 
     partner_counts = (
@@ -119,7 +140,12 @@ def _render_partner_courses_chart(filtered_df: pd.DataFrame) -> None:
 
 
 def _render_raw_data_expander(filtered_df: pd.DataFrame) -> None:
-    """Renders the raw data expander."""
+    """
+    Renders an expander containing the raw data table for detailed inspection.
+
+    Args:
+        filtered_df (pd.DataFrame): Filtered dataframe to be displayed.
+    """
     with st.expander("Ver dados detalhados"):
         st.dataframe(
             filtered_df[
@@ -135,7 +161,12 @@ def _render_raw_data_expander(filtered_df: pd.DataFrame) -> None:
 
 
 def _render_analysis_tab(students_df: pd.DataFrame) -> None:
-    """Renders the Students Analysis tab."""
+    """
+    Renders the Students Analysis sub-tab (Course Analysis).
+
+    Args:
+        students_df (pd.DataFrame): Raw dataframe containing student data.
+    """
     st.markdown("### Análise de Alunos e Cursos")
 
     if students_df.empty:
@@ -156,7 +187,12 @@ def _render_analysis_tab(students_df: pd.DataFrame) -> None:
 
 
 def _render_general_metrics(df: pd.DataFrame) -> None:
-    """Renders general metrics for the General Data tab."""
+    """
+    Renders general metrics cards (Total Students, Cities, States).
+
+    Args:
+        df (pd.DataFrame): Dataframe containing general student data.
+    """
     total_students = len(df)
     unique_cities = df[C.COL_INT_GEN_CITY].nunique()
     unique_states = df[C.COL_INT_GEN_STATE].nunique()
@@ -169,7 +205,12 @@ def _render_general_metrics(df: pd.DataFrame) -> None:
 
 
 def _render_general_charts(df: pd.DataFrame) -> None:
-    """Renders charts for the General Data tab."""
+    """
+    Renders charts for the General Data tab including state, city, and regional distribution.
+
+    Args:
+        df (pd.DataFrame): Dataframe containing general student data.
+    """
     # 1. States with most students
     st.markdown("#### Estados com mais Alunos")
     state_counts = df[C.COL_INT_GEN_STATE].value_counts().reset_index()
@@ -301,7 +342,13 @@ def _render_geo_distribution_map(df: pd.DataFrame) -> None:
 def _render_general_tab(
     sheet_id: str, fetch_data: Callable[[str], Tuple[pd.DataFrame, datetime]]
 ) -> None:
-    """Renders the General Data tab."""
+    """
+    Renders the General Data sub-tab.
+
+    Args:
+        sheet_id (str): The Google Sheets ID to fetch data from.
+        fetch_data (Callable): Function to fetch general student data.
+    """
     st.markdown("### Dados Gerais de Alunos")
 
     with st.spinner("Carregando dados gerais de alunos..."):
@@ -326,7 +373,15 @@ def render(
     access_key: str,
     sheet_id: str = None,
 ) -> None:
-    """Main render function for the Students Tab."""
+    """
+    Main render function for the Students Tab.
+
+    Args:
+        students_df (pd.DataFrame): Raw dataframe containing student data.
+        fetch_general_data (Callable): Function to fetch general student data.
+        access_key (str): The access key required to view sensitive data.
+        sheet_id (str, optional): The Google Sheets ID. Defaults to None.
+    """
     key = st.text_input(
         C.UI_LABEL_ACCESS_KEY, type="password", key="students_access_key"
     )

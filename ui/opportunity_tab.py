@@ -16,12 +16,31 @@ geo_service = GeocodingService()
 
 
 def get_cnae_id_for_area(area: str, sections_map: Dict[str, str]) -> str:
+    """
+    Returns the CNAE ID (or fallback) for a given business area.
+
+    Args:
+        area (str): The name of the area (e.g., 'Indústria').
+        sections_map (Dict[str, str]): A mapping of area names to CNAE section codes.
+
+    Returns:
+        str: The corresponding CNAE ID or 'all'.
+    """
     # Function kept for interface compatibility but now we rely on Heuristic Fallback
     # because SIDRA API metadata is flaky.
     return "all"
 
 
 def _check_authentication(access_key: str) -> bool:
+    """
+    Handles access control for the Opportunity tab.
+
+    Args:
+        access_key (str): The correct password/key required to access the tab.
+
+    Returns:
+        bool: True if the user entered the correct key, False otherwise.
+    """
     """Handles access control for the Opportunity tab."""
     key = st.text_input(C.UI_LABEL_ACCESS_KEY, type="password", key="opp_access_key")
     if key != access_key:
@@ -34,6 +53,13 @@ def _render_overview_tab(
     dados_df: pd.DataFrame,
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
 ) -> None:
+    """
+    Renders the General Overview tab (Population based analysis).
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing city/state data.
+        build_oportunidade_por_uf (Callable): Function to build the opportunity dataframe for selected states.
+    """
     """Renders the General Overview tab (Population based)."""
     # Use ALL states, not just present ones
     ufs_all = sorted(list(C.ESTADO_REGIAO.keys()))
@@ -141,6 +167,14 @@ def _render_detailed_tab(
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
     get_unidades_locais: Callable[[str, str], int],
 ) -> None:
+    """
+    Renders the Detailed Analysis tab (Economic indicators).
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing city/state data.
+        build_oportunidade_por_uf (Callable): Function to build the opportunity dataframe.
+        get_unidades_locais (Callable): Service function to fetch local unit counts (companies).
+    """
     """Renders the Detailed Analysis tab (Economic indicators)."""
     st.markdown(C.UI_LABEL_ECON_ANALYSIS_TITLE)
     st.info(C.UI_LABEL_ECON_ANALYSIS_INFO)
@@ -215,6 +249,14 @@ def _render_course_tab(
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
     get_unidades_locais: Callable[[str, str], int],
 ) -> None:
+    """
+    Renders the Market Analysis by Course tab.
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing city/state data.
+        build_oportunidade_por_uf (Callable): Function to build the opportunity dataframe.
+        get_unidades_locais (Callable): Service function to fetch local unit counts.
+    """
     """Renders the Market Analysis by Course tab."""
     st.markdown(C.UI_LABEL_MARKET_ANALYSIS_TITLE)
     st.write(C.UI_LABEL_MARKET_ANALYSIS_SUBTITLE)
@@ -355,6 +397,13 @@ def _render_clustering_tab(
     dados_df: pd.DataFrame,
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
 ) -> None:
+    """
+    Renders the Geo Clustering (DBSCAN) tab.
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing city/state data.
+        build_oportunidade_por_uf (Callable): Function to build the opportunity dataframe.
+    """
     """Renders the Geo Clustering (DBSCAN) tab."""
     st.markdown(C.UI_LABEL_CLUSTERING_TITLE)
     st.write(C.UI_LABEL_CLUSTERING_DESC)
@@ -485,6 +534,17 @@ def _render_regression_tab(
     build_oportunidade_por_uf: Callable[[pd.DataFrame, List[str]], pd.DataFrame],
     get_unidades_locais: Callable[[str, str], int],
 ) -> None:
+    """
+    Renders the Regression Analysis tab.
+
+    Performs a linear regression to understand the relationship between sales
+    and demographic/economic factors (Population, Companies).
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing city/state data.
+        build_oportunidade_por_uf (Callable): Function to build the opportunity dataframe.
+        get_unidades_locais (Callable): Service function to fetch local unit counts.
+    """
     """Renders the Regression Analysis tab."""
     st.markdown(C.UI_LABEL_REGRESSION_TITLE)
     st.write(C.UI_LABEL_REGRESSION_DESC)
@@ -585,6 +645,19 @@ def render(
     get_cnae_sections: Callable[[], Dict[str, str]],
     access_key: str,
 ):
+    """
+    Main render function for the Opportunity Tab.
+
+    Orchestrates the rendering of 5 sub-tabs: Overview, Detailed, Course Analysis,
+    Clustering, and Regression. Handles authentication check.
+
+    Args:
+        dados_df (pd.DataFrame): The main dataframe containing city/state data.
+        build_oportunidade_por_uf (Callable): Service function to build opportunity data.
+        get_unidades_locais (Callable): Service function to fetch company counts.
+        get_cnae_sections (Callable): Service function to get CNAE sections (legacy).
+        access_key (str): The password required to access this tab.
+    """
     if not _check_authentication(access_key):
         return
 
