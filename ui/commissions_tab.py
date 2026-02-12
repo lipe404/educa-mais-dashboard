@@ -63,7 +63,7 @@ def _get_available_months(df: pd.DataFrame) -> list:
     return sorted([d.to_timestamp() for d in dates], reverse=True)
 
 def _render_team_config(all_partners_list: list):
-    with st.expander("👥 Gestão de Equipe e Configurações", expanded=True):
+    with st.expander("Gestão de Equipe e Configurações", expanded=True, icon=":material/groups:"):
         # Initialize Session State
         if "team_members" not in st.session_state:
             st.session_state["team_members"] = []
@@ -75,7 +75,7 @@ def _render_team_config(all_partners_list: list):
         
         # 1. Add New Member Form
         with col_form:
-            st.markdown("#### ➕ Novo Membro")
+            st.markdown("#### :material/person_add: Novo Membro")
             with st.container(border=True):
                 new_name = st.text_input("Nome do Membro")
                 
@@ -86,7 +86,7 @@ def _render_team_config(all_partners_list: list):
                     format_func=lambda x: role_options[x]
                 )
                 
-                if st.button("Adicionar Membro", use_container_width=True):
+                if st.button("Adicionar Membro", use_container_width=True, icon=":material/add:"):
                     if new_name and selected_roles_keys:
                         new_id = len(st.session_state["team_members"]) + 100  # Simple ID gen
                         # Check for max ID to avoid collisions if loaded from DB
@@ -105,7 +105,7 @@ def _render_team_config(all_partners_list: list):
 
         # 2. List Members and Assignments
         with col_list:
-            st.markdown("#### 📋 Membros da Equipe")
+            st.markdown("#### :material/badge: Membros da Equipe")
             
             # We need to manage assignments in a Member-Centric way for UI, 
             # but store/convert to Partner-Centric for logic.
@@ -134,7 +134,7 @@ def _render_team_config(all_partners_list: list):
             for idx, member in enumerate(st.session_state["team_members"]):
                 role_labels = [TEAM_CATEGORIES.get(r, {'name': r})['name'] for r in member['roles']]
                 
-                with st.expander(f"👤 {member['name']} ({', '.join(role_labels)})", expanded=False):
+                with st.expander(f"{member['name']} ({', '.join(role_labels)})", expanded=False, icon=":material/person:"):
                     
                     # Roles Editing (Simplified: just Delete for now, or re-add)
                     # Assignments Logic
@@ -148,7 +148,7 @@ def _render_team_config(all_partners_list: list):
                     
                     with ac1:
                         if has_captador:
-                            st.caption("📢 Captador de:")
+                            st.caption(":material/campaign: Captador de:")
                             current_partners = current_assignments_map.get(member["id"], {}).get("captador", [])
                             default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
                             
@@ -172,7 +172,7 @@ def _render_team_config(all_partners_list: list):
                     
                     with ac2:
                         if has_suporte:
-                            st.caption("🤝 Suporte de:")
+                            st.caption(":material/handshake: Suporte de:")
                             current_partners = current_assignments_map.get(member["id"], {}).get("suporte_performance", [])
                             default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
                             
@@ -208,7 +208,7 @@ def _render_team_config(all_partners_list: list):
                         st.session_state["assignments"] = list(new_global_assignments.values())
 
                     st.markdown("---")
-                    if st.button("❌ Remover Membro", key=f"del_{member['id']}"):
+                    if st.button("Remover Membro", key=f"del_{member['id']}", icon=":material/delete:"):
                         members_to_remove.append(idx)
 
             if members_to_remove:
@@ -521,7 +521,8 @@ def render(dados_df: pd.DataFrame, access_key: str):
         # PDF
         pdf_bytes = _generate_pdf(result, selected_month.strftime("%B %Y"))
         col_pdf.download_button(
-            label="📄 Baixar PDF Completo",
+            label="Baixar PDF Completo",
+            icon=":material/picture_as_pdf:",
             data=pdf_bytes,
             file_name=f"relatorio_comissoes_{selected_month.strftime('%Y_%m')}.pdf",
             mime="application/pdf",
@@ -549,7 +550,8 @@ def render(dados_df: pd.DataFrame, access_key: str):
                 df_team_xls.to_excel(writer, index=False, sheet_name="Equipe")
                 
             col_xls_team.download_button(
-                label="📊 Excel Equipe",
+                label="Excel Equipe",
+                icon=":material/table_view:",
                 data=buffer_team.getvalue(),
                 file_name=f"relatorio_equipe_{selected_month.strftime('%Y_%m')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -576,7 +578,8 @@ def render(dados_df: pd.DataFrame, access_key: str):
                 df_partners_xls.to_excel(writer, index=False, sheet_name="Parceiros")
                 
             col_xls_partners.download_button(
-                label="📊 Excel Parceiros",
+                label="Excel Parceiros",
+                icon=":material/table_view:",
                 data=buffer_partners.getvalue(),
                 file_name=f"relatorio_parceiros_{selected_month.strftime('%Y_%m')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
