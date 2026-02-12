@@ -63,167 +63,158 @@ def _get_available_months(df: pd.DataFrame) -> list:
     return sorted([d.to_timestamp() for d in dates], reverse=True)
 
 def _render_team_config(all_partners_list: list):
-    st.sidebar.header("⚙️ Configuração da Equipe")
-    
-    # Initialize Session State
-    if "team_members" not in st.session_state:
-        st.session_state["team_members"] = []
-    if "assignments" not in st.session_state:
-        st.session_state["assignments"] = []
+    with st.expander("👥 Gestão de Equipe e Configurações", expanded=True):
+        # Initialize Session State
+        if "team_members" not in st.session_state:
+            st.session_state["team_members"] = []
+        if "assignments" not in st.session_state:
+            st.session_state["assignments"] = []
 
-    
-    st.sidebar.markdown("---")
-    
-    # 1. Add New Member Form
-    with st.sidebar.expander("➕ Adicionar Novo Membro", expanded=False):
-        new_name = st.text_input("Nome do Membro")
+        # Layout: Add Member (Left) vs List Members (Right)
+        col_form, col_list = st.columns([1, 2], gap="large")
         
-        role_options = {k: v["name"] for k, v in TEAM_CATEGORIES.items()}
-        selected_roles_keys = st.multiselect(
-            "Cargos",
-            options=list(role_options.keys()),
-            format_func=lambda x: role_options[x]
-        )
-        
-        if st.button("Adicionar Membro"):
-            if new_name and selected_roles_keys:
-                new_id = len(st.session_state["team_members"]) + 100  # Simple ID gen
-                # Check for max ID to avoid collisions if loaded from DB
-                existing_ids = [m.get("id", 0) for m in st.session_state["team_members"]]
-                if existing_ids:
-                    new_id = max(existing_ids) + 1
+        # 1. Add New Member Form
+        with col_form:
+            st.markdown("#### ➕ Novo Membro")
+            with st.container(border=True):
+                new_name = st.text_input("Nome do Membro")
+                
+                role_options = {k: v["name"] for k, v in TEAM_CATEGORIES.items()}
+                selected_roles_keys = st.multiselect(
+                    "Cargos",
+                    options=list(role_options.keys()),
+                    format_func=lambda x: role_options[x]
+                )
+                
+                if st.button("Adicionar Membro", use_container_width=True):
+                    if new_name and selected_roles_keys:
+                        new_id = len(st.session_state["team_members"]) + 100  # Simple ID gen
+                        # Check for max ID to avoid collisions if loaded from DB
+                        existing_ids = [m.get("id", 0) for m in st.session_state["team_members"]]
+                        if existing_ids:
+                            new_id = max(existing_ids) + 1
+                            
+                        st.session_state["team_members"].append({
+                            "id": new_id,
+                            "name": new_name,
+                            "roles": selected_roles_keys
+                        })
+                        st.rerun()
+                    else:
+                        st.error("Preencha nome e selecione pelo menos um cargo.")
+
+        # 2. List Members and Assignments
+        with col_list:
+            st.markdown("#### 📋 Membros da Equipe")
+            
+            # We need to manage assignments in a Member-Centric way for UI, 
+            # but store/convert to Partner-Centric for logic.
+            current_assignments_map = {} 
+            for assign in st.session_state["assignments"]:
+                p_id = assign.get("partner_id")
+                c_id = assign.get("captador_id")
+                s_id = assign.get("suporte_id")
+                
+                if c_id:
+                    if c_id not in current_assignments_map: current_assignments_map[c_id] = {}
+                    if "captador" not in current_assignments_map[c_id]: current_assignments_map[c_id]["captador"] = []
+                    current_assignments_map[c_id]["captador"].append(p_id)
                     
-                st.session_state["team_members"].append({
-                    "id": new_id,
-                    "name": new_name,
-                    "roles": selected_roles_keys
-                })
+                if s_id:
+                    if s_id not in current_assignments_map: current_assignments_map[s_id] = {}
+                    if "suporte_performance" not in current_assignments_map[s_id]: current_assignments_map[s_id]["suporte_performance"] = []
+                    current_assignments_map[s_id]["suporte_performance"].append(p_id)
+
+            # Display Members
+            members_to_remove = []
+            
+            if not st.session_state["team_members"]:
+                st.info("Nenhum membro cadastrado. Utilize o formulário ao lado para adicionar.")
+
+            for idx, member in enumerate(st.session_state["team_members"]):
+                role_labels = [TEAM_CATEGORIES.get(r, {'name': r})['name'] for r in member['roles']]
+                
+                with st.expander(f"👤 {member['name']} ({', '.join(role_labels)})", expanded=False):
+                    
+                    # Roles Editing (Simplified: just Delete for now, or re-add)
+                    # Assignments Logic
+                    has_captador = "captador" in member["roles"]
+                    has_suporte = "suporte_performance" in member["roles"]
+                    
+                    updated_assignments = False
+                    
+                    # Layout for assignments
+                    ac1, ac2 = st.columns(2)
+                    
+                    with ac1:
+                        if has_captador:
+                            st.caption("📢 Captador de:")
+                            current_partners = current_assignments_map.get(member["id"], {}).get("captador", [])
+                            default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
+                            
+                            selected_partners_names = st.multiselect(
+                                "Selecione Parceiros (Captador)",
+                                options=[p["name"] for p in all_partners_list],
+                                default=default_options,
+                                key=f"capt_{member['id']}",
+                                label_visibility="collapsed"
+                            )
+                            
+                            new_ids = [
+                                next((p["id"] for p in all_partners_list if p["name"] == name), name) 
+                                for name in selected_partners_names
+                            ]
+                            
+                            if set(new_ids) != set(current_partners):
+                                if member["id"] not in current_assignments_map: current_assignments_map[member["id"]] = {}
+                                current_assignments_map[member["id"]]["captador"] = new_ids
+                                updated_assignments = True
+                    
+                    with ac2:
+                        if has_suporte:
+                            st.caption("🤝 Suporte de:")
+                            current_partners = current_assignments_map.get(member["id"], {}).get("suporte_performance", [])
+                            default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
+                            
+                            selected_partners_names = st.multiselect(
+                                "Selecione Parceiros (Suporte)",
+                                options=[p["name"] for p in all_partners_list],
+                                default=default_options,
+                                key=f"sup_{member['id']}",
+                                label_visibility="collapsed"
+                            )
+                            
+                            new_ids = [
+                                next((p["id"] for p in all_partners_list if p["name"] == name), name) 
+                                for name in selected_partners_names
+                            ]
+                            
+                            if set(new_ids) != set(current_partners):
+                                if member["id"] not in current_assignments_map: current_assignments_map[member["id"]] = {}
+                                current_assignments_map[member["id"]]["suporte_performance"] = new_ids
+                                updated_assignments = True
+
+                    if updated_assignments:
+                        # Rebuild global assignments list from map
+                        new_global_assignments = {}
+                        for m_id, roles_map in current_assignments_map.items():
+                            for p_id in roles_map.get("captador", []):
+                                if p_id not in new_global_assignments: new_global_assignments[p_id] = {"partner_id": p_id}
+                                new_global_assignments[p_id]["captador_id"] = m_id
+                            for p_id in roles_map.get("suporte_performance", []):
+                                if p_id not in new_global_assignments: new_global_assignments[p_id] = {"partner_id": p_id}
+                                new_global_assignments[p_id]["suporte_id"] = m_id
+                        
+                        st.session_state["assignments"] = list(new_global_assignments.values())
+
+                    st.markdown("---")
+                    if st.button("❌ Remover Membro", key=f"del_{member['id']}"):
+                        members_to_remove.append(idx)
+
+            if members_to_remove:
+                for idx in sorted(members_to_remove, reverse=True):
+                    del st.session_state["team_members"][idx]
                 st.rerun()
-            else:
-                st.error("Preencha nome e selecione pelo menos um cargo.")
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Membros da Equipe")
-
-    # 2. List Members and Assignments
-    # We need to manage assignments in a Member-Centric way for UI, 
-    # but store/convert to Partner-Centric for logic.
-    # Let's rebuild the assignments map for easy UI access:
-    # member_id -> 'captador' -> [partner_ids]
-    # member_id -> 'suporte' -> [partner_ids]
-    
-    current_assignments_map = {} 
-    for assign in st.session_state["assignments"]:
-        p_id = assign.get("partner_id")
-        c_id = assign.get("captador_id")
-        s_id = assign.get("suporte_id")
-        
-        if c_id:
-            if c_id not in current_assignments_map: current_assignments_map[c_id] = {}
-            if "captador" not in current_assignments_map[c_id]: current_assignments_map[c_id]["captador"] = []
-            current_assignments_map[c_id]["captador"].append(p_id)
-            
-        if s_id:
-            if s_id not in current_assignments_map: current_assignments_map[s_id] = {}
-            if "suporte_performance" not in current_assignments_map[s_id]: current_assignments_map[s_id]["suporte_performance"] = []
-            current_assignments_map[s_id]["suporte_performance"].append(p_id)
-
-    # Display Members
-    members_to_remove = []
-    
-    for idx, member in enumerate(st.session_state["team_members"]):
-        with st.sidebar.expander(f"{member['name']}", expanded=False):
-            st.write(f"**Cargos:** {', '.join([TEAM_CATEGORIES.get(r, {'name': r})['name'] for r in member['roles']])}")
-            
-            # Roles Editing (Simplified: just Delete for now, or re-add)
-            if st.button("❌ Remover Membro", key=f"del_{member['id']}"):
-                members_to_remove.append(idx)
-                continue
-
-            # Assignments Logic
-            # Only show partner selection if they have relevant roles
-            has_captador = "captador" in member["roles"]
-            has_suporte = "suporte_performance" in member["roles"]
-            
-            updated_assignments = False
-            
-            if has_captador:
-                st.markdown("##### Captador de:")
-                current_partners = current_assignments_map.get(member["id"], {}).get("captador", [])
-                
-                # Filter partners that match current_partners to ensure they exist in list
-                # (Use Names for UI, IDs for logic)
-                # We need a map Name -> ID and ID -> Name
-                # all_partners_list is [{'id': p_id, 'name': p_name}, ...]
-                
-                # Pre-select based on IDs
-                default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
-                
-                selected_partners_names = st.multiselect(
-                    "Selecione Parceiros (Captador)",
-                    options=[p["name"] for p in all_partners_list],
-                    default=default_options,
-                    key=f"capt_{member['id']}"
-                )
-                
-                # Update map
-                new_ids = [
-                    next((p["id"] for p in all_partners_list if p["name"] == name), name) 
-                    for name in selected_partners_names
-                ]
-                
-                if set(new_ids) != set(current_partners):
-                    if member["id"] not in current_assignments_map: current_assignments_map[member["id"]] = {}
-                    current_assignments_map[member["id"]]["captador"] = new_ids
-                    updated_assignments = True
-
-            if has_suporte:
-                st.markdown("##### Suporte de:")
-                current_partners = current_assignments_map.get(member["id"], {}).get("suporte_performance", [])
-                
-                default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
-                
-                selected_partners_names = st.multiselect(
-                    "Selecione Parceiros (Suporte)",
-                    options=[p["name"] for p in all_partners_list],
-                    default=default_options,
-                    key=f"sup_{member['id']}"
-                )
-                
-                new_ids = [
-                    next((p["id"] for p in all_partners_list if p["name"] == name), name) 
-                    for name in selected_partners_names
-                ]
-                
-                if set(new_ids) != set(current_partners):
-                    if member["id"] not in current_assignments_map: current_assignments_map[member["id"]] = {}
-                    current_assignments_map[member["id"]]["suporte_performance"] = new_ids
-                    updated_assignments = True
-
-            if updated_assignments:
-                # Rebuild global assignments list from map
-                # We need to invert the map: Partner -> {captador: id, suporte: id}
-                new_global_assignments = {}
-                
-                # Iterate all members in map
-                for m_id, roles_map in current_assignments_map.items():
-                    # Captador
-                    for p_id in roles_map.get("captador", []):
-                        if p_id not in new_global_assignments: new_global_assignments[p_id] = {"partner_id": p_id}
-                        new_global_assignments[p_id]["captador_id"] = m_id
-                    
-                    # Suporte
-                    for p_id in roles_map.get("suporte_performance", []):
-                        if p_id not in new_global_assignments: new_global_assignments[p_id] = {"partner_id": p_id}
-                        new_global_assignments[p_id]["suporte_id"] = m_id
-                
-                st.session_state["assignments"] = list(new_global_assignments.values())
-                # st.rerun() # Optional: rerun to refresh state immediately or wait for next interaction
-
-    if members_to_remove:
-        for idx in sorted(members_to_remove, reverse=True):
-            del st.session_state["team_members"][idx]
-        st.rerun()
 
 def _generate_pdf(report_data: dict, month_str: str) -> bytes:
     buffer = io.BytesIO()
@@ -349,6 +340,8 @@ def render(dados_df: pd.DataFrame, access_key: str):
     
     # Render Team Config Sidebar ALWAYS
     _render_team_config(all_partners_list)
+    
+    st.divider()
     
     # Filter Data
     months = _get_available_months(dados_df)
