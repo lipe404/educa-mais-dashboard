@@ -514,11 +514,71 @@ def render(dados_df: pd.DataFrame, access_key: str):
                 use_container_width=True
             )
             
-        # 4. PDF Export
+        # 4. Export Reports
+        st.subheader("Exportar Relatórios")
+        col_pdf, col_xls_team, col_xls_partners = st.columns(3)
+        
+        # PDF
         pdf_bytes = _generate_pdf(result, selected_month.strftime("%B %Y"))
-        st.download_button(
-            label="📄 Baixar Relatório PDF",
+        col_pdf.download_button(
+            label="📄 Baixar PDF Completo",
             data=pdf_bytes,
             file_name=f"relatorio_comissoes_{selected_month.strftime('%Y_%m')}.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
+            use_container_width=True
         )
+        
+        # Excel Team
+        if result["team"]:
+            buffer_team = io.BytesIO()
+            df_team_xls = pd.DataFrame(result["team"])
+            df_team_xls = df_team_xls[["name", "roles", "fixed_commission", "partner_commission", "total_commission"]]
+            df_team_xls.columns = ["Nome", "Cargos", "Fixo (R$)", "Variável (R$)", "Total (R$)"]
+            df_team_xls["Cargos"] = df_team_xls["Cargos"].apply(lambda x: ", ".join(x) if isinstance(x, list) else str(x))
+            
+            # Total
+            total_row = pd.DataFrame([{
+                "Nome": "TOTAL", "Cargos": "-", 
+                "Fixo (R$)": df_team_xls["Fixo (R$)"].sum(),
+                "Variável (R$)": df_team_xls["Variável (R$)"].sum(),
+                "Total (R$)": df_team_xls["Total (R$)"].sum()
+            }])
+            df_team_xls = pd.concat([df_team_xls, total_row], ignore_index=True)
+            
+            with pd.ExcelWriter(buffer_team, engine='openpyxl') as writer:
+                df_team_xls.to_excel(writer, index=False, sheet_name="Equipe")
+                
+            col_xls_team.download_button(
+                label="📊 Excel Equipe",
+                data=buffer_team.getvalue(),
+                file_name=f"relatorio_equipe_{selected_month.strftime('%Y_%m')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+            
+        # Excel Partners
+        if result["partners"]:
+            buffer_partners = io.BytesIO()
+            df_partners_xls = pd.DataFrame(result["partners"])
+            df_partners_xls = df_partners_xls[["name", "revenue", "commission_percentage", "commission_value"]]
+            df_partners_xls.columns = ["Parceiro", "Faturamento", "%", "Comissão"]
+            
+            # Total
+            total_row_p = pd.DataFrame([{
+                "Parceiro": "TOTAL", 
+                "Faturamento": df_partners_xls["Faturamento"].sum(),
+                "%": 0,
+                "Comissão": df_partners_xls["Comissão"].sum()
+            }])
+            df_partners_xls = pd.concat([df_partners_xls, total_row_p], ignore_index=True)
+            
+            with pd.ExcelWriter(buffer_partners, engine='openpyxl') as writer:
+                df_partners_xls.to_excel(writer, index=False, sheet_name="Parceiros")
+                
+            col_xls_partners.download_button(
+                label="📊 Excel Parceiros",
+                data=buffer_partners.getvalue(),
+                file_name=f"relatorio_parceiros_{selected_month.strftime('%Y_%m')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
