@@ -313,34 +313,11 @@ def render(dados_df: pd.DataFrame, access_key: str):
     if not _check_authentication(access_key):
         return
         
-    # Initialize DB Data and Team Config early
+    # Initialize DB Data early
     if "db_partners" not in st.session_state:
         db_data = CommissionEngine.load_data_from_db(DB_PATH)
         if db_data["partners"]:
             st.session_state["db_partners"] = db_data["partners"]
-    
-    # Prepare global partners list for Team Config (DB + potentially from DF later)
-    # At this stage, we only have DB partners guaranteed
-    db_partners = st.session_state.get("db_partners", {})
-    all_partners_list = [{"id": p["id"], "name": p["name"]} for p in db_partners.values()]
-    
-    # If we have DataFrame data, we can merge unique partners from it (but we don't have month selected yet)
-    # Ideally, we should list all unique partners from the whole DataFrame too
-    if not dados_df.empty and C.COL_INT_PARTNER in dados_df.columns:
-        df_unique_partners = dados_df[C.COL_INT_PARTNER].dropna().unique()
-        for p_name in df_unique_partners:
-            # Avoid duplicates by name (if name matches DB partner name)
-            if p_name not in db_partners:
-                # Add if not in DB list already (by ID/Name check?)
-                # Since we used p_name as key for DB map, this check is efficient
-                all_partners_list.append({"id": p_name, "name": p_name})
-    
-    # Sort for UI
-    all_partners_list = sorted(all_partners_list, key=lambda x: x["name"])
-    
-    # Render Team Config Sidebar ALWAYS
-    _render_team_config(all_partners_list)
-    
     st.divider()
 
     # Tabs: Real Calculation vs Simulation
@@ -406,8 +383,9 @@ def render(dados_df: pd.DataFrame, access_key: str):
             
             all_partners_list.append({"id": p_id, "name": p_name})
         
-        # Sort for UI
-        # all_partners_list = sorted(all_partners_list, key=lambda x: x["name"]) # Already sorted above and passed to config
+        all_partners_list = sorted(all_partners_list, key=lambda x: x["name"])
+
+        _render_team_config(all_partners_list)
 
         st.write(f"Encontrados {len(partners_data_input)} parceiros com faturamento neste mês.")
         
