@@ -1,9 +1,19 @@
 import sqlite3
 import time
+import random
+import logging
 from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+from geopy.exc import (
+    GeocoderTimedOut,
+    GeocoderUnavailable,
+    GeocoderRateLimited,
+    GeocoderServiceError,
+)
 import os
 import constants as C
+
+
+logger = logging.getLogger(__name__)
 
 
 class GeocodingService:
@@ -41,6 +51,44 @@ class GeocodingService:
             # isso garante redundância caso o esquema mude)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
 
+    def _geocode_with_retry(self, query, max_retries=3, initial_delay=1.5):
+        """
+        Helper method to execute geocoding with retry logic and exponential backoff.
+        
+        Args:
+            query (str|dict): The address string or dict query for geocoding.
+            max_retries (int): Maximum number of retry attempts.
+            initial_delay (float): Initial delay in seconds before request.
+            
+        Returns:
+            Location: The geopy Location object or None if failed.
+        """
+        delay = initial_delay
+        for attempt in range(max_retries):
+            try:
+                # Add jitter to avoid synchronized retries
+                sleep_time = delay + random.uniform(0, 0.5)
+                time.sleep(sleep_time)
+                
+                return self.geolocator.geocode(query, timeout=10)
+                
+            except (GeocoderTimedOut, GeocoderUnavailable):
+                logger.warning(f"Geocoding timeout/unavailable. Attempt {attempt + 1}/{max_retries}.")
+            except GeocoderRateLimited:
+                logger.warning(f"Geocoding rate limited. Attempt {attempt + 1}/{max_retries}.")
+                # Increase delay significantly on rate limit
+                delay += 5.0
+            except Exception as e:
+                logger.error(f"Unexpected geocoding error: {e}")
+                # Don't retry on unknown errors unless we want to be very robust
+                return None
+            
+            # Exponential backoff
+            delay *= 2
+        
+        logger.error(f"Failed to geocode '{query}' after {max_retries} attempts.")
+        return None
+
     def get_coords(self, city: str, state: str) -> tuple[float | None, float | None]:
         """
         Get coordinates (latitude, longitude) for a given city and state.
@@ -73,30 +121,24 @@ class GeocodingService:
 
         # Fetch from API
         query = f"{city}, {state}, {C.GEO_COUNTRY}"
+        
+        loc = self._geocode_with_retry(query)
+
+        lat, lon = None, None
+        if loc:
+            lat, lon = loc.latitude, loc.longitude
+
+        # Save to cache (even if None, to avoid re-querying invalid cities)
         try:
-            # Respect rate limit of Nominatim (1 req/sec)
-            # We can't easily sync this across processes without a lock file or server,
-            # but for a single dashboard instance this is okay.
-            time.sleep(1.1)
-
-            loc = self.geolocator.geocode(query, timeout=4)
-
-            lat, lon = None, None
-            if loc:
-                lat, lon = loc.latitude, loc.longitude
-
-            # Save to cache (even if None, to avoid re-querying invalid cities)
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO cache (key, lat, lon) VALUES (?, ?, ?)",
                     (key, lat, lon),
                 )
+        except Exception as e:
+            logger.error(f"Error saving to cache: {e}")
 
-            return lat, lon
-
-        except (GeocoderTimedOut, GeocoderUnavailable):
-            # Don't cache timeout errors, we want to retry them later
-            return None, None
+        return lat, lon
 
     def get_coords_by_zip(self, zip_code: str) -> tuple[float | None, float | None]:
         """
@@ -131,25 +173,21 @@ class GeocodingService:
         # Fetch from API
         # Using structured query for postalcode
         query = {"postalcode": clean_zip, "country": C.GEO_COUNTRY}
+        
+        loc = self._geocode_with_retry(query)
+
+        lat, lon = None, None
+        if loc:
+            lat, lon = loc.latitude, loc.longitude
+
+        # Save to cache
         try:
-            time.sleep(1.1)
-            loc = self.geolocator.geocode(query, timeout=4)
-
-            lat, lon = None, None
-            if loc:
-                lat, lon = loc.latitude, loc.longitude
-
-            # Save to cache
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO cache (key, lat, lon) VALUES (?, ?, ?)",
                     (key, lat, lon),
                 )
-
-            return lat, lon
-
-        except (GeocoderTimedOut, GeocoderUnavailable):
-            return None, None
         except Exception as e:
-            print(f"Geocoding error for zip {clean_zip}: {e}")
-            return None, None
+            logger.error(f"Error saving to cache: {e}")
+
+        return lat, lon
