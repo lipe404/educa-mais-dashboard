@@ -53,56 +53,88 @@ def _render_kpis(kpis: dict):
     c4.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
 
 
-def _render_waterfall_chart(kpis: dict):
-    """
-    Renders a Waterfall chart explaining how we get from Total Revenue to Net Revenue.
-    """
-    # Prepare data
-    y_values = [
-        kpis["total"],
-        -kpis["parceiros"],
-        -kpis["equipe"],
-        0,  # Placeholder for total, plotly calculates it
-    ]
-    
-    x_labels = [
+def _render_sankey_chart(kpis: dict):
+    total = float(kpis.get("total", 0.0) or 0.0)
+    parceiros = float(kpis.get("parceiros", 0.0) or 0.0)
+    equipe_total = float(kpis.get("equipe", 0.0) or 0.0)
+    liquido = float(kpis.get("liquido", 0.0) or 0.0)
+
+    base_equipe = max(0.0, total - parceiros)
+
+    equipe_fixa = max(0.0, min(equipe_total, base_equipe))
+    equipe_variavel = max(0.0, base_equipe - equipe_fixa - liquido)
+    liquido_sankey = max(0.0, base_equipe - equipe_fixa - equipe_variavel)
+
+    labels = [
         "Faturamento Bruto",
         "Comissão Parceiros",
-        "Comissão Equipe",
-        "Resultado Líquido"
+        "Base Equipe",
+        "Comissão Equipe (Fixa)",
+        "Comissão Equipe (Variável)",
+        "Resultado Líquido",
     ]
-    
-    measure = ["absolute", "relative", "relative", "total"]
-    
-    text_values = [
-        f"R$ {kpis['total']:,.2f}",
-        f"-R$ {kpis['parceiros']:,.2f}",
-        f"-R$ {kpis['equipe']:,.2f}",
-        f"R$ {kpis['liquido']:,.2f}"
+    idx = {label: i for i, label in enumerate(labels)}
+
+    sources = [
+        idx["Faturamento Bruto"],
+        idx["Faturamento Bruto"],
+        idx["Base Equipe"],
+        idx["Base Equipe"],
+        idx["Base Equipe"],
+    ]
+    targets = [
+        idx["Comissão Parceiros"],
+        idx["Base Equipe"],
+        idx["Comissão Equipe (Fixa)"],
+        idx["Comissão Equipe (Variável)"],
+        idx["Resultado Líquido"],
+    ]
+    values = [parceiros, base_equipe, equipe_fixa, equipe_variavel, liquido_sankey]
+
+    link_colors = [
+        "rgba(239,85,59,0.55)",
+        "rgba(45,159,255,0.35)",
+        "rgba(239,85,59,0.55)",
+        "rgba(239,85,59,0.35)",
+        "rgba(0,204,150,0.55)",
+    ]
+    node_colors = [
+        "rgba(45,159,255,0.9)",
+        "rgba(239,85,59,0.9)",
+        "rgba(45,159,255,0.6)",
+        "rgba(239,85,59,0.8)",
+        "rgba(239,85,59,0.55)",
+        "rgba(0,204,150,0.9)",
     ]
 
     fig = go.Figure(
-        go.Waterfall(
-            name="Resultado",
-            orientation="v",
-            measure=measure,
-            x=x_labels,
-            textposition="auto",
-            text=text_values,
-            y=y_values,
-            connector={"line": {"color": "rgb(63, 63, 63)"}},
-            decreasing={"marker": {"color": "#EF553B"}},  # Red for expenses
-            increasing={"marker": {"color": "#00CC96"}},  # Green for revenue
-            totals={"marker": {"color": C.COLOR_PRIMARY}}, # Brand color for result
-        )
+        data=[
+            go.Sankey(
+                arrangement="snap",
+                node=dict(
+                    pad=18,
+                    thickness=18,
+                    line=dict(color="rgba(0,0,0,0.15)", width=1),
+                    label=labels,
+                    color=node_colors,
+                ),
+                link=dict(
+                    source=sources,
+                    target=targets,
+                    value=values,
+                    color=link_colors,
+                    hovertemplate="R$ %{value:,.2f}<extra></extra>",
+                ),
+            )
+        ]
     )
 
     fig.update_layout(
-        title="Demonstração do Resultado Líquido (Waterfall)",
-        showlegend=False,
-        waterfallgap=0.3,
+        title="Fluxo de Receita (Sankey)",
+        font=dict(size=12),
+        margin=dict(l=20, r=20, t=50, b=20),
     )
-    
+
     st.plotly_chart(fig, use_container_width=True)
 
 
@@ -488,8 +520,8 @@ def render(
     kpis = _calculate_kpis(df)
     _render_kpis(kpis)
 
-    with st.expander("Ver Detalhes do Resultado (Waterfall)", expanded=False):
-        _render_waterfall_chart(kpis)
+    with st.expander("Ver Detalhes do Resultado (Sankey)", expanded=False):
+        _render_sankey_chart(kpis)
 
     st.divider()
 
