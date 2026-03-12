@@ -4,6 +4,7 @@ import plotly.express as px
 import constants as C
 from typing import Callable, Tuple, Optional
 from datetime import datetime
+import math
 from geocoding_service import GeocodingService
 
 
@@ -147,16 +148,53 @@ def _render_raw_data_expander(filtered_df: pd.DataFrame) -> None:
         filtered_df (pd.DataFrame): Filtered dataframe to be displayed.
     """
     with st.expander("Ver dados detalhados"):
-        st.dataframe(
-            filtered_df[
-                [
-                    C.COL_INT_PARTNER,
-                    C.COL_INT_STUDENT_NAME,
-                    C.COL_INT_COURSE,
-                    C.COL_INT_FINANCIAL_TYPE,
-                    C.COL_INT_DATA,
-                ]
-            ]
+        show_table = st.checkbox(
+            "Carregar tabela paginada",
+            value=False,
+            key="students_analysis_raw_show_table",
+        )
+        if not show_table:
+            return
+
+        cols = [
+            C.COL_INT_PARTNER,
+            C.COL_INT_STUDENT_NAME,
+            C.COL_INT_COURSE,
+            C.COL_INT_FINANCIAL_TYPE,
+            C.COL_INT_DATA,
+        ]
+        table_df = filtered_df[cols].reset_index(drop=True)
+
+        page_size = st.selectbox(
+            "Linhas por página",
+            options=[50, 100, 200, 500],
+            index=1,
+            key="students_analysis_raw_page_size",
+        )
+        total_rows = len(table_df)
+        total_pages = max(1, math.ceil(total_rows / page_size)) if page_size else 1
+
+        page = st.number_input(
+            "Página",
+            min_value=1,
+            max_value=total_pages,
+            value=min(
+                int(st.session_state.get("students_analysis_raw_page", 1)), total_pages
+            ),
+            step=1,
+            key="students_analysis_raw_page",
+        )
+
+        start = (page - 1) * page_size
+        end = min(start + page_size, total_rows)
+
+        st.caption(f"Mostrando linhas {start + 1}-{end} de {total_rows}")
+        st.data_editor(
+            table_df.iloc[start:end],
+            use_container_width=True,
+            hide_index=True,
+            disabled=True,
+            key="students_analysis_raw_editor",
         )
 
 
@@ -364,7 +402,46 @@ def _render_general_tab(
 
     # Show raw data option
     with st.expander("Visualizar Dados Brutos (ALUNOS_GERAL)"):
-        st.dataframe(df)
+        show_table = st.checkbox(
+            "Carregar tabela paginada",
+            value=False,
+            key="students_general_raw_show_table",
+        )
+        if not show_table:
+            return
+
+        table_df = df.reset_index(drop=True)
+        page_size = st.selectbox(
+            "Linhas por página",
+            options=[50, 100, 200, 500],
+            index=1,
+            key="students_general_raw_page_size",
+        )
+        total_rows = len(table_df)
+        total_pages = max(1, math.ceil(total_rows / page_size)) if page_size else 1
+
+        page = st.number_input(
+            "Página",
+            min_value=1,
+            max_value=total_pages,
+            value=min(
+                int(st.session_state.get("students_general_raw_page", 1)), total_pages
+            ),
+            step=1,
+            key="students_general_raw_page",
+        )
+
+        start = (page - 1) * page_size
+        end = min(start + page_size, total_rows)
+
+        st.caption(f"Mostrando linhas {start + 1}-{end} de {total_rows}")
+        st.data_editor(
+            table_df.iloc[start:end],
+            use_container_width=True,
+            hide_index=True,
+            disabled=True,
+            key="students_general_raw_editor",
+        )
 
 
 def render(
