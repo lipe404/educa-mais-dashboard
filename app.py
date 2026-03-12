@@ -61,6 +61,8 @@ else:
 
 if st.sidebar.button(C.UI_LABEL_RELOAD_DATA):
     st.cache_data.clear()
+    st.session_state.pop("_l1_data_cache", None)
+    st.session_state.pop("_l1_filtered_cache", None)
     st.rerun()
 
 if not data_service.validate_columns(dados, [C.COL_INT_DT, C.COL_INT_STATUS]):
@@ -177,55 +179,93 @@ else:
 
 selected_cities = st.sidebar.multiselect("Filtrar por Cidade", available_cities)
 
-# Apply Filters
-# Using standard masking since index optimization requires more complex setup for two distinct frames
-mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
-    dados[C.COL_INT_DT].dt.date <= end_date
-)
-if selected_year:
-    mask_dados &= dados[C.COL_INT_DT].dt.year == selected_year
-
-if selected_month:
-    mask_dados &= dados[C.COL_INT_DT].dt.month == selected_month
-
-if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
-    mask_dados &= dados[C.COL_INT_CONTRACT_TYPE].isin(
-        [C.CONTRACT_TYPE_NORMAL, C.CONTRACT_TYPE_50]
+def _filtered_cache_key():
+    ts_dados_key = ts_dados.timestamp() if isinstance(ts_dados, datetime) else None
+    ts_fat_key = (
+        ts_faturamento.timestamp() if isinstance(ts_faturamento, datetime) else None
     )
-elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
-    mask_dados &= dados[C.COL_INT_CONTRACT_TYPE] == C.CONTRACT_TYPE_POS
+    return (
+        DEFAULT_SHEET_ID,
+        ts_dados_key,
+        ts_fat_key,
+        start_date,
+        end_date,
+        selected_year,
+        selected_month,
+        selected_contract_type,
+        tuple(selected_regions),
+        tuple(selected_states),
+        tuple(selected_cities),
+    )
 
-if selected_regions:
-    mask_dados &= dados[C.COL_INT_REGION].isin(selected_regions)
 
-if selected_states:
-    mask_dados &= dados[C.COL_INT_STATE].isin(selected_states)
+def _get_filtered_frames():
+    cache = st.session_state.setdefault("_l1_filtered_cache", {})
+    key = _filtered_cache_key()
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
 
-if selected_cities:
-    mask_dados &= dados[C.COL_INT_CITY].isin(selected_cities)
+    mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
+        dados[C.COL_INT_DT].dt.date <= end_date
+    )
+    if selected_year:
+        mask_dados &= dados[C.COL_INT_DT].dt.year == selected_year
 
-dados_filtered = dados[mask_dados].copy()
+    if selected_month:
+        mask_dados &= dados[C.COL_INT_DT].dt.month == selected_month
 
-mask_fat_base = pd.Series(True, index=faturamento.index)
+    if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
+        mask_dados &= dados[C.COL_INT_CONTRACT_TYPE].isin(
+            [C.CONTRACT_TYPE_NORMAL, C.CONTRACT_TYPE_50]
+        )
+    elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
+        mask_dados &= dados[C.COL_INT_CONTRACT_TYPE] == C.CONTRACT_TYPE_POS
 
-if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
-    mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_TECNICO
-elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
-    mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
+    if selected_regions:
+        mask_dados &= dados[C.COL_INT_REGION].isin(selected_regions)
 
-mask_fat = (
-    mask_fat_base
-    & (faturamento[C.COL_INT_DATA].dt.date >= start_date)
-    & (faturamento[C.COL_INT_DATA].dt.date <= end_date)
-)
-if selected_year:
-    mask_fat &= faturamento[C.COL_INT_DATA].dt.year == selected_year
+    if selected_states:
+        mask_dados &= dados[C.COL_INT_STATE].isin(selected_states)
 
-if selected_month:
-    mask_fat &= faturamento[C.COL_INT_DATA].dt.month == selected_month
+    if selected_cities:
+        mask_dados &= dados[C.COL_INT_CITY].isin(selected_cities)
 
-fat_filtered = faturamento[mask_fat].copy()
-fat_filtered_base = faturamento[mask_fat_base].copy()
+    dados_filtered = dados[mask_dados].copy()
+
+    mask_fat_base = pd.Series(True, index=faturamento.index)
+
+    if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
+        mask_fat_base &= (
+            faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_TECNICO
+        )
+    elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
+        mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
+
+    mask_fat = (
+        mask_fat_base
+        & (faturamento[C.COL_INT_DATA].dt.date >= start_date)
+        & (faturamento[C.COL_INT_DATA].dt.date <= end_date)
+    )
+    if selected_year:
+        mask_fat &= faturamento[C.COL_INT_DATA].dt.year == selected_year
+
+    if selected_month:
+        mask_fat &= faturamento[C.COL_INT_DATA].dt.month == selected_month
+
+    fat_filtered = faturamento[mask_fat].copy()
+    fat_filtered_base = faturamento[mask_fat_base].copy()
+
+    value = (dados_filtered, fat_filtered, fat_filtered_base)
+    cache[key] = value
+
+    while len(cache) > 6:
+        cache.pop(next(iter(cache)), None)
+
+    return value
+
+
+dados_filtered, fat_filtered, fat_filtered_base = _get_filtered_frames()
 
 # --- Sidebar Metrics ---
 st.sidebar.markdown("---")

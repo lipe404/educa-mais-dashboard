@@ -5,6 +5,7 @@ from dateutil import parser
 from io import StringIO
 import logging
 from datetime import datetime
+import time
 from typing import Tuple
 import constants as C
 
@@ -12,6 +13,39 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+_L1_CACHE_KEY = "_l1_data_cache"
+_L1_CACHE_TTL_SECONDS = 600
+
+
+def _l1_cache_get(key):
+    try:
+        cache = st.session_state.get(_L1_CACHE_KEY)
+    except Exception:
+        return None
+    if not isinstance(cache, dict):
+        return None
+    entry = cache.get(key)
+    if not entry:
+        return None
+    value, stored_at = entry
+    if time.time() - stored_at > _L1_CACHE_TTL_SECONDS:
+        cache.pop(key, None)
+        return None
+    return value
+
+
+def _l1_cache_set(key, value):
+    try:
+        cache = st.session_state.setdefault(_L1_CACHE_KEY, {})
+    except Exception:
+        return
+    if not isinstance(cache, dict):
+        return
+    cache[key] = (value, time.time())
+    if len(cache) > 6:
+        oldest_key = next(iter(cache))
+        cache.pop(oldest_key, None)
 
 
 def parse_datetime_any(s: str):
@@ -176,8 +210,18 @@ def load_sheet(
         return pd.DataFrame(), datetime.now()
 
 
-@st.cache_data(show_spinner=False, ttl=600)
 def get_dados(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    key = ("get_dados", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_dados_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_dados_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     """
     Loads and processes the main data sheet.
 
@@ -228,8 +272,18 @@ def get_dados(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     return df, ts
 
 
-@st.cache_data(show_spinner=False, ttl=600)
 def get_faturamento(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    key = ("get_faturamento", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_faturamento_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_faturamento_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     """
     Loads and processes the financial (faturamento) sheet.
 
@@ -279,8 +333,18 @@ def get_faturamento(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     return df, ts
 
 
-@st.cache_data(show_spinner=False, ttl=600)
 def get_alunos(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    key = ("get_alunos", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_alunos_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_alunos_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     df, ts = load_sheet(sheet_id, C.SHEET_NAME_STUDENTS, gid=C.GID_STUDENTS)
     if df.empty:
         return df, ts
@@ -384,8 +448,18 @@ def get_alunos(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     return df, ts
 
 
-@st.cache_data(show_spinner=False, ttl=600)
 def get_students_general_data(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    key = ("get_students_general_data", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_students_general_data_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_students_general_data_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     """
     Loads and processes the general students data sheet.
 
