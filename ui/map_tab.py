@@ -5,6 +5,129 @@ import plotly.express as px
 import folium
 from streamlit_folium import st_folium
 import constants as C
+import requests
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_states_lookup() -> list[dict[str, Any]]:
+    try:
+        url = "https://servicodados.ibge.gov.br/api/v1/localidades/estados"
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        states = r.json()
+        if not isinstance(states, list):
+            return []
+        return sorted(
+            [
+                {"sigla": str(s.get("sigla", "")).strip(), "id": str(s.get("id", "")).strip()}
+                for s in states
+                if str(s.get("sigla", "")).strip()
+            ],
+            key=lambda x: x["sigla"],
+        )
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_states_geojson() -> Dict[str, Any] | None:
+    try:
+        states = _get_states_lookup()
+        if not states:
+            return None
+
+        features: list[dict[str, Any]] = []
+        for s in states:
+            sigla = s["sigla"]
+            state_id = s.get("id", "")
+            url = f"https://servicodados.ibge.gov.br/api/v3/malhas/estados/{sigla}?formato=application/vnd.geo+json"
+            try:
+                r = requests.get(url, timeout=25)
+                r.raise_for_status()
+                fc = r.json()
+                for f in (fc.get("features") or []):
+                    props = f.get("properties") or {}
+                    props["sigla"] = sigla
+                    if state_id:
+                        props["id"] = state_id
+                    f["properties"] = props
+                    features.append(f)
+            except Exception:
+                continue
+
+        if not features:
+            return None
+
+        return {"type": "FeatureCollection", "features": features}
+    except Exception:
+        return None
+
+
+def _guess_featureidkey(geojson: Dict[str, Any]) -> str | None:
+    try:
+        features = geojson.get("features") or []
+        if not features:
+            return None
+        props = (features[0] or {}).get("properties") or {}
+        if "sigla" in props:
+            return "properties.sigla"
+        if "UF" in props:
+            return "properties.UF"
+        if "uf" in props:
+            return "properties.uf"
+    except Exception:
+        return None
+    return None
+
+
+def _render_uf_choropleth(signed_unique: pd.DataFrame) -> None:
+    with st.spinner("Carregando malha de estados (IBGE)..."):
+        geojson = _get_states_geojson()
+    if not geojson:
+        st.warning("Não foi possível carregar o GeoJSON de estados do IBGE.")
+        return
+
+    featureidkey = _guess_featureidkey(geojson)
+    if not featureidkey:
+        st.warning("GeoJSON de estados não possui chave de UF compatível.")
+        return
+
+    counts = (
+        signed_unique[C.COL_INT_STATE]
+        .astype(str)
+        .str.strip()
+        .replace("", pd.NA)
+        .dropna()
+        .value_counts()
+    )
+
+    all_states = sorted(list(C.ESTADO_REGIAO.keys()))
+    df_counts = pd.DataFrame({"uf": all_states})
+    df_counts["parceiros"] = df_counts["uf"].map(counts).fillna(0).astype(int)
+    df_counts["regiao"] = df_counts["uf"].map(C.ESTADO_REGIAO).fillna("")
+
+    fig = px.choropleth_mapbox(
+        df_counts,
+        geojson=geojson,
+        locations="uf",
+        featureidkey=featureidkey,
+        color="parceiros",
+        hover_name="uf",
+        hover_data={"regiao": True, "parceiros": True, "uf": False},
+        color_continuous_scale=px.colors.sequential.Blues,
+        range_color=(0, int(df_counts["parceiros"].max()) if not df_counts.empty else 0),
+        opacity=0.65,
+        center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+        zoom=3,
+        title="Densidade de Parceiros por UF (Choropleth)",
+    )
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        height=600,
+        margin={"r": 0, "t": 30, "l": 0, "b": 0},
+        coloraxis_colorbar=dict(title="Parceiros"),
+    )
+    st.plotly_chart(fig, width="stretch")
 
 
 def _prepare_map_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -375,8 +498,15 @@ def render(
         value=False,
         help="Exibe os limites territoriais dos municípios. Pode ser mais lento para carregar.",
     )
+    use_uf_choropleth = st.toggle(
+        "Ativar Choropleth por UF (Densidade de Parceiros)",
+        value=False,
+        help="Coloriza cada UF pela quantidade de parceiros (ASSINADO).",
+    )
 
-    if use_boundary_map:
+    if use_uf_choropleth:
+        _render_uf_choropleth(signed_unique)
+    elif use_boundary_map:
         _render_boundary_map(unique_locations, get_ibge_code, get_municipality_geojson)
     else:
         _render_point_map(unique_locations, signed_unique, get_coords)
@@ -391,4 +521,3 @@ def render(
 
     # 6. Render Missing States Table
     _render_missing_states_table(signed_unique)
-
