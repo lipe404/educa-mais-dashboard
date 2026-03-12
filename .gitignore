@@ -6,3 +6,6 @@ __pycache__/
 docs/
 
 todo.md
+
+# Tudo dentro da pasta venv e ignorar
+venv/
