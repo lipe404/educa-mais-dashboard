@@ -6,6 +6,186 @@ from typing import Callable, Tuple, Optional
 from datetime import datetime
 import math
 from geocoding_service import GeocodingService
+import unicodedata
+
+
+def _normalize_text(value: str) -> str:
+    if not isinstance(value, str):
+        return ""
+    value = (
+        "".join(
+            ch
+            for ch in unicodedata.normalize("NFD", value)
+            if unicodedata.category(ch) != "Mn"
+        )
+        .upper()
+        .strip()
+    )
+    return " ".join(value.split())
+
+
+def _build_student_id_series(df: pd.DataFrame) -> pd.Series:
+    if df.empty:
+        return pd.Series(dtype="object")
+
+    name_series = pd.Series("", index=df.index, dtype="object")
+    if C.COL_INT_STUDENT_NAME in df.columns:
+        name_series = (
+            df[C.COL_INT_STUDENT_NAME].astype(str).str.strip().str.lower()
+        )
+
+    if C.COL_INT_CPF not in df.columns:
+        return name_series
+
+    cpf_series = (
+        df[C.COL_INT_CPF].astype(str).str.replace(r"\D+", "", regex=True).str.strip()
+    )
+    cpf_valid = cpf_series.str.len() >= 11
+    return cpf_series.where(cpf_valid, name_series)
+
+
+def _render_type_pie_chart(students_df: pd.DataFrame) -> None:
+    if students_df.empty or C.COL_INT_FINANCIAL_TYPE not in students_df.columns:
+        return
+
+    tmp = students_df[[C.COL_INT_FINANCIAL_TYPE]].copy()
+    tmp["Tipo"] = (
+        tmp[C.COL_INT_FINANCIAL_TYPE]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .replace({"": pd.NA, "NAN": pd.NA, "NONE": pd.NA})
+    )
+
+    if C.COL_INT_COURSE in students_df.columns:
+        eja_targets = {
+            _normalize_text(
+                "EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO FUNDAMENTAL"
+            ),
+            _normalize_text("EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO MÉDIO"),
+        }
+        course_norm = students_df[C.COL_INT_COURSE].astype(str).map(_normalize_text)
+        tmp.loc[course_norm.isin(eja_targets), "Tipo"] = "EJA"
+
+    types = tmp["Tipo"].dropna()
+    if types.empty:
+        return
+
+    counts = types.value_counts()
+    top_n = 8
+    if len(counts) > top_n:
+        top = counts.head(top_n)
+        others = int(counts.iloc[top_n:].sum())
+        pie_df = top.reset_index()
+        pie_df.columns = ["Tipo", "Quantidade"]
+        pie_df = pd.concat(
+            [pie_df, pd.DataFrame([{"Tipo": "OUTROS", "Quantidade": others}])],
+            ignore_index=True,
+        )
+    else:
+        pie_df = counts.reset_index()
+        pie_df.columns = ["Tipo", "Quantidade"]
+
+    st.markdown("#### Tipos Mais Vendidos (TIPO)")
+    fig = px.pie(
+        pie_df,
+        names="Tipo",
+        values="Quantidade",
+        title="Distribuição de Vendas por Tipo",
+        hole=0.35,
+    )
+    st.plotly_chart(fig, width="stretch")
+    st.divider()
+
+
+def _render_ticket_and_students_timeseries(
+    filtered_df: pd.DataFrame, faturamento_df: pd.DataFrame | None
+) -> None:
+    if faturamento_df is not None and not faturamento_df.empty:
+        if (
+            C.COL_INT_DATA in faturamento_df.columns
+            and C.COL_INT_VALOR in faturamento_df.columns
+        ):
+            df_f = faturamento_df[[C.COL_INT_DATA, C.COL_INT_VALOR]].copy()
+            df_f = df_f[df_f[C.COL_INT_DATA].notna() & df_f[C.COL_INT_VALOR].notna()]
+            if not df_f.empty:
+                df_f["Dia"] = pd.to_datetime(df_f[C.COL_INT_DATA].dt.date)
+                daily_f = (
+                    df_f.groupby("Dia")
+                    .agg(qtd=(C.COL_INT_VALOR, "count"), soma=(C.COL_INT_VALOR, "sum"))
+                    .reset_index()
+                    .sort_values("Dia")
+                )
+                daily_f["ticket_medio"] = (
+                    daily_f["soma"].cumsum() / daily_f["qtd"].cumsum()
+                ).fillna(0.0)
+
+                st.markdown("#### Ticket Médio ao Longo do Tempo")
+                fig_ticket = px.line(
+                    daily_f,
+                    x="Dia",
+                    y="ticket_medio",
+                    title="Ticket Médio (Média Acumulada)",
+                    markers=True,
+                )
+                fig_ticket.update_yaxes(title="R$")
+                st.plotly_chart(fig_ticket, width="stretch")
+                st.divider()
+        else:
+            st.info("Ticket médio indisponível: faltam colunas de data/valor no faturamento.")
+    else:
+        st.info("Ticket médio indisponível: faturamento vazio ou não fornecido.")
+
+    if (
+        filtered_df.empty
+        or C.COL_INT_DATA not in filtered_df.columns
+        or C.COL_INT_STUDENT_NAME not in filtered_df.columns
+    ):
+        return
+
+    df_ts = filtered_df[[C.COL_INT_DATA]].copy()
+    df_ts["_sid"] = _build_student_id_series(filtered_df)
+    df_ts = df_ts[df_ts[C.COL_INT_DATA].notna()]
+    df_ts = df_ts[df_ts["_sid"].notna() & (df_ts["_sid"] != "")]
+    if df_ts.empty:
+        return
+
+    df_ts["Dia"] = pd.to_datetime(df_ts[C.COL_INT_DATA].dt.date)
+    daily = (
+        df_ts.groupby("Dia")
+        .agg(matriculas=("_sid", "size"), alunos_unicos=("_sid", "nunique"))
+        .reset_index()
+        .sort_values("Dia")
+    )
+
+    by_day_ids = df_ts.groupby("Dia")["_sid"].apply(lambda s: set(s.unique())).to_dict()
+    seen: set[str] = set()
+    cumulative_values = []
+    for d in daily["Dia"].tolist():
+        seen |= by_day_ids.get(d, set())
+        cumulative_values.append(len(seen))
+    daily["alunos_unicos_acumulado"] = cumulative_values
+
+    st.markdown("#### Quantidade de Alunos (Unitários)")
+    series_df = daily[
+        ["Dia", "alunos_unicos", "alunos_unicos_acumulado"]
+    ].rename(
+        columns={
+            "alunos_unicos": "Alunos únicos no dia",
+            "alunos_unicos_acumulado": "Alunos únicos acumulado",
+        }
+    )
+    melt_df = series_df.melt(id_vars="Dia", var_name="Métrica", value_name="Quantidade")
+    fig_students = px.line(
+        melt_df,
+        x="Dia",
+        y="Quantidade",
+        color="Métrica",
+        title="Alunos Únicos: Diário vs Acumulado",
+        markers=True,
+    )
+    st.plotly_chart(fig_students, width="stretch")
+    st.divider()
 
 
 def _filter_students_data(students_df: pd.DataFrame) -> pd.DataFrame:
@@ -198,7 +378,9 @@ def _render_raw_data_expander(filtered_df: pd.DataFrame) -> None:
         )
 
 
-def _render_analysis_tab(students_df: pd.DataFrame) -> None:
+def _render_analysis_tab(
+    students_df: pd.DataFrame, faturamento_df: pd.DataFrame | None
+) -> None:
     """
     Renders the Students Analysis sub-tab (Course Analysis).
 
@@ -219,6 +401,8 @@ def _render_analysis_tab(students_df: pd.DataFrame) -> None:
         )
         return
 
+    _render_type_pie_chart(students_df)
+    _render_ticket_and_students_timeseries(filtered_df, faturamento_df)
     _render_top_courses_chart(filtered_df)
     _render_partner_courses_chart(filtered_df)
     _render_raw_data_expander(filtered_df)
@@ -446,6 +630,7 @@ def _render_general_tab(
 
 def render(
     students_df: pd.DataFrame,
+    faturamento_df: pd.DataFrame | None,
     fetch_general_data: Callable[[str], Tuple[pd.DataFrame, datetime]],
     access_key: str,
     sheet_id: str = None,
@@ -455,6 +640,7 @@ def render(
 
     Args:
         students_df (pd.DataFrame): Raw dataframe containing student data.
+        faturamento_df (pd.DataFrame | None): Dataframe de faturamento para ticket médio.
         fetch_general_data (Callable): Function to fetch general student data.
         access_key (str): The access key required to view sensitive data.
         sheet_id (str, optional): The Google Sheets ID. Defaults to None.
@@ -476,7 +662,7 @@ def render(
     st.divider()
 
     if view_mode == "Análise de Cursos (Planilha Alunos)":
-        _render_analysis_tab(students_df)
+        _render_analysis_tab(students_df, faturamento_df)
     else:
         if sheet_id:
             _render_general_tab(sheet_id, fetch_general_data)

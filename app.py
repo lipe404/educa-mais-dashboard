@@ -421,7 +421,11 @@ with t7:
     )
 with t8:
     students_tab.render(
-        alunos, data_service.get_students_general_data, KEY_API, DEFAULT_SHEET_ID
+        alunos,
+        fat_filtered,
+        data_service.get_students_general_data,
+        KEY_API,
+        DEFAULT_SHEET_ID,
     )
 with t9:
     # Pass faturamento dataframe because it has the financial data
