@@ -261,7 +261,7 @@ UI_LABEL_RELOAD_DATA = "Recarregar dados"
 UI_LABEL_DATE_RANGE = "Intervalo de datas"
 
 # Contract Types (UI)
-CONTRACT_TYPE_UI_TECNICO = "Técnico (Normal + 50%)"
+CONTRACT_TYPE_UI_TECNICO = "Técnico"
 CONTRACT_TYPE_UI_POS = "Pós-Graduação"
 
 # Internal Financial Types
