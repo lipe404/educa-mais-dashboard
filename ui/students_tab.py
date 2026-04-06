@@ -338,6 +338,28 @@ def _render_ticket_breakdowns(
             if g.empty:
                 st.info("Sem dados suficientes para calcular ticket por tipo.")
             else:
+                def _fmt_brl(v: float) -> str:
+                    try:
+                        s = f"{float(v):,.2f}"
+                    except Exception:
+                        return "R$ 0,00"
+                    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+                    return f"R$ {s}"
+
+                def _fmt_int(v: float) -> str:
+                    try:
+                        return f"{int(v):,}".replace(",", ".")
+                    except Exception:
+                        return "0"
+
+                g["label"] = g.apply(
+                    lambda r: (
+                        f"Ticket: {_fmt_brl(r['ticket_medio'])}"
+                        f"<br>Vendas: {_fmt_int(r['vendas'])}"
+                        f"<br>Fat: {_fmt_brl(r['faturamento'])}"
+                    ),
+                    axis=1,
+                )
                 fig = px.bar(
                     g,
                     x="ticket_medio",
@@ -345,7 +367,9 @@ def _render_ticket_breakdowns(
                     orientation="h",
                     title="Por Tipo",
                     hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+                    text="label",
                 )
+                fig.update_traces(texttemplate="%{text}", textposition="auto")
                 fig.update_yaxes(categoryorder="total ascending")
                 fig.update_xaxes(title="R$")
                 st.plotly_chart(fig, width="stretch")
