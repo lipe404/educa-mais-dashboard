@@ -321,6 +321,30 @@ def _get_faturamento_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     )
     process_column(
         df,
+        C.COL_SRC_STUDENT_NAME,
+        C.COL_INT_STUDENT_NAME,
+        lambda x: str(x).strip(),
+        "",
+        aliases=["Nome", "Aluno", "Nome do Aluno", "ALUNO", "NOME", "NOME DO ALUNO"],
+    )
+    process_column(
+        df,
+        C.COL_SRC_COURSE,
+        C.COL_INT_COURSE,
+        lambda x: str(x).strip(),
+        "",
+        aliases=["Curso", "curso", "CURSO"],
+    )
+    process_column(
+        df,
+        C.COL_SRC_CPF,
+        C.COL_INT_CPF,
+        lambda x: str(x).strip(),
+        "",
+        aliases=["CPF", "cpf"],
+    )
+    process_column(
+        df,
         C.COL_SRC_CONTRACT_TYPE,
         C.COL_INT_CONTRACT_TYPE,
         lambda x: str(x).strip(),

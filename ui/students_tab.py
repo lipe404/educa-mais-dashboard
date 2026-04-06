@@ -215,31 +215,32 @@ def _render_ticket_breakdowns(
         )
 
     resolved_course_col = None
-    if C.COL_INT_COURSE in df.columns:
-        resolved_course_col = C.COL_INT_COURSE
-    else:
-        resolved_course_col = _find_column(df, C.COL_SRC_COURSE, ["Curso", "CURSO", "curso"])
+    maybe_course_col = (
+        C.COL_INT_COURSE
+        if C.COL_INT_COURSE in df.columns
+        else _find_column(df, C.COL_SRC_COURSE, ["Curso", "CURSO", "curso"])
+    )
 
-    if resolved_course_col:
-        df[resolved_course_col] = (
-            df[resolved_course_col]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-            .replace({"": pd.NA})
+    if maybe_course_col:
+        df[maybe_course_col] = (
+            df[maybe_course_col].astype(str).str.strip().str.upper().replace({"": pd.NA})
         )
-        course_norm = df[resolved_course_col].astype(str).map(_normalize_text)
-        eja_targets = {
-            _normalize_text(
-                "EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO FUNDAMENTAL"
-            ),
-            _normalize_text("EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO MÉDIO"),
-        }
-        is_eja_course = course_norm.isin(eja_targets)
-        if tipo_col:
-            df.loc[is_eja_course, tipo_col] = "EJA"
-        df.loc[is_eja_course, resolved_course_col] = "EJA"
-    else:
+
+        if df[maybe_course_col].notna().any():
+            resolved_course_col = maybe_course_col
+            course_norm = df[resolved_course_col].astype(str).map(_normalize_text)
+            eja_targets = {
+                _normalize_text(
+                    "EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO FUNDAMENTAL"
+                ),
+                _normalize_text("EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO MÉDIO"),
+            }
+            is_eja_course = course_norm.isin(eja_targets)
+            if tipo_col:
+                df.loc[is_eja_course, tipo_col] = "EJA"
+            df.loc[is_eja_course, resolved_course_col] = "EJA"
+
+    if not resolved_course_col:
         lookup = _build_students_sales_lookup(students_df)
         if (
             not lookup.empty
@@ -250,8 +251,9 @@ def _render_ticket_breakdowns(
         ):
             faturamento_name_col = _find_column(
                 df,
-                C.COL_SRC_STUDENT_NAME,
+                C.COL_INT_STUDENT_NAME,
                 [
+                    C.COL_SRC_STUDENT_NAME,
                     "NOME DO ALUNO",
                     "Nome do Aluno",
                     "Nome",
@@ -312,17 +314,20 @@ def _render_ticket_breakdowns(
         if resolved_course_col:
             g = build_group(resolved_course_col).head(15)
             g = g.rename(columns={resolved_course_col: "Curso"})
-            fig = px.bar(
-                g,
-                x="ticket_medio",
-                y="Curso",
-                orientation="h",
-                title="Por Curso (Top 15)",
-                hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
-            )
-            fig.update_yaxes(categoryorder="total ascending")
-            fig.update_xaxes(title="R$")
-            st.plotly_chart(fig, width="stretch")
+            if g.empty:
+                st.info("Não foi possível vincular cursos ao faturamento com as chaves atuais.")
+            else:
+                fig = px.bar(
+                    g,
+                    x="ticket_medio",
+                    y="Curso",
+                    orientation="h",
+                    title="Por Curso (Top 15)",
+                    hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+                )
+                fig.update_yaxes(categoryorder="total ascending")
+                fig.update_xaxes(title="R$")
+                st.plotly_chart(fig, width="stretch")
         else:
             st.info("Curso indisponível: faltam dados para vincular FATURAMENTO aos cursos (ALUNOS).")
 
@@ -330,17 +335,20 @@ def _render_ticket_breakdowns(
         if tipo_col:
             g = build_group(tipo_col)
             g = g.rename(columns={tipo_col: "Tipo"})
-            fig = px.bar(
-                g,
-                x="ticket_medio",
-                y="Tipo",
-                orientation="h",
-                title="Por Tipo",
-                hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
-            )
-            fig.update_yaxes(categoryorder="total ascending")
-            fig.update_xaxes(title="R$")
-            st.plotly_chart(fig, width="stretch")
+            if g.empty:
+                st.info("Sem dados suficientes para calcular ticket por tipo.")
+            else:
+                fig = px.bar(
+                    g,
+                    x="ticket_medio",
+                    y="Tipo",
+                    orientation="h",
+                    title="Por Tipo",
+                    hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+                )
+                fig.update_yaxes(categoryorder="total ascending")
+                fig.update_xaxes(title="R$")
+                st.plotly_chart(fig, width="stretch")
         else:
             st.info("Tipo não disponível no faturamento.")
 
@@ -348,17 +356,20 @@ def _render_ticket_breakdowns(
         if partner_col:
             g = build_group(partner_col).head(20)
             g = g.rename(columns={partner_col: "Parceiro"})
-            fig = px.bar(
-                g,
-                x="ticket_medio",
-                y="Parceiro",
-                orientation="h",
-                title="Por Parceiro (Top 20)",
-                hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
-            )
-            fig.update_yaxes(categoryorder="total ascending")
-            fig.update_xaxes(title="R$")
-            st.plotly_chart(fig, width="stretch")
+            if g.empty:
+                st.info("Sem dados suficientes para calcular ticket por parceiro.")
+            else:
+                fig = px.bar(
+                    g,
+                    x="ticket_medio",
+                    y="Parceiro",
+                    orientation="h",
+                    title="Por Parceiro (Top 20)",
+                    hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+                )
+                fig.update_yaxes(categoryorder="total ascending")
+                fig.update_xaxes(title="R$")
+                st.plotly_chart(fig, width="stretch")
         else:
             st.info("Parceiro não disponível no faturamento.")
 
