@@ -98,6 +98,273 @@ def _render_type_pie_chart(students_df: pd.DataFrame) -> None:
     st.divider()
 
 
+def _find_column(df: pd.DataFrame, primary: str, aliases: list[str]) -> str | None:
+    if primary in df.columns:
+        return primary
+    for a in aliases:
+        if a in df.columns:
+            return a
+    primary_u = str(primary).strip().upper()
+    aliases_u = {str(a).strip().upper() for a in aliases}
+    for col in df.columns:
+        col_u = str(col).strip().upper()
+        if col_u == primary_u or col_u in aliases_u:
+            return col
+    return None
+
+
+def _normalize_person_name_series(s: pd.Series) -> pd.Series:
+    if s is None:
+        return pd.Series(dtype="object")
+    return s.astype(str).map(_normalize_text)
+
+
+def _build_students_sales_lookup(students_df: pd.DataFrame) -> pd.DataFrame:
+    if students_df.empty:
+        return pd.DataFrame(
+            columns=["_k_partner", "_k_day", "_k_name", "curso", "tipo"]
+        )
+
+    needed = [C.COL_INT_PARTNER, C.COL_INT_DATA, C.COL_INT_STUDENT_NAME, C.COL_INT_COURSE]
+    missing = [c for c in needed if c not in students_df.columns]
+    if missing:
+        return pd.DataFrame(
+            columns=["_k_partner", "_k_day", "_k_name", "curso", "tipo"]
+        )
+
+    base = students_df[needed + ([C.COL_INT_FINANCIAL_TYPE] if C.COL_INT_FINANCIAL_TYPE in students_df.columns else [])].copy()
+    base = base[base[C.COL_INT_PARTNER].notna() & base[C.COL_INT_DATA].notna()]
+    base = base[base[C.COL_INT_STUDENT_NAME].notna() & base[C.COL_INT_COURSE].notna()]
+    if base.empty:
+        return pd.DataFrame(
+            columns=["_k_partner", "_k_day", "_k_name", "curso", "tipo"]
+        )
+
+    base["_k_partner"] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+    base["_k_day"] = pd.to_datetime(base[C.COL_INT_DATA].dt.date)
+    base["_k_name"] = _normalize_person_name_series(base[C.COL_INT_STUDENT_NAME])
+
+    course_norm = base[C.COL_INT_COURSE].astype(str).map(_normalize_text)
+    eja_targets = {
+        _normalize_text(
+            "EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO FUNDAMENTAL"
+        ),
+        _normalize_text("EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO MÉDIO"),
+    }
+    is_eja = course_norm.isin(eja_targets)
+
+    base["curso"] = (
+        base[C.COL_INT_COURSE].astype(str).str.strip().str.upper().replace({"": pd.NA})
+    )
+    base.loc[is_eja, "curso"] = "EJA"
+
+    if C.COL_INT_FINANCIAL_TYPE in base.columns:
+        base["tipo"] = (
+            base[C.COL_INT_FINANCIAL_TYPE]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .replace({"": pd.NA, "NAN": pd.NA, "NONE": pd.NA})
+        )
+    else:
+        base["tipo"] = pd.NA
+
+    base.loc[is_eja, "tipo"] = "EJA"
+
+    def _mode_or_na(s: pd.Series):
+        s = s.dropna()
+        if s.empty:
+            return pd.NA
+        return s.mode().iloc[0] if not s.mode().empty else s.iloc[0]
+
+    lookup = (
+        base.groupby(["_k_partner", "_k_day", "_k_name"], dropna=True)
+        .agg(curso=("curso", _mode_or_na), tipo=("tipo", _mode_or_na))
+        .reset_index()
+    )
+    lookup = lookup[(lookup["_k_partner"] != "") & (lookup["_k_name"] != "")]
+    return lookup
+
+
+def _render_ticket_breakdowns(
+    faturamento_df: pd.DataFrame, students_df: pd.DataFrame
+) -> None:
+    if faturamento_df.empty:
+        return
+    if C.COL_INT_VALOR not in faturamento_df.columns:
+        return
+
+    df = faturamento_df.copy()
+    df = df[df[C.COL_INT_VALOR].notna()]
+    if df.empty:
+        return
+    df = df.reset_index(drop=True)
+
+    tipo_col = C.COL_INT_FINANCIAL_TYPE if C.COL_INT_FINANCIAL_TYPE in df.columns else None
+    partner_col = C.COL_INT_PARTNER if C.COL_INT_PARTNER in df.columns else None
+    date_col = C.COL_INT_DATA if C.COL_INT_DATA in df.columns else None
+
+    if tipo_col:
+        df[tipo_col] = (
+            df[tipo_col].astype(str).str.strip().str.upper().replace({"": pd.NA})
+        )
+
+    if partner_col:
+        df[partner_col] = (
+            df[partner_col].astype(str).str.strip().replace({"": pd.NA})
+        )
+
+    resolved_course_col = None
+    if C.COL_INT_COURSE in df.columns:
+        resolved_course_col = C.COL_INT_COURSE
+    else:
+        resolved_course_col = _find_column(df, C.COL_SRC_COURSE, ["Curso", "CURSO", "curso"])
+
+    if resolved_course_col:
+        df[resolved_course_col] = (
+            df[resolved_course_col]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .replace({"": pd.NA})
+        )
+        course_norm = df[resolved_course_col].astype(str).map(_normalize_text)
+        eja_targets = {
+            _normalize_text(
+                "EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO FUNDAMENTAL"
+            ),
+            _normalize_text("EDUCAÇÃO DE JOVENS E ADULTOS À DISTÂNCIA - ENSINO MÉDIO"),
+        }
+        is_eja_course = course_norm.isin(eja_targets)
+        if tipo_col:
+            df.loc[is_eja_course, tipo_col] = "EJA"
+        df.loc[is_eja_course, resolved_course_col] = "EJA"
+    else:
+        lookup = _build_students_sales_lookup(students_df)
+        if (
+            not lookup.empty
+            and partner_col
+            and date_col
+            and df[partner_col].notna().any()
+            and df[date_col].notna().any()
+        ):
+            faturamento_name_col = _find_column(
+                df,
+                C.COL_SRC_STUDENT_NAME,
+                [
+                    "NOME DO ALUNO",
+                    "Nome do Aluno",
+                    "Nome",
+                    "NOME",
+                    "Aluno",
+                    "ALUNO",
+                ],
+            )
+
+            df["_k_partner"] = df[partner_col].astype(str).str.strip()
+            df["_k_day"] = pd.to_datetime(df[date_col].dt.date)
+
+            if faturamento_name_col:
+                df["_k_name"] = _normalize_person_name_series(df[faturamento_name_col])
+                df = df.merge(
+                    lookup,
+                    on=["_k_partner", "_k_day", "_k_name"],
+                    how="left",
+                )
+            else:
+                day_lookup = (
+                    lookup.groupby(["_k_partner", "_k_day"], dropna=True)
+                    .agg(
+                        n_cursos=("curso", lambda s: s.dropna().nunique()),
+                        curso=("curso", lambda s: s.dropna().unique().tolist()),
+                        tipo=("tipo", lambda s: s.dropna().unique().tolist()),
+                    )
+                    .reset_index()
+                )
+                df = df.merge(day_lookup, on=["_k_partner", "_k_day"], how="left")
+                df["curso"] = df["curso"].apply(
+                    lambda v: (v[0] if isinstance(v, list) and len(v) == 1 else pd.NA)
+                )
+                df["tipo"] = df["tipo"].apply(
+                    lambda v: (v[0] if isinstance(v, list) and len(v) == 1 else pd.NA)
+                )
+
+            resolved_course_col = "curso"
+            if tipo_col:
+                df[tipo_col] = df["tipo"].where(
+                    df["tipo"].notna(), df[tipo_col]
+                )
+
+    def build_group(dim_col: str) -> pd.DataFrame:
+        g = (
+            df[df[dim_col].notna()]
+            .groupby(dim_col, dropna=True)[C.COL_INT_VALOR]
+            .agg(vendas="count", faturamento="sum", ticket_medio="mean")
+            .reset_index()
+        )
+        g = g.sort_values(["ticket_medio", "vendas"], ascending=[False, False])
+        return g
+
+    st.markdown("#### Ticket Médio por Segmento")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        if resolved_course_col:
+            g = build_group(resolved_course_col).head(15)
+            g = g.rename(columns={resolved_course_col: "Curso"})
+            fig = px.bar(
+                g,
+                x="ticket_medio",
+                y="Curso",
+                orientation="h",
+                title="Por Curso (Top 15)",
+                hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+            )
+            fig.update_yaxes(categoryorder="total ascending")
+            fig.update_xaxes(title="R$")
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Curso indisponível: faltam dados para vincular FATURAMENTO aos cursos (ALUNOS).")
+
+    with c2:
+        if tipo_col:
+            g = build_group(tipo_col)
+            g = g.rename(columns={tipo_col: "Tipo"})
+            fig = px.bar(
+                g,
+                x="ticket_medio",
+                y="Tipo",
+                orientation="h",
+                title="Por Tipo",
+                hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+            )
+            fig.update_yaxes(categoryorder="total ascending")
+            fig.update_xaxes(title="R$")
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Tipo não disponível no faturamento.")
+
+    with c3:
+        if partner_col:
+            g = build_group(partner_col).head(20)
+            g = g.rename(columns={partner_col: "Parceiro"})
+            fig = px.bar(
+                g,
+                x="ticket_medio",
+                y="Parceiro",
+                orientation="h",
+                title="Por Parceiro (Top 20)",
+                hover_data={"vendas": True, "faturamento": ":,.2f", "ticket_medio": ":,.2f"},
+            )
+            fig.update_yaxes(categoryorder="total ascending")
+            fig.update_xaxes(title="R$")
+            st.plotly_chart(fig, width="stretch")
+        else:
+            st.info("Parceiro não disponível no faturamento.")
+
+    st.divider()
+
+
 def _render_ticket_and_students_timeseries(
     filtered_df: pd.DataFrame, faturamento_df: pd.DataFrame | None
 ) -> None:
@@ -131,6 +398,7 @@ def _render_ticket_and_students_timeseries(
                 fig_ticket.update_yaxes(title="R$")
                 st.plotly_chart(fig_ticket, width="stretch")
                 st.divider()
+                _render_ticket_breakdowns(faturamento_df, filtered_df)
         else:
             st.info("Ticket médio indisponível: faltam colunas de data/valor no faturamento.")
     else:
