@@ -109,6 +109,18 @@ def _render_team_config(all_partners_list: list):
             
             # We need to manage assignments in a Member-Centric way for UI, 
             # but store/convert to Partner-Centric for logic.
+            name_to_partner_id = {str(p.get("name")): p.get("id") for p in all_partners_list}
+            partner_id_to_name = {p.get("id"): str(p.get("name")) for p in all_partners_list}
+
+            def _resolve_partner_id(value):
+                if value is None:
+                    return None
+                if isinstance(value, int):
+                    return value
+                if isinstance(value, str):
+                    return name_to_partner_id.get(value)
+                return None
+
             current_assignments_map = {} 
             for assign in st.session_state["assignments"]:
                 p_id = assign.get("partner_id")
@@ -124,6 +136,18 @@ def _render_team_config(all_partners_list: list):
                     if s_id not in current_assignments_map: current_assignments_map[s_id] = {}
                     if "suporte_performance" not in current_assignments_map[s_id]: current_assignments_map[s_id]["suporte_performance"] = []
                     current_assignments_map[s_id]["suporte_performance"].append(p_id)
+
+            taken_captador_ids = set()
+            taken_suporte_ids = set()
+            for m_id, roles_map in current_assignments_map.items():
+                for pid in roles_map.get("captador", []):
+                    resolved = _resolve_partner_id(pid)
+                    if resolved is not None:
+                        taken_captador_ids.add(resolved)
+                for pid in roles_map.get("suporte_performance", []):
+                    resolved = _resolve_partner_id(pid)
+                    if resolved is not None:
+                        taken_suporte_ids.add(resolved)
 
             # Display Members
             members_to_remove = []
@@ -151,10 +175,16 @@ def _render_team_config(all_partners_list: list):
                             st.caption(":material/campaign: Captador de:")
                             current_partners = current_assignments_map.get(member["id"], {}).get("captador", [])
                             default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
+                            current_ids = {p["id"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners}
+                            blocked_ids = taken_captador_ids - current_ids
+                            captador_options = [
+                                p["name"] for p in all_partners_list
+                                if (p["id"] not in blocked_ids) or (p["id"] in current_ids)
+                            ]
                             
                             selected_partners_names = st.multiselect(
                                 "Selecione Parceiros (Captador)",
-                                options=[p["name"] for p in all_partners_list],
+                                options=captador_options,
                                 default=default_options,
                                 key=f"capt_{member['id']}",
                                 label_visibility="collapsed"
@@ -175,10 +205,16 @@ def _render_team_config(all_partners_list: list):
                             st.caption(":material/handshake: Suporte de:")
                             current_partners = current_assignments_map.get(member["id"], {}).get("suporte_performance", [])
                             default_options = [p["name"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners]
+                            current_ids = {p["id"] for p in all_partners_list if p["id"] in current_partners or p["name"] in current_partners}
+                            blocked_ids = taken_suporte_ids - current_ids
+                            suporte_options = [
+                                p["name"] for p in all_partners_list
+                                if (p["id"] not in blocked_ids) or (p["id"] in current_ids)
+                            ]
                             
                             selected_partners_names = st.multiselect(
                                 "Selecione Parceiros (Suporte)",
-                                options=[p["name"] for p in all_partners_list],
+                                options=suporte_options,
                                 default=default_options,
                                 key=f"sup_{member['id']}",
                                 label_visibility="collapsed"
@@ -197,15 +233,22 @@ def _render_team_config(all_partners_list: list):
                     if updated_assignments:
                         # Rebuild global assignments list from map
                         new_global_assignments = {}
-                        for m_id, roles_map in current_assignments_map.items():
+                        ordered_member_ids = [m.get("id") for m in st.session_state["team_members"]]
+                        for m_id in ordered_member_ids:
+                            roles_map = current_assignments_map.get(m_id, {})
                             for p_id in roles_map.get("captador", []):
-                                if p_id not in new_global_assignments: new_global_assignments[p_id] = {"partner_id": p_id}
-                                new_global_assignments[p_id]["captador_id"] = m_id
+                                if p_id not in new_global_assignments:
+                                    new_global_assignments[p_id] = {"partner_id": p_id}
+                                if "captador_id" not in new_global_assignments[p_id]:
+                                    new_global_assignments[p_id]["captador_id"] = m_id
                             for p_id in roles_map.get("suporte_performance", []):
-                                if p_id not in new_global_assignments: new_global_assignments[p_id] = {"partner_id": p_id}
-                                new_global_assignments[p_id]["suporte_id"] = m_id
+                                if p_id not in new_global_assignments:
+                                    new_global_assignments[p_id] = {"partner_id": p_id}
+                                if "suporte_id" not in new_global_assignments[p_id]:
+                                    new_global_assignments[p_id]["suporte_id"] = m_id
                         
                         st.session_state["assignments"] = list(new_global_assignments.values())
+                        st.rerun()
 
                     st.markdown("---")
                     if st.button("Remover Membro", key=f"del_{member['id']}", icon=":material/delete:"):
