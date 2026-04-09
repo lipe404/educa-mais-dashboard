@@ -466,6 +466,96 @@ def _render_partner_cohort_retention(fat_df: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
+def _render_partner_monthly_comparison(fat_df: pd.DataFrame) -> None:
+    if fat_df.empty:
+        return
+    if (
+        C.COL_INT_PARTNER not in fat_df.columns
+        or C.COL_INT_DATA not in fat_df.columns
+        or C.COL_INT_VALOR not in fat_df.columns
+    ):
+        return
+
+    base = fat_df[[C.COL_INT_PARTNER, C.COL_INT_DATA, C.COL_INT_VALOR]].copy()
+    base[C.COL_INT_PARTNER] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+    base[C.COL_INT_DATA] = pd.to_datetime(base[C.COL_INT_DATA], errors="coerce")
+    base[C.COL_INT_VALOR] = pd.to_numeric(base[C.COL_INT_VALOR], errors="coerce")
+    base = base.dropna(subset=[C.COL_INT_PARTNER, C.COL_INT_DATA, C.COL_INT_VALOR])
+    base = base[(base[C.COL_INT_PARTNER] != "") & (base[C.COL_INT_VALOR] > 0)]
+    if base.empty:
+        return
+
+    totals = base.groupby(C.COL_INT_PARTNER)[C.COL_INT_VALOR].sum()
+    if totals.empty:
+        return
+
+    partners = totals.sort_values(ascending=False).index.tolist()
+    default_partner = partners[0] if partners else None
+    selected = st.selectbox(
+        "Selecione um parceiro",
+        options=partners,
+        index=0,
+        key="partner_monthly_comparison_select",
+    )
+    if not selected:
+        selected = default_partner
+    if not selected:
+        return
+
+    p = base[base[C.COL_INT_PARTNER] == selected].copy()
+    if p.empty:
+        return
+
+    p["_ano"] = p[C.COL_INT_DATA].dt.year
+    p["_mes"] = p[C.COL_INT_DATA].dt.month
+    monthly = p.groupby(["_ano", "_mes"])[C.COL_INT_VALOR].sum().reset_index()
+    monthly = monthly.sort_values(["_ano", "_mes"])
+    monthly["mes_label"] = monthly.apply(
+        lambda r: f"{C.MONTH_NAMES.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+        axis=1,
+    )
+    monthly["valor"] = monthly[C.COL_INT_VALOR].astype(float)
+
+    avg = float(monthly["valor"].mean()) if not monthly.empty else 0.0
+    monthly["faixa"] = np.where(monthly["valor"] >= avg, "Acima da média", "Abaixo da média")
+
+    st.markdown("### Comparativo mês a mês por parceiro")
+    fig = px.bar(
+        monthly,
+        x="mes_label",
+        y="valor",
+        color="faixa",
+        text="valor",
+        title=f"Evolução mensal de faturamento — {selected}",
+        labels={"mes_label": "Mês", "valor": "Faturamento (R$)", "faixa": ""},
+        color_discrete_map={
+            "Acima da média": "rgba(0,204,150,0.9)",
+            "Abaixo da média": "rgba(239,85,59,0.85)",
+        },
+    )
+    fig.update_traces(
+        texttemplate="R$ %{text:,.0f}",
+        textposition="outside",
+        cliponaxis=False,
+        hovertemplate="%{x}<br>R$ %{y:,.2f}<extra></extra>",
+    )
+    fig.add_hline(
+        y=avg,
+        line_dash="dash",
+        line_color="rgba(255,255,255,0.45)",
+        annotation_text=f"Média: R$ {avg:,.0f}",
+        annotation_position="top left",
+    )
+    fig.update_xaxes(title="", tickangle=-35)
+    fig.update_yaxes(title="Faturamento (R$)", tickprefix="R$ ", tickformat=",.0f")
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=10, r=10, t=60, b=10),
+        height=520,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_summary_metrics(partner_sales: pd.DataFrame) -> None:
     """
     Renders summary metrics for partners, including total count and top performers.
@@ -625,6 +715,8 @@ def render(fat_df: pd.DataFrame, dados_df: pd.DataFrame, access_key: str):
             _render_partner_rfm(fat_df)
             st.divider()
             _render_partner_cohort_retention(fat_df)
+            st.divider()
+            _render_partner_monthly_comparison(fat_df)
             st.divider()
             _render_summary_metrics(partner_sales)
             st.divider()
