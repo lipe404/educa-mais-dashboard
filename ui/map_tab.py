@@ -2,10 +2,18 @@ from typing import Callable, Any, Dict, Tuple, List, Optional
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import numpy as np
 import folium
 from streamlit_folium import st_folium
 import constants as C
 import requests
+try:
+    from scipy.spatial import Voronoi
+
+    SCIPY_AVAILABLE = True
+except Exception:
+    Voronoi = None
+    SCIPY_AVAILABLE = False
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -308,6 +316,457 @@ def _render_point_map(
         st.plotly_chart(fig_map, width="stretch")
 
 
+def _voronoi_finite_polygons_2d(vor: Voronoi, radius: float | None = None):
+    if vor.points.shape[1] != 2:
+        raise ValueError("Voronoi supports only 2D input")
+
+    new_regions: list[list[int]] = []
+    new_vertices = vor.vertices.tolist()
+
+    center = vor.points.mean(axis=0)
+    if radius is None:
+        radius = float(np.ptp(vor.points, axis=0).max()) * 2.0
+
+    all_ridges: dict[int, list[tuple[int, int, int]]] = {}
+    for (p1, p2), (v1, v2) in zip(vor.ridge_points, vor.ridge_vertices):
+        all_ridges.setdefault(p1, []).append((p2, v1, v2))
+        all_ridges.setdefault(p2, []).append((p1, v1, v2))
+
+    for p1, region_idx in enumerate(vor.point_region):
+        vertices = vor.regions[region_idx]
+
+        if all(v >= 0 for v in vertices):
+            new_regions.append(vertices)
+            continue
+
+        ridges = all_ridges.get(p1, [])
+        new_region = [v for v in vertices if v >= 0]
+
+        for p2, v1, v2 in ridges:
+            if v1 >= 0 and v2 >= 0:
+                continue
+            if v1 < 0:
+                v1, v2 = v2, v1
+
+            t = vor.points[p2] - vor.points[p1]
+            t = t / (t**2).sum() ** 0.5
+            n = np.array([-t[1], t[0]])
+
+            midpoint = vor.points[[p1, p2]].mean(axis=0)
+            direction = np.sign(np.dot(midpoint - center, n)) * n
+            far_point = vor.vertices[v1] + direction * radius
+
+            new_vertices.append(far_point.tolist())
+            new_region.append(len(new_vertices) - 1)
+
+        vs = np.asarray([new_vertices[v] for v in new_region])
+        c = vs.mean(axis=0)
+        angles = np.arctan2(vs[:, 1] - c[1], vs[:, 0] - c[0])
+        new_region = [v for _, v in sorted(zip(angles, new_region))]
+
+        new_regions.append(new_region)
+
+    return new_regions, np.asarray(new_vertices)
+
+
+def _clip_polygon_to_bbox(
+    polygon: list[tuple[float, float]],
+    bbox: tuple[float, float, float, float],
+) -> list[tuple[float, float]]:
+    min_x, min_y, max_x, max_y = bbox
+
+    def clip(poly: list[tuple[float, float]], edge: str) -> list[tuple[float, float]]:
+        if not poly:
+            return []
+
+        def inside(p: tuple[float, float]) -> bool:
+            x, y = p
+            if edge == "left":
+                return x >= min_x
+            if edge == "right":
+                return x <= max_x
+            if edge == "bottom":
+                return y >= min_y
+            return y <= max_y
+
+        def intersect(p1: tuple[float, float], p2: tuple[float, float]) -> tuple[float, float]:
+            x1, y1 = p1
+            x2, y2 = p2
+            if edge in ("left", "right"):
+                x_edge = min_x if edge == "left" else max_x
+                if x2 == x1:
+                    return x_edge, y1
+                t = (x_edge - x1) / (x2 - x1)
+                return x_edge, y1 + t * (y2 - y1)
+            y_edge = min_y if edge == "bottom" else max_y
+            if y2 == y1:
+                return x1, y_edge
+            t = (y_edge - y1) / (y2 - y1)
+            return x1 + t * (x2 - x1), y_edge
+
+        output: list[tuple[float, float]] = []
+        prev = poly[-1]
+        for curr in poly:
+            if inside(curr):
+                if inside(prev):
+                    output.append(curr)
+                else:
+                    output.append(intersect(prev, curr))
+                    output.append(curr)
+            else:
+                if inside(prev):
+                    output.append(intersect(prev, curr))
+            prev = curr
+        return output
+
+    out = polygon
+    for e in ("left", "right", "bottom", "top"):
+        out = clip(out, e)
+        if not out:
+            return []
+    return out
+
+
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    s = str(hex_color).lstrip("#")
+    if len(s) != 6:
+        return f"rgba(0,0,0,{alpha})"
+    r = int(s[0:2], 16)
+    g = int(s[2:4], 16)
+    b = int(s[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _color_to_rgba(color: str, alpha: float) -> str:
+    c = str(color).strip()
+    if c.startswith("rgb(") and c.endswith(")"):
+        parts = c[4:-1].split(",")
+        if len(parts) == 3:
+            try:
+                r = int(float(parts[0].strip()))
+                g = int(float(parts[1].strip()))
+                b = int(float(parts[2].strip()))
+                return f"rgba({r},{g},{b},{alpha})"
+            except Exception:
+                return f"rgba(0,0,0,{alpha})"
+    if c.startswith("#"):
+        return _hex_to_rgba(c, alpha)
+    if len(c) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in c):
+        return _hex_to_rgba("#" + c, alpha)
+    return f"rgba(0,0,0,{alpha})"
+
+
+def _extract_outer_rings_from_geojson(geojson: Dict[str, Any]) -> list[list[tuple[float, float]]]:
+    rings: list[list[tuple[float, float]]] = []
+    for f in geojson.get("features") or []:
+        geom = (f or {}).get("geometry") or {}
+        gtype = geom.get("type")
+        coords = geom.get("coordinates")
+        if not coords:
+            continue
+        if gtype == "Polygon":
+            outer = coords[0] if coords and len(coords) > 0 else None
+            if outer:
+                rings.append([(float(x), float(y)) for x, y in outer])
+        elif gtype == "MultiPolygon":
+            for poly in coords:
+                if not poly:
+                    continue
+                outer = poly[0] if len(poly) > 0 else None
+                if outer:
+                    rings.append([(float(x), float(y)) for x, y in outer])
+    return rings
+
+
+def _rings_bbox(rings: list[list[tuple[float, float]]]) -> tuple[float, float, float, float] | None:
+    if not rings:
+        return None
+    xs: list[float] = []
+    ys: list[float] = []
+    for ring in rings:
+        for x, y in ring:
+            xs.append(float(x))
+            ys.append(float(y))
+    if not xs or not ys:
+        return None
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _sample_boundary_points(
+    rings: list[list[tuple[float, float]]],
+    step: int,
+    max_points: int,
+) -> np.ndarray:
+    pts: list[tuple[float, float]] = []
+    for ring in rings:
+        if not ring:
+            continue
+        pts.extend(ring[:: max(step, 1)])
+        if len(pts) >= max_points:
+            break
+    if len(pts) > max_points:
+        pts = pts[:max_points]
+    return np.asarray(pts, dtype="float64")
+
+
+def _point_in_ring(x: float, y: float, ring: list[tuple[float, float]]) -> bool:
+    inside = False
+    n = len(ring)
+    if n < 3:
+        return False
+    x1, y1 = ring[0]
+    for i in range(1, n + 1):
+        x2, y2 = ring[i % n]
+        if ((y1 > y) != (y2 > y)) and (x < (x2 - x1) * (y - y1) / ((y2 - y1) or 1e-12) + x1):
+            inside = not inside
+        x1, y1 = x2, y2
+    return inside
+
+
+def _point_in_any_ring(x: float, y: float, rings: list[list[tuple[float, float]]]) -> bool:
+    for ring in rings:
+        if _point_in_ring(x, y, ring):
+            return True
+    return False
+
+
+def _haversine_km(
+    lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray
+) -> np.ndarray:
+    r = 6371.0
+    lat1r = np.deg2rad(lat1)
+    lon1r = np.deg2rad(lon1)
+    lat2r = np.deg2rad(lat2)
+    lon2r = np.deg2rad(lon2)
+    dlat = lat2r - lat1r
+    dlon = lon2r - lon1r
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1r) * np.cos(lat2r) * np.sin(dlon / 2.0) ** 2
+    c = 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
+    return r * c
+
+
+def _render_voronoi_map(
+    unique_locations: pd.DataFrame,
+    signed_unique: pd.DataFrame,
+    get_coords: Callable[[str, str], Tuple[float | None, float | None]],
+) -> None:
+    if not SCIPY_AVAILABLE or Voronoi is None:
+        st.warning("Biblioteca 'scipy' não disponível para gerar Voronoi.")
+        return
+
+    base = signed_unique.copy()
+    base[C.COL_INT_CITY] = base[C.COL_INT_CITY].astype(str).str.strip()
+    base[C.COL_INT_STATE] = base[C.COL_INT_STATE].astype(str).str.strip()
+    base = base[(base[C.COL_INT_CITY] != "") & (base[C.COL_INT_STATE] != "")]
+    if base.empty:
+        st.info("Sem dados suficientes para gerar Voronoi.")
+        return
+
+    if "_pid" not in base.columns:
+        base["_pid"] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+        base["_pid"] = base["_pid"].where(
+            base["_pid"] != "", base[C.COL_INT_CEP].astype(str).str.strip()
+        )
+        base["_pid"] = base["_pid"].where(
+            base["_pid"] != "",
+            base[C.COL_INT_CITY].astype(str).str.strip()
+            + "|"
+            + base[C.COL_INT_STATE].astype(str).str.strip(),
+        )
+
+    city_counts = (
+        base.groupby([C.COL_INT_CITY, C.COL_INT_STATE])["_pid"]
+        .nunique()
+        .reset_index(name="parceiros")
+    )
+    if city_counts.empty:
+        st.info("Sem dados suficientes para gerar Voronoi.")
+        return
+
+    location_map: dict[tuple[str, str], tuple[float, float]] = {}
+    for _, row in unique_locations.iterrows():
+        c, s = str(row.get(C.COL_INT_CITY, "")).strip(), str(row.get(C.COL_INT_STATE, "")).strip()
+        if c and s:
+            lat, lon = get_coords(c, s)
+            if lat is not None and lon is not None:
+                location_map[(c, s)] = (float(lat), float(lon))
+
+    rows = []
+    for _, r in city_counts.iterrows():
+        key = (str(r[C.COL_INT_CITY]).strip(), str(r[C.COL_INT_STATE]).strip())
+        if key in location_map:
+            lat, lon = location_map[key]
+            rows.append(
+                {
+                    "cidade": key[0],
+                    "estado": key[1],
+                    "parceiros": int(r["parceiros"]),
+                    "lat": lat,
+                    "lon": lon,
+                }
+            )
+
+    if len(rows) < 3:
+        st.info("Voronoi requer ao menos 3 pontos com coordenadas.")
+        return
+
+    pts = pd.DataFrame(rows)
+    pts = pts.drop_duplicates(subset=["lat", "lon"]).copy()
+    if len(pts) < 3:
+        st.info("Voronoi requer ao menos 3 pontos distintos.")
+        return
+
+    states_geojson = _get_states_geojson()
+    rings = _extract_outer_rings_from_geojson(states_geojson) if states_geojson else []
+    bbox_from_states = _rings_bbox(rings)
+
+    if bbox_from_states:
+        min_lon, min_lat, max_lon, max_lat = bbox_from_states
+        pad_lon = max((max_lon - min_lon) * 0.03, 0.5)
+        pad_lat = max((max_lat - min_lat) * 0.03, 0.5)
+        bbox = (min_lon - pad_lon, min_lat - pad_lat, max_lon + pad_lon, max_lat + pad_lat)
+    else:
+        bbox = (-74.0, -34.0, -34.0, 6.0)
+        min_lon, min_lat, max_lon, max_lat = bbox
+
+    boundary_pts = _sample_boundary_points(rings, step=25, max_points=900) if rings else np.empty((0, 2))
+    partner_coords = pts[["lon", "lat"]].to_numpy(dtype="float64")
+    if len(boundary_pts) > 0:
+        all_coords = np.vstack([partner_coords, boundary_pts])
+    else:
+        all_coords = partner_coords
+
+    vor = Voronoi(all_coords)
+    radius = float(max(bbox[2] - bbox[0], bbox[3] - bbox[1]) * 2.5)
+    regions, vertices = _voronoi_finite_polygons_2d(vor, radius=radius)
+
+    palette = px.colors.sequential.Blues
+    min_v = float(pts["parceiros"].min())
+    max_v = float(pts["parceiros"].max())
+    denom = max(max_v - min_v, 1.0)
+
+    features: list[dict[str, Any]] = []
+    n_partners = len(pts)
+    for i in range(n_partners):
+        region = regions[i]
+        poly = vertices[region]
+        polygon = [(float(x), float(y)) for x, y in poly.tolist()]
+        clipped = _clip_polygon_to_bbox(polygon, bbox)
+        if len(clipped) < 3:
+            continue
+
+        if clipped[0] != clipped[-1]:
+            clipped.append(clipped[0])
+
+        count = int(pts.iloc[i]["parceiros"])
+        t = (count - min_v) / denom
+        idx = int(round(t * (len(palette) - 1)))
+        idx = max(0, min(idx, len(palette) - 1))
+        fill = _color_to_rgba(palette[idx], 0.28)
+
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "cidade": str(pts.iloc[i]["cidade"]),
+                    "estado": str(pts.iloc[i]["estado"]),
+                    "parceiros": count,
+                    "fill": fill,
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[x, y] for x, y in clipped]],
+                },
+            }
+        )
+
+    if not features:
+        st.info("Não foi possível gerar polígonos de Voronoi com os pontos disponíveis.")
+        return
+
+    gap_km = st.slider(
+        "Cobertura inadequada se a distância ao parceiro mais próximo for ≥ (km)",
+        min_value=50,
+        max_value=800,
+        value=250,
+        step=10,
+        key="voronoi_gap_km",
+    )
+    st.info("Mapa Voronoi pode levar alguns segundos, pois depende de geocodificação por cidade.")
+    m = folium.Map(location=[C.MAP_LAT_DEFAULT, C.MAP_LON_DEFAULT], zoom_start=4, tiles="OpenStreetMap")
+    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
+
+    def style_fn(feature):
+        props = feature.get("properties") or {}
+        return {
+            "fillColor": props.get("fill", "rgba(45,159,255,0.18)"),
+            "color": "rgba(255,255,255,0.22)",
+            "weight": 1,
+            "fillOpacity": 1.0,
+        }
+
+    folium.GeoJson(
+        {"type": "FeatureCollection", "features": features},
+        style_function=style_fn,
+        tooltip=folium.GeoJsonTooltip(fields=["cidade", "estado", "parceiros"], aliases=["Cidade", "UF", "Parceiros"]),
+        name="Voronoi",
+    ).add_to(m)
+
+    if states_geojson:
+        folium.GeoJson(
+            states_geojson,
+            style_function=lambda x: {
+                "fillColor": "rgba(0,0,0,0)",
+                "color": "rgba(0,0,0,0.45)",
+                "weight": 1,
+                "fillOpacity": 0.0,
+            },
+            name="Brasil (UFs)",
+        ).add_to(m)
+
+    partners_lat = pts["lat"].to_numpy(dtype="float64")
+    partners_lon = pts["lon"].to_numpy(dtype="float64")
+    gap_points: list[tuple[float, float, float]] = []
+    lat_grid = np.linspace(min_lat, max_lat, 55)
+    lon_grid = np.linspace(min_lon, max_lon, 75)
+    for lat in lat_grid:
+        for lon in lon_grid:
+            if rings and not _point_in_any_ring(float(lon), float(lat), rings):
+                continue
+            d = _haversine_km(float(lat), float(lon), partners_lat, partners_lon)
+            md = float(np.min(d)) if d.size else 0.0
+            if md >= float(gap_km):
+                gap_points.append((float(lat), float(lon), md))
+
+    if gap_points:
+        if len(gap_points) > 900:
+            gap_points = gap_points[:: max(len(gap_points) // 900, 1)]
+
+        st.caption(f"Pontos sem cobertura adequada (amostra): {len(gap_points)}")
+        for lat, lon, md in gap_points:
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=2,
+                color="rgba(255, 77, 77, 0.9)",
+                fill=True,
+                fill_opacity=0.45,
+                weight=0,
+                tooltip=f"Gap ~ {md:.0f} km",
+            ).add_to(m)
+
+    for _, r in pts.iterrows():
+        folium.CircleMarker(
+            location=[float(r["lat"]), float(r["lon"])],
+            radius=4,
+            color=C.COLOR_SECONDARY,
+            fill=True,
+            fill_opacity=0.9,
+            tooltip=f"{r['cidade']} - {r['estado']} ({int(r['parceiros'])})",
+        ).add_to(m)
+
+    st_folium(m, width="100%", height=650, returned_objects=[])
+
+
 def _render_region_state_city_sunburst(signed_unique: pd.DataFrame) -> None:
     if signed_unique.empty:
         return
@@ -567,8 +1026,15 @@ def render(
         value=False,
         help="Coloriza cada UF pela quantidade de parceiros (ASSINADO).",
     )
+    use_voronoi = st.toggle(
+        "Ativar Voronoi de Cobertura Territorial",
+        value=False,
+        help="Divide o território em zonas de influência (mais próximo) usando pontos de cidades com parceiros.",
+    )
 
-    if use_uf_choropleth:
+    if use_voronoi:
+        _render_voronoi_map(unique_locations, signed_unique, get_coords)
+    elif use_uf_choropleth:
         _render_uf_choropleth(signed_unique)
     elif use_boundary_map:
         _render_boundary_map(unique_locations, get_ibge_code, get_municipality_geojson)
