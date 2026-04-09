@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 import constants as C
 from typing import Optional
 
@@ -215,6 +216,70 @@ def _render_partner_pareto(partner_sales: pd.DataFrame) -> None:
     )
 
 
+def _render_partner_ticket_volume_scatter(partner_sales: pd.DataFrame) -> None:
+    base = partner_sales[[C.COL_INT_PARTNER, "total_vendas", "total_faturamento"]].copy()
+    base[C.COL_INT_PARTNER] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+    base["total_vendas"] = pd.to_numeric(base["total_vendas"], errors="coerce")
+    base["total_faturamento"] = pd.to_numeric(base["total_faturamento"], errors="coerce")
+    base = base.dropna(subset=["total_vendas", "total_faturamento"])
+    base = base[(base[C.COL_INT_PARTNER] != "") & (base["total_vendas"] > 0) & (base["total_faturamento"] > 0)]
+    if base.empty:
+        return
+
+    base["ticket_medio"] = base["total_faturamento"] / base["total_vendas"]
+    med_vendas = float(base["total_vendas"].median())
+    med_ticket = float(base["ticket_medio"].median())
+
+    base["_quad"] = np.select(
+        [
+            (base["total_vendas"] >= med_vendas) & (base["ticket_medio"] >= med_ticket),
+            (base["total_vendas"] >= med_vendas) & (base["ticket_medio"] < med_ticket),
+            (base["total_vendas"] < med_vendas) & (base["ticket_medio"] >= med_ticket),
+        ],
+        ["Alto volume / Alto ticket", "Alto volume / Baixo ticket", "Baixo volume / Alto ticket"],
+        default="Baixo volume / Baixo ticket",
+    )
+
+    top_labels = (
+        base.sort_values("total_faturamento", ascending=False)
+        .head(15)[C.COL_INT_PARTNER]
+        .tolist()
+    )
+    base["_text"] = base[C.COL_INT_PARTNER].where(base[C.COL_INT_PARTNER].isin(top_labels), "")
+
+    st.markdown("### Scatter: ticket médio × volume de vendas por parceiro")
+    fig = px.scatter(
+        base,
+        x="total_vendas",
+        y="ticket_medio",
+        size="total_faturamento",
+        color="_quad",
+        text="_text",
+        size_max=55,
+        labels={
+            "total_vendas": "Nº de vendas",
+            "ticket_medio": "Ticket médio (R$)",
+            "total_faturamento": "Faturamento total (R$)",
+            "_quad": "Quadrante",
+        },
+        title="Segmentação de parceiros por volume e ticket",
+        hover_data={
+            C.COL_INT_PARTNER: True,
+            "total_vendas": True,
+            "ticket_medio": ":.2f",
+            "total_faturamento": ":.2f",
+            "_quad": True,
+            "_text": False,
+        },
+    )
+    fig.update_traces(textposition="top center")
+    fig.add_vline(x=med_vendas, line_dash="dot", line_color="rgba(255,255,255,0.35)")
+    fig.add_hline(y=med_ticket, line_dash="dot", line_color="rgba(255,255,255,0.35)")
+    fig.update_yaxes(tickprefix="R$ ", tickformat=",.2f")
+    fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), height=560)
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_summary_metrics(partner_sales: pd.DataFrame) -> None:
     """
     Renders summary metrics for partners, including total count and top performers.
@@ -369,6 +434,7 @@ def render(fat_df: pd.DataFrame, dados_df: pd.DataFrame, access_key: str):
             st.divider()
             _render_revenue_chart(partner_sales)
             _render_partner_pareto(partner_sales)
+            _render_partner_ticket_volume_scatter(partner_sales)
             st.divider()
             _render_summary_metrics(partner_sales)
             st.divider()
