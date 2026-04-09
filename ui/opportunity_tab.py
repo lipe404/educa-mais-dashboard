@@ -102,6 +102,9 @@ def _render_overview_tab(
 
         st.divider()
 
+        _render_nearest_partner_distance(df, min_pop=min_pop, ufs_selected=ufs_selected)
+        st.divider()
+
         top_n = st.slider(
             C.UI_LABEL_MAP_GEOCODING,
             min_value=10,
@@ -160,6 +163,197 @@ def _render_overview_tab(
                 drop=True
             )
         )
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
+    r = 6371.0088
+    lat1r = np.radians(lat1)
+    lon1r = np.radians(lon1)
+    lat2r = np.radians(lat2.astype(float))
+    lon2r = np.radians(lon2.astype(float))
+    dlat = lat2r - lat1r
+    dlon = lon2r - lon1r
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1r) * np.cos(lat2r) * np.sin(dlon / 2.0) ** 2
+    c = 2 * np.arcsin(np.minimum(1.0, np.sqrt(a)))
+    return r * c
+
+
+def _render_nearest_partner_distance(
+    df: pd.DataFrame, min_pop: int, ufs_selected: List[str]
+) -> None:
+    if df.empty:
+        return
+    needed = {"uf", "nome", "pop_2022", "presenca", "score"}
+    if not needed.issubset(set(df.columns)):
+        return
+
+    with st.expander("Análise de distância ao parceiro mais próximo", expanded=False):
+        missing = df[(df["presenca"] == 0) & (df["pop_2022"] >= min_pop)].copy()
+        present = df[df["presenca"] > 0].copy()
+        if ufs_selected:
+            missing = missing[missing["uf"].isin(ufs_selected)]
+            present = present[present["uf"].isin(ufs_selected)]
+
+        if missing.empty or present.empty:
+            st.info("Não há municípios sem parceiro ou não há base de parceiros ativos para comparar.")
+            return
+
+        max_missing = int(min(400, len(missing)))
+        max_present = int(min(600, len(present)))
+        n_missing = st.slider(
+            "Municípios sem parceiro para analisar (top por score)",
+            min_value=30,
+            max_value=max_missing if max_missing >= 30 else 30,
+            value=min(180, max_missing) if max_missing >= 30 else 30,
+            step=10,
+            key="opp_dist_missing_n",
+        )
+        n_present = st.slider(
+            "Municípios com parceiro ativo para base de comparação",
+            min_value=30,
+            max_value=max_present if max_present >= 30 else 30,
+            value=min(300, max_present) if max_present >= 30 else 30,
+            step=10,
+            key="opp_dist_present_n",
+        )
+        connect_top = st.toggle(
+            "Conectar no mapa somente os mais distantes",
+            value=True,
+            key="opp_dist_connect_top",
+        )
+        n_lines = st.slider(
+            "Quantidade de conexões no mapa",
+            min_value=10,
+            max_value=120,
+            value=40,
+            step=10,
+            key="opp_dist_lines_n",
+        )
+
+        if not st.button("Calcular distâncias", key="opp_dist_run", type="primary"):
+            return
+
+        missing = missing.sort_values("score", ascending=False).head(n_missing)
+        present = present.sort_values("presenca", ascending=False).head(n_present)
+
+        present_geo_rows = []
+        for _, row in present.iterrows():
+            lat, lon = geo_service.get_coords(row.get("nome", ""), row.get("uf", ""))
+            if lat is None or lon is None:
+                continue
+            present_geo_rows.append(
+                {
+                    "lat": float(lat),
+                    "lon": float(lon),
+                    "cidade": row.get("nome", ""),
+                    "uf": row.get("uf", ""),
+                    "presenca": int(row.get("presenca", 1)),
+                }
+            )
+        if not present_geo_rows:
+            st.info("Não foi possível obter coordenadas para municípios com parceiro ativo.")
+            return
+
+        present_geo = pd.DataFrame(present_geo_rows).dropna(subset=["lat", "lon"])
+        if present_geo.empty:
+            return
+
+        pres_lat = present_geo["lat"].to_numpy(dtype=float)
+        pres_lon = present_geo["lon"].to_numpy(dtype=float)
+
+        dist_rows = []
+        for _, row in missing.iterrows():
+            lat, lon = geo_service.get_coords(row.get("nome", ""), row.get("uf", ""))
+            if lat is None or lon is None:
+                continue
+            d = _haversine_km(float(lat), float(lon), pres_lat, pres_lon)
+            if d.size == 0:
+                continue
+            j = int(np.argmin(d))
+            dist_rows.append(
+                {
+                    "cidade": row.get("nome", ""),
+                    "uf": row.get("uf", ""),
+                    "pop_2022": int(row.get("pop_2022", 0)),
+                    "score": float(row.get("score", 0)),
+                    "lat": float(lat),
+                    "lon": float(lon),
+                    "dist_km": float(d[j]),
+                    "nearest_city": str(present_geo.iloc[j]["cidade"]),
+                    "nearest_uf": str(present_geo.iloc[j]["uf"]),
+                    "nearest_lat": float(present_geo.iloc[j]["lat"]),
+                    "nearest_lon": float(present_geo.iloc[j]["lon"]),
+                }
+            )
+        if not dist_rows:
+            st.info("Não foi possível calcular distâncias (sem coordenadas suficientes).")
+            return
+
+        dist_df = pd.DataFrame(dist_rows).sort_values("dist_km", ascending=False)
+
+        st.plotly_chart(
+            px.histogram(
+                dist_df,
+                x="dist_km",
+                nbins=28,
+                title="Distribuição: distância ao parceiro ativo mais próximo (km)",
+                labels={"dist_km": "Distância (km)"},
+                color_discrete_sequence=[C.COLOR_SECONDARY],
+            ).update_layout(margin=dict(l=10, r=10, t=60, b=10), height=420),
+            width="stretch",
+        )
+
+        if connect_top:
+            show_df = dist_df.head(n_lines)
+        else:
+            show_df = dist_df.sample(n=min(n_lines, len(dist_df)), random_state=42)
+
+        partners_trace = go.Scattermapbox(
+            lat=present_geo["lat"],
+            lon=present_geo["lon"],
+            mode="markers",
+            marker=dict(size=10, color=C.COLOR_PRIMARY, opacity=0.75),
+            text=present_geo.apply(lambda r: f"{r['cidade']} ({r['uf']})", axis=1),
+            hovertemplate="%{text}<extra></extra>",
+            name="Parceiros ativos (município)",
+        )
+
+        candidates_trace = go.Scattermapbox(
+            lat=dist_df["lat"],
+            lon=dist_df["lon"],
+            mode="markers",
+            marker=dict(size=9, color=C.COLOR_SECONDARY, opacity=0.65),
+            text=dist_df.apply(
+                lambda r: f"{r['cidade']} ({r['uf']})<br>Pop: {r['pop_2022']:,}<br>Dist: {r['dist_km']:.1f} km<br>Mais próximo: {r['nearest_city']} ({r['nearest_uf']})",
+                axis=1,
+            ),
+            hovertemplate="%{text}<extra></extra>",
+            name="Candidatos (sem parceiro)",
+        )
+
+        line_traces = []
+        for _, r in show_df.iterrows():
+            line_traces.append(
+                go.Scattermapbox(
+                    lat=[r["lat"], r["nearest_lat"]],
+                    lon=[r["lon"], r["nearest_lon"]],
+                    mode="lines",
+                    line=dict(width=2, color="rgba(255,255,255,0.18)"),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
+
+        fig_map = go.Figure(data=[partners_trace, candidates_trace, *line_traces])
+        fig_map.update_layout(
+            mapbox_style="open-street-map",
+            mapbox=dict(center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT}, zoom=3),
+            margin=dict(l=10, r=10, t=60, b=10),
+            height=640,
+            title="Mapa: conexões ao parceiro ativo mais próximo",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        )
+        st.plotly_chart(fig_map, width="stretch")
 
 
 def _render_detailed_tab(
