@@ -360,6 +360,67 @@ def _render_weekday_hour_heatmap(signed_only: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
+def _render_captador_bump_chart(signed_only: pd.DataFrame) -> None:
+    if signed_only.empty:
+        return
+    if C.COL_INT_CAPTADOR not in signed_only.columns or C.COL_INT_DT not in signed_only.columns:
+        return
+
+    base = signed_only.dropna(subset=[C.COL_INT_DT]).copy()
+    if base.empty:
+        return
+
+    if "_pid" not in base.columns:
+        base = _enrich_df(base)
+
+    base = base[base["_pid"].notna() & (base["_pid"] != "")]
+    base = base[base[C.COL_INT_CAPTADOR].notna() & (base[C.COL_INT_CAPTADOR] != "")]
+    if base.empty:
+        return
+
+    base["_ano"] = base[C.COL_INT_DT].dt.year
+    base["_mes"] = base[C.COL_INT_DT].dt.month
+
+    monthly = (
+        base.drop_duplicates(subset=["_pid", "_ano", "_mes"])
+        .groupby(["_ano", "_mes", C.COL_INT_CAPTADOR])["_pid"]
+        .nunique()
+        .reset_index(name=C.UI_LABEL_CONTRACTS)
+    )
+    if monthly.empty:
+        return
+
+    monthly["rank"] = monthly.groupby(["_ano", "_mes"])[C.UI_LABEL_CONTRACTS].rank(
+        method="dense", ascending=False
+    )
+    monthly["rank"] = monthly["rank"].astype(int)
+
+    monthly[C.UI_LABEL_MONTH] = monthly.apply(
+        lambda r: f"{C.MONTH_NAMES.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+        axis=1,
+    )
+    month_order = (
+        monthly[["_ano", "_mes", C.UI_LABEL_MONTH]]
+        .drop_duplicates()
+        .sort_values(["_ano", "_mes"])[C.UI_LABEL_MONTH]
+        .tolist()
+    )
+
+    st.markdown("#### Bump Chart: Ranking de Captadores por Mês")
+    fig = px.line(
+        monthly,
+        x=C.UI_LABEL_MONTH,
+        y="rank",
+        color=C.COL_INT_CAPTADOR,
+        markers=True,
+        title="Ranking Mensal de Captadores (quanto menor, melhor)",
+        category_orders={C.UI_LABEL_MONTH: month_order},
+    )
+    fig.update_yaxes(autorange="reversed", dtick=1, title="Rank")
+    fig.update_xaxes(title="")
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_daily_drilldown(event, signed_only: pd.DataFrame, kpis: dict, selected_month: int | None):
     """
     Renders a daily drilldown chart based on user selection or default month.
@@ -476,6 +537,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     # 6. Monthly Evolution & Daily Drilldown
     event, signed_only = _render_monthly_evolution(df)
     _render_weekday_hour_heatmap(signed_only)
+    _render_captador_bump_chart(signed_only)
     
     st.divider()
     
