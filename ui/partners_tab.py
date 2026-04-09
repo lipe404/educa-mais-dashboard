@@ -280,6 +280,192 @@ def _render_partner_ticket_volume_scatter(partner_sales: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
+def _render_partner_rfm(fat_df: pd.DataFrame) -> None:
+    if fat_df.empty:
+        return
+    if (
+        C.COL_INT_PARTNER not in fat_df.columns
+        or C.COL_INT_DATA not in fat_df.columns
+        or C.COL_INT_VALOR not in fat_df.columns
+    ):
+        return
+
+    base = fat_df[[C.COL_INT_PARTNER, C.COL_INT_DATA, C.COL_INT_VALOR]].copy()
+    base[C.COL_INT_PARTNER] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+    base[C.COL_INT_DATA] = pd.to_datetime(base[C.COL_INT_DATA], errors="coerce")
+    base[C.COL_INT_VALOR] = pd.to_numeric(base[C.COL_INT_VALOR], errors="coerce")
+    base = base.dropna(subset=[C.COL_INT_PARTNER, C.COL_INT_DATA, C.COL_INT_VALOR])
+    base = base[(base[C.COL_INT_PARTNER] != "")]
+    if base.empty:
+        return
+
+    last_dt = base[C.COL_INT_DATA].max()
+    g = (
+        base.groupby(C.COL_INT_PARTNER)
+        .agg(
+            last_date=(C.COL_INT_DATA, "max"),
+            frequency=(C.COL_INT_VALOR, "count"),
+            monetary=(C.COL_INT_VALOR, "sum"),
+        )
+        .reset_index()
+    )
+    if g.empty:
+        return
+
+    g["recency_days"] = (last_dt - g["last_date"]).dt.days.astype(int)
+    g = g[(g["frequency"] > 0) & (g["monetary"] > 0)]
+    if g.empty:
+        return
+
+    def _qscore(s: pd.Series, reverse: bool) -> pd.Series:
+        q = s.rank(method="first", ascending=not reverse)
+        try:
+            return pd.qcut(q, 5, labels=[1, 2, 3, 4, 5]).astype(int)
+        except Exception:
+            return pd.cut(q, bins=5, labels=[1, 2, 3, 4, 5], include_lowest=True).astype(int)
+
+    g["r_score"] = _qscore(g["recency_days"], reverse=True)
+    g["f_score"] = _qscore(g["frequency"], reverse=False)
+    g["m_score"] = _qscore(g["monetary"], reverse=False)
+
+    def _segment(row: pd.Series) -> str:
+        r, f, m = int(row["r_score"]), int(row["f_score"]), int(row["m_score"])
+        if r >= 4 and f >= 4 and m >= 4:
+            return "Campeões"
+        if r >= 4 and (f >= 3 or m >= 3):
+            return "Leais"
+        if r <= 2 and (m >= 4 or f >= 4):
+            return "Em risco"
+        if r <= 2 and f <= 2 and m <= 2:
+            return "Perdidos"
+        if r >= 4 and f <= 2:
+            return "Promissores"
+        return "Regulares"
+
+    g["segmento"] = g.apply(_segment, axis=1)
+
+    st.markdown("### Matriz RFM de parceiros")
+    use_3d = st.toggle("Visualização 3D (R×F×M)", value=False, key="rfm_3d_toggle")
+    if use_3d:
+        fig = px.scatter_3d(
+            g,
+            x="recency_days",
+            y="frequency",
+            z="monetary",
+            color="segmento",
+            size="monetary",
+            size_max=18,
+            hover_name=C.COL_INT_PARTNER,
+            labels={
+                "recency_days": "Recência (dias desde última venda)",
+                "frequency": "Frequência (nº vendas)",
+                "monetary": "Monetário (R$)",
+                "segmento": "Segmento",
+            },
+            title="RFM: recência × frequência × monetário",
+        )
+        fig.update_traces(marker=dict(opacity=0.75))
+        fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), height=620)
+        st.plotly_chart(fig, width="stretch")
+    else:
+        top_labels = (
+            g.sort_values("monetary", ascending=False).head(15)[C.COL_INT_PARTNER].tolist()
+        )
+        g["_text"] = g[C.COL_INT_PARTNER].where(g[C.COL_INT_PARTNER].isin(top_labels), "")
+        fig = px.scatter(
+            g,
+            x="recency_days",
+            y="frequency",
+            size="monetary",
+            color="segmento",
+            text="_text",
+            size_max=55,
+            hover_name=C.COL_INT_PARTNER,
+            labels={
+                "recency_days": "Recência (dias desde última venda)",
+                "frequency": "Frequência (nº vendas)",
+                "monetary": "Monetário (R$)",
+                "segmento": "Segmento",
+            },
+            title="RFM: recência × frequência (tamanho = monetário)",
+        )
+        fig.update_traces(textposition="top center")
+        fig.update_xaxes(autorange="reversed")
+        fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), height=560)
+        st.plotly_chart(fig, width="stretch")
+
+
+def _render_partner_cohort_retention(fat_df: pd.DataFrame) -> None:
+    if fat_df.empty:
+        return
+    if C.COL_INT_PARTNER not in fat_df.columns or C.COL_INT_DATA not in fat_df.columns:
+        return
+
+    base = fat_df[[C.COL_INT_PARTNER, C.COL_INT_DATA]].copy()
+    base[C.COL_INT_PARTNER] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+    base[C.COL_INT_DATA] = pd.to_datetime(base[C.COL_INT_DATA], errors="coerce")
+    base = base.dropna(subset=[C.COL_INT_PARTNER, C.COL_INT_DATA])
+    base = base[base[C.COL_INT_PARTNER] != ""]
+    if base.empty:
+        return
+
+    base["_mes"] = base[C.COL_INT_DATA].dt.to_period("M").dt.to_timestamp()
+    first = base.groupby(C.COL_INT_PARTNER)["_mes"].min()
+    base = base.join(first.rename("cohort_mes"), on=C.COL_INT_PARTNER)
+    base["periodo"] = (
+        (base["_mes"].dt.year - base["cohort_mes"].dt.year) * 12
+        + (base["_mes"].dt.month - base["cohort_mes"].dt.month)
+    ).astype(int)
+
+    active = (
+        base.drop_duplicates(subset=[C.COL_INT_PARTNER, "_mes"])
+        .groupby(["cohort_mes", "periodo"])[C.COL_INT_PARTNER]
+        .nunique()
+        .reset_index(name="ativos")
+    )
+    if active.empty:
+        return
+
+    cohort_sizes = (
+        base.drop_duplicates(subset=[C.COL_INT_PARTNER])
+        .groupby("cohort_mes")[C.COL_INT_PARTNER]
+        .nunique()
+        .rename("cohort_size")
+        .reset_index()
+    )
+    active = active.merge(cohort_sizes, on="cohort_mes", how="left")
+    active["retencao"] = (active["ativos"] / active["cohort_size"] * 100.0).fillna(0.0)
+
+    pivot = (
+        active.pivot(index="cohort_mes", columns="periodo", values="retencao")
+        .sort_index()
+        .fillna(0.0)
+    )
+    if pivot.empty:
+        return
+
+    if pivot.shape[1] > 18:
+        pivot = pivot.loc[:, list(range(18))]
+
+    y_labels = [d.strftime("%Y-%m") for d in pivot.index.to_list()]
+    pivot.index = y_labels
+
+    st.markdown("### Retenção de parceiros (cohort)")
+    fig = px.imshow(
+        pivot,
+        aspect="auto",
+        color_continuous_scale="Blues",
+        labels={"x": "Meses desde 1ª venda", "y": "Cohort (mês 1ª venda)", "color": "Retenção (%)"},
+        title="Cohort de parceiros: % que voltou a vender nos meses seguintes",
+        text_auto=".0f",
+        zmin=0,
+        zmax=100,
+    )
+    fig.update_traces(hovertemplate="Cohort %{y}<br>M+%{x}: %{z:.1f}%<extra></extra>")
+    fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), height=560)
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_summary_metrics(partner_sales: pd.DataFrame) -> None:
     """
     Renders summary metrics for partners, including total count and top performers.
@@ -435,6 +621,10 @@ def render(fat_df: pd.DataFrame, dados_df: pd.DataFrame, access_key: str):
             _render_revenue_chart(partner_sales)
             _render_partner_pareto(partner_sales)
             _render_partner_ticket_volume_scatter(partner_sales)
+            st.divider()
+            _render_partner_rfm(fat_df)
+            st.divider()
+            _render_partner_cohort_retention(fat_df)
             st.divider()
             _render_summary_metrics(partner_sales)
             st.divider()
