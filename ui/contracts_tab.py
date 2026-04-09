@@ -421,6 +421,62 @@ def _render_captador_bump_chart(signed_only: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
+def _render_contracts_treemap(signed_only: pd.DataFrame) -> None:
+    if signed_only.empty:
+        return
+    required = [C.COL_INT_DT, C.COL_INT_STATE, C.COL_INT_CAPTADOR]
+    if any(c not in signed_only.columns for c in required):
+        return
+
+    base = signed_only.dropna(subset=[C.COL_INT_DT]).copy()
+    if base.empty:
+        return
+
+    if "_pid" not in base.columns:
+        base = _enrich_df(base)
+
+    if C.COL_INT_REGION not in base.columns and C.COL_INT_STATE in base.columns:
+        base[C.COL_INT_REGION] = (
+            base[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
+        )
+
+    base = base[base["_pid"].notna() & (base["_pid"] != "")]
+    base = base[
+        base[C.COL_INT_STATE].notna()
+        & (base[C.COL_INT_STATE] != "")
+        & base[C.COL_INT_CAPTADOR].notna()
+        & (base[C.COL_INT_CAPTADOR] != "")
+        & base[C.COL_INT_REGION].notna()
+        & (base[C.COL_INT_REGION] != "")
+    ]
+    if base.empty:
+        return
+
+    dedup = base.drop_duplicates(subset=["_pid"])[
+        [C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CAPTADOR, "_pid"]
+    ].copy()
+
+    g = (
+        dedup.groupby([C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CAPTADOR])["_pid"]
+        .nunique()
+        .reset_index(name=C.UI_LABEL_CONTRACTS)
+    )
+    if g.empty:
+        return
+
+    st.markdown("#### Treemap: Região → Estado → Captador")
+    fig = px.treemap(
+        g,
+        path=[C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CAPTADOR],
+        values=C.UI_LABEL_CONTRACTS,
+        color=C.UI_LABEL_CONTRACTS,
+        color_continuous_scale="Blues",
+        title="Distribuição de Contratos (Assinados) por Região/Estado/Captador",
+    )
+    fig.update_traces(textinfo="label+value")
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_daily_drilldown(event, signed_only: pd.DataFrame, kpis: dict, selected_month: int | None):
     """
     Renders a daily drilldown chart based on user selection or default month.
@@ -538,6 +594,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
     event, signed_only = _render_monthly_evolution(df)
     _render_weekday_hour_heatmap(signed_only)
     _render_captador_bump_chart(signed_only)
+    _render_contracts_treemap(signed_only)
     
     st.divider()
     
