@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import constants as C
 from typing import Optional
 
@@ -106,6 +107,112 @@ def _render_revenue_chart(partner_sales: pd.DataFrame) -> None:
     )
     fig_revenue.update_layout(xaxis_tickangle=-45)
     st.plotly_chart(fig_revenue, width="stretch")
+
+
+def _render_partner_pareto(partner_sales: pd.DataFrame) -> None:
+    base = partner_sales[[C.COL_INT_PARTNER, "total_faturamento"]].copy()
+    base[C.COL_INT_PARTNER] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+    base = base[base[C.COL_INT_PARTNER] != ""]
+    base = base.sort_values("total_faturamento", ascending=False)
+    if base.empty:
+        return
+
+    total = float(base["total_faturamento"].sum())
+    if total <= 0:
+        return
+
+    n_partners = int(len(base))
+    base["pct_acum_full"] = (base["total_faturamento"] / total).cumsum() * 100.0
+    k_80 = int((base["pct_acum_full"] >= 80.0).values.argmax() + 1) if (base["pct_acum_full"] >= 80.0).any() else n_partners
+
+    top_n = 20
+    top = base.head(top_n).copy()
+    others_sum = float(base.iloc[top_n:]["total_faturamento"].sum()) if n_partners > top_n else 0.0
+
+    plot_rows = []
+    for i, (_, r) in enumerate(top.iterrows(), start=1):
+        plot_rows.append(
+            {
+                "rank_num": int(i),
+                "rank_label": str(i),
+                "partner": str(r[C.COL_INT_PARTNER]),
+                "total_faturamento": float(r["total_faturamento"]),
+            }
+        )
+    if others_sum > 0:
+        plot_rows.append(
+            {
+                "rank_num": int(top_n + 1),
+                "rank_label": "Outros",
+                "partner": f"Outros ({n_partners - top_n} parceiros)",
+                "total_faturamento": float(others_sum),
+            }
+        )
+
+    plot_df = pd.DataFrame(plot_rows)
+    plot_df["pct_acum"] = (plot_df["total_faturamento"] / total).cumsum() * 100.0
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=plot_df["rank_num"],
+            y=plot_df["total_faturamento"],
+            name="Faturamento",
+            marker_color=C.COLOR_PRIMARY,
+            customdata=plot_df["partner"],
+            hovertemplate="Parceiro: %{customdata}<br>R$ %{y:,.2f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df["rank_num"],
+            y=plot_df["pct_acum"],
+            name="% acumulado",
+            yaxis="y2",
+            mode="lines+markers",
+            line=dict(color="rgba(255,255,255,0.75)", width=2),
+            marker=dict(size=6),
+            hovertemplate="% acumulado: %{y:.1f}%<extra></extra>",
+        )
+    )
+
+    if (plot_df["pct_acum"] >= 80.0).any():
+        cut_pos = int((plot_df["pct_acum"] >= 80.0).values.argmax())
+        cut_x = float(plot_df.iloc[cut_pos]["rank_num"])
+        fig.add_vline(
+            x=cut_x,
+            line_width=2,
+            line_dash="dot",
+            line_color="rgba(0,204,150,0.9)",
+            annotation_text="corte 80%",
+            annotation_position="top left",
+        )
+    fig.update_layout(
+        title="Curva de Pareto: parceiros por faturamento",
+        xaxis=dict(title="Ranking (por faturamento)", tickangle=0),
+        yaxis=dict(title="Faturamento (R$)"),
+        yaxis2=dict(
+            title="% acumulado",
+            overlaying="y",
+            side="right",
+            range=[0, 100],
+            ticksuffix="%",
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=10, r=10, t=60, b=10),
+        height=520,
+    )
+    fig.update_xaxes(
+        tickmode="array",
+        tickvals=plot_df["rank_num"].tolist(),
+        ticktext=plot_df["rank_label"].tolist(),
+    )
+    fig.update_yaxes(tickprefix="R$ ", tickformat=",.0f")
+    st.plotly_chart(fig, width="stretch")
+
+    st.caption(
+        f"~80% do faturamento vem dos top {k_80} parceiros ({(k_80 / n_partners * 100.0):.1f}% dos parceiros)."
+    )
 
 
 def _render_summary_metrics(partner_sales: pd.DataFrame) -> None:
@@ -261,6 +368,7 @@ def render(fat_df: pd.DataFrame, dados_df: pd.DataFrame, access_key: str):
             _render_sales_chart(partner_sales)
             st.divider()
             _render_revenue_chart(partner_sales)
+            _render_partner_pareto(partner_sales)
             st.divider()
             _render_summary_metrics(partner_sales)
             st.divider()
