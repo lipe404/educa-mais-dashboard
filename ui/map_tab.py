@@ -308,6 +308,70 @@ def _render_point_map(
         st.plotly_chart(fig_map, width="stretch")
 
 
+def _render_region_state_city_sunburst(signed_unique: pd.DataFrame) -> None:
+    if signed_unique.empty:
+        return
+    required = [C.COL_INT_STATE, C.COL_INT_CITY]
+    if any(c not in signed_unique.columns for c in required):
+        return
+
+    base = signed_unique.copy()
+    if C.COL_INT_REGION not in base.columns:
+        base[C.COL_INT_REGION] = (
+            base[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna("")
+        )
+
+    base[C.COL_INT_REGION] = base[C.COL_INT_REGION].astype(str).str.strip()
+    base[C.COL_INT_STATE] = base[C.COL_INT_STATE].astype(str).str.strip()
+    base[C.COL_INT_CITY] = base[C.COL_INT_CITY].astype(str).str.strip()
+
+    base = base[
+        (base[C.COL_INT_REGION] != "")
+        & (base[C.COL_INT_STATE] != "")
+        & (base[C.COL_INT_CITY] != "")
+    ]
+    if base.empty:
+        return
+
+    if "_pid" not in base.columns:
+        base["_pid"] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+        base["_pid"] = base["_pid"].where(
+            base["_pid"] != "", base[C.COL_INT_CEP].astype(str).str.strip()
+        )
+        base["_pid"] = base["_pid"].where(
+            base["_pid"] != "",
+            base[C.COL_INT_CITY].astype(str).str.strip()
+            + "|"
+            + base[C.COL_INT_STATE].astype(str).str.strip(),
+        )
+
+    g = (
+        base.groupby([C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CITY])["_pid"]
+        .nunique()
+        .reset_index(name=C.UI_LABEL_COL_PARTNERS)
+    )
+    if g.empty:
+        return
+
+    max_leaves = 1500
+    if len(g) > max_leaves:
+        st.info(
+            f"Sunburst resumido para {max_leaves} cidades por performance."
+        )
+        g = g.sort_values(C.UI_LABEL_COL_PARTNERS, ascending=False).head(max_leaves)
+
+    st.markdown("### Sunburst: Região → Estado → Cidade")
+    fig = px.sunburst(
+        g,
+        path=[C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CITY],
+        values=C.UI_LABEL_COL_PARTNERS,
+        color=C.UI_LABEL_COL_PARTNERS,
+        color_continuous_scale=px.colors.sequential.Blues,
+        title="Distribuição de Parceiros (Assinados) por Região/Estado/Cidade",
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_city_search(signed_unique: pd.DataFrame) -> None:
     """
     Renders the city search functionality to check for partner presence.
@@ -511,6 +575,7 @@ def render(
     else:
         _render_point_map(unique_locations, signed_unique, get_coords)
 
+    _render_region_state_city_sunburst(signed_unique)
     st.divider()
 
     # 4. Render City Search
