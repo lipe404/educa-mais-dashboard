@@ -316,6 +316,50 @@ def _render_monthly_evolution(df: pd.DataFrame):
     return event, signed_only
 
 
+def _render_weekday_hour_heatmap(signed_only: pd.DataFrame) -> None:
+    if signed_only.empty or C.COL_INT_DT not in signed_only.columns:
+        return
+
+    base = signed_only.dropna(subset=[C.COL_INT_DT]).copy()
+    if base.empty:
+        return
+
+    if "_pid" not in base.columns:
+        base = _enrich_df(base)
+
+    base["_dow"] = base[C.COL_INT_DT].dt.dayofweek
+    base["_hour"] = base[C.COL_INT_DT].dt.hour
+
+    g = (
+        base.groupby(["_dow", "_hour"])["_pid"]
+        .nunique()
+        .reset_index(name=C.UI_LABEL_CONTRACTS)
+    )
+    if g.empty:
+        return
+
+    pivot = (
+        g.pivot(index="_dow", columns="_hour", values=C.UI_LABEL_CONTRACTS)
+        .reindex(index=list(range(7)), columns=list(range(24)))
+        .fillna(0)
+        .astype(int)
+    )
+
+    day_labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    pivot.index = day_labels
+
+    st.markdown("#### Heatmap: Assinaturas por Dia da Semana × Hora")
+    fig = px.imshow(
+        pivot,
+        aspect="auto",
+        text_auto=True,
+        color_continuous_scale="Blues",
+        labels={"x": "Hora", "y": "Dia da semana", "color": C.UI_LABEL_CONTRACTS},
+        title="Distribuição de Assinaturas (7×24)",
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
 def _render_daily_drilldown(event, signed_only: pd.DataFrame, kpis: dict, selected_month: int | None):
     """
     Renders a daily drilldown chart based on user selection or default month.
@@ -431,6 +475,7 @@ def render(df: pd.DataFrame, end_date: date, selected_month: int | None):
 
     # 6. Monthly Evolution & Daily Drilldown
     event, signed_only = _render_monthly_evolution(df)
+    _render_weekday_hour_heatmap(signed_only)
     
     st.divider()
     
