@@ -513,6 +513,75 @@ def _render_simulator(
     )
 
 
+def _render_revenue_waterfall(kpis: dict) -> None:
+    total = float(kpis.get("total", 0.0) or 0.0)
+    parceiros = float(kpis.get("parceiros", 0.0) or 0.0)
+    equipe = float(kpis.get("equipe", 0.0) or 0.0)
+    liquido = float(kpis.get("liquido", 0.0) or 0.0)
+
+    fig = go.Figure(
+        go.Waterfall(
+            orientation="v",
+            measure=["absolute", "relative", "relative", "total"],
+            x=["Bruto", "Comissão Parceiros", "Comissão Equipe", "Líquido"],
+            y=[total, -parceiros, -equipe, liquido],
+            text=[
+                f"R$ {total:,.2f}",
+                f"- R$ {parceiros:,.2f}",
+                f"- R$ {equipe:,.2f}",
+                f"R$ {liquido:,.2f}",
+            ],
+            textposition="outside",
+            connector={"line": {"color": "rgba(255,255,255,0.25)"}},
+            increasing={"marker": {"color": C.COLOR_PRIMARY}},
+            decreasing={"marker": {"color": "rgba(239,85,59,0.9)"}},
+            totals={"marker": {"color": "rgba(0,204,150,0.9)"}},
+        )
+    )
+    fig.update_layout(
+        title="Waterfall: Composição do Faturamento",
+        yaxis_title="R$",
+        margin=dict(l=10, r=10, t=60, b=10),
+        height=420,
+    )
+    fig.update_yaxes(tickprefix="R$ ", tickformat=",.0f")
+    st.plotly_chart(fig, width="stretch")
+
+
+def _render_monthly_ticket_boxplot(df: pd.DataFrame) -> None:
+    base = df.dropna(subset=[C.COL_INT_DATA, C.COL_INT_VALOR]).copy()
+    if base.empty:
+        return
+
+    base["_ano"] = base[C.COL_INT_DATA].dt.year
+    base["_mes"] = base[C.COL_INT_DATA].dt.month
+    base[C.UI_LABEL_MONTH] = base.apply(
+        lambda r: f"{C.MONTH_NAMES.get(int(r['_mes']), str(int(r['_mes'])))} {int(r['_ano'])}",
+        axis=1,
+    )
+    month_order = (
+        base[["_ano", "_mes", C.UI_LABEL_MONTH]]
+        .drop_duplicates()
+        .sort_values(["_ano", "_mes"])[C.UI_LABEL_MONTH]
+        .tolist()
+    )
+
+    st.markdown("### Boxplot: Ticket por Mês (dispersão de vendas)")
+    fig = px.box(
+        base,
+        x=C.UI_LABEL_MONTH,
+        y=C.COL_INT_VALOR,
+        points="outliers",
+        category_orders={C.UI_LABEL_MONTH: month_order},
+        title="Distribuição do valor de cada venda por mês",
+        color_discrete_sequence=[C.COLOR_PRIMARY],
+    )
+    fig.update_xaxes(title="")
+    fig.update_yaxes(title="Valor (R$)", tickprefix="R$ ", tickformat=",.2f")
+    fig.update_layout(margin=dict(l=10, r=10, t=60, b=10), height=520)
+    st.plotly_chart(fig, width="stretch")
+
+
 def render(
     df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None
 ):
@@ -547,6 +616,9 @@ def render(
     cur_total_month, prev_total_month = _render_month_vs_month_kpis(
         full_df, focus_year, focus_month, prev_year, prev_month
     )
+
+    _render_revenue_waterfall(kpis)
+    _render_monthly_ticket_boxplot(df)
 
     # 5. Simulator
     _render_simulator(kpis, cur_total_month, prev_total_month)
