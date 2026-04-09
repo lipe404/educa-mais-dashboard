@@ -316,6 +316,130 @@ def _render_point_map(
         st.plotly_chart(fig_map, width="stretch")
 
 
+def _render_geo_expansion_timeline(
+    signed: pd.DataFrame,
+    unique_locations: pd.DataFrame,
+    get_coords: Callable[[str, str], Tuple[float | None, float | None]],
+) -> None:
+    if signed.empty or C.COL_INT_DT not in signed.columns:
+        return
+
+    base = signed.dropna(subset=[C.COL_INT_DT]).copy()
+    if "_pid" not in base.columns:
+        base["_pid"] = base[C.COL_INT_PARTNER].astype(str).str.strip()
+        base["_pid"] = base["_pid"].where(
+            base["_pid"] != "", base[C.COL_INT_CEP].astype(str).str.strip()
+        )
+        base["_pid"] = base["_pid"].where(
+            base["_pid"] != "",
+            base[C.COL_INT_CITY].astype(str).str.strip()
+            + "|"
+            + base[C.COL_INT_STATE].astype(str).str.strip(),
+        )
+
+    base[C.COL_INT_CITY] = base[C.COL_INT_CITY].astype(str).str.strip()
+    base[C.COL_INT_STATE] = base[C.COL_INT_STATE].astype(str).str.strip()
+    base = base[(base["_pid"] != "") & (base[C.COL_INT_CITY] != "") & (base[C.COL_INT_STATE] != "")]
+    if base.empty:
+        return
+
+    first = (
+        base.sort_values(C.COL_INT_DT)
+        .drop_duplicates(subset=["_pid"])
+        .loc[:, ["_pid", C.COL_INT_DT, C.COL_INT_CITY, C.COL_INT_STATE]]
+        .rename(columns={C.COL_INT_DT: "first_dt"})
+        .copy()
+    )
+    if first.empty:
+        return
+
+    first[C.COL_INT_REGION] = (
+        first[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna("")
+    )
+
+    location_map: dict[tuple[str, str], tuple[float, float]] = {}
+    for _, row in unique_locations.iterrows():
+        c, s = str(row.get(C.COL_INT_CITY, "")).strip(), str(row.get(C.COL_INT_STATE, "")).strip()
+        if c and s and (c, s) not in location_map:
+            lat, lon = get_coords(c, s)
+            if lat is not None and lon is not None:
+                location_map[(c, s)] = (float(lat), float(lon))
+
+    first["lat"] = first.apply(
+        lambda r: location_map.get((r[C.COL_INT_CITY], r[C.COL_INT_STATE]), (None, None))[0],
+        axis=1,
+    )
+    first["lon"] = first.apply(
+        lambda r: location_map.get((r[C.COL_INT_CITY], r[C.COL_INT_STATE]), (None, None))[1],
+        axis=1,
+    )
+    first = first.dropna(subset=["lat", "lon"]).copy()
+    if first.empty:
+        return
+
+    first["frame_ts"] = pd.to_datetime(first["first_dt"]).dt.normalize()
+    unique_days = first["frame_ts"].nunique()
+
+    if unique_days <= 60:
+        min_ts = first["frame_ts"].min()
+        max_ts = first["frame_ts"].max()
+        frames = pd.date_range(start=min_ts, end=max_ts, freq="D")
+        first["frame_key"] = first["frame_ts"].dt.strftime("%Y-%m-%d")
+        frame_keys = [d.strftime("%Y-%m-%d") for d in frames]
+    else:
+        first["frame_key"] = first["frame_ts"].dt.to_period("M").astype(str)
+        start = first["frame_ts"].min().to_period("M")
+        end = first["frame_ts"].max().to_period("M")
+        frame_keys = [str(p) for p in pd.period_range(start=start, end=end, freq="M")]
+
+    key_to_idx = {k: i for i, k in enumerate(frame_keys)}
+    first["_frame_idx"] = first["frame_key"].map(key_to_idx).fillna(0).astype(int)
+
+    frames_rows = []
+    for i, k in enumerate(frame_keys):
+        snap = first[first["_frame_idx"] <= i].copy()
+        if snap.empty:
+            continue
+        snap["frame"] = k
+        frames_rows.append(snap)
+
+    if not frames_rows:
+        return
+
+    anim_df = pd.concat(frames_rows, ignore_index=True)
+    anim_df["marker_size"] = 7
+
+    st.markdown("### Linha do tempo de expansão geográfica")
+    fig = px.scatter_mapbox(
+        anim_df,
+        lat="lat",
+        lon="lon",
+        animation_frame="frame",
+        animation_group="_pid",
+        color=C.COL_INT_REGION,
+        size="marker_size",
+        size_max=12,
+        hover_name=C.COL_INT_CITY,
+        hover_data={C.COL_INT_STATE: True, C.COL_INT_REGION: True, "first_dt": True, "lat": False, "lon": False},
+        zoom=3,
+        center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+        title="Parceiros aparecendo na data do primeiro contrato (acumulado)",
+    )
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        height=650,
+        margin={"r": 0, "t": 35, "l": 0, "b": 0},
+        legend_title_text="Região",
+    )
+    if fig.layout.updatemenus and len(fig.layout.updatemenus) > 0:
+        try:
+            fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 450
+            fig.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 0
+        except Exception:
+            pass
+    st.plotly_chart(fig, width="stretch")
+
+
 def _voronoi_finite_polygons_2d(vor: Voronoi, radius: float | None = None):
     if vor.points.shape[1] != 2:
         raise ValueError("Voronoi supports only 2D input")
@@ -1005,7 +1129,7 @@ def render(
     """
     
     # 1. Prepare Data
-    _, signed_unique = _prepare_map_data(df)
+    signed, signed_unique = _prepare_map_data(df)
 
     # 2. Render KPIs
     _render_map_kpis(signed_unique)
@@ -1041,6 +1165,7 @@ def render(
     else:
         _render_point_map(unique_locations, signed_unique, get_coords)
 
+    _render_geo_expansion_timeline(signed, unique_locations, get_coords)
     _render_region_state_city_sunburst(signed_unique)
     st.divider()
 
