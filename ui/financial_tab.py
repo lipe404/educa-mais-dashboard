@@ -641,13 +641,21 @@ def _render_monthly_chart(df: pd.DataFrame):
     else:
         monthly[C.UI_LABEL_MONTH] = pd.Series(dtype="string")
 
-    monthly = monthly.sort_values(["_ano", "_mes"])
+    show_ranking = st.toggle("Visualizar como Ranking (Ordenado por Maior Faturamento)", value=False)
+
+    if show_ranking:
+        monthly = monthly.sort_values(C.COL_INT_VALOR, ascending=False)
+        chart_title = "Ranking de Faturamento por Mês (Melhores Meses)"
+    else:
+        monthly = monthly.sort_values(["_ano", "_mes"])
+        chart_title = C.UI_LABEL_MONTHLY_REVENUE
+
     st.plotly_chart(
         px.bar(
             monthly,
             x=C.UI_LABEL_MONTH,
             y=C.COL_INT_VALOR,
-            title=C.UI_LABEL_MONTHLY_REVENUE,
+            title=chart_title,
             color_discrete_sequence=[C.COLOR_PRIMARY],
         ),
         width="stretch",
