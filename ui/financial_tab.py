@@ -174,7 +174,7 @@ def _render_day_record_banner(full_df: pd.DataFrame) -> None:
             Com o ritmo atual (**R$ {daily_avg:,.2f}/dia**), a projeção para o mês é **R$ {projected_total:,.2f}** 
             — isso **superaria** o melhor mês histórico 
             *(R$ {best_month_total:,.2f} em {best_total_month_name}/{best_total_year})* em 
-            **R$ {abs(gap_to_best):,.2f}**! """
+            **R$ {abs(gap_to_best):,.2f}**!"""
         )
     else:
         st.warning(
@@ -670,7 +670,22 @@ def _render_month_vs_month_kpis(
     progress_pct = (
         (cur_total_month / prev_total_month * 100.0) if prev_total_month > 0 else None
     )
-    k1, k2, k3 = st.columns(3)
+
+    # Find historically best month to calculate comparison KPIs
+    best_year, best_month, best_total = _find_best_month(full_df, focus_year, focus_month)
+    if best_year is not None:
+        diff_best = cur_total_month - best_total
+        progress_best_pct = (
+            (cur_total_month / best_total * 100.0) if best_total > 0 else None
+        )
+        label_best = "Acima do melhor mês" if diff_best > 0 else "Falta para igualar melhor mês"
+        best_value = abs(diff_best)
+    else:
+        best_value = 0.0
+        progress_best_pct = None
+        label_best = "Falta para igualar melhor mês"
+
+    k1, k2, k3, k4 = st.columns(4)
     k1.metric(C.UI_LABEL_REVENUE_CURRENT_MONTH, f"R$ {cur_total_month:,.2f}")
     k2.metric(C.UI_LABEL_GOAL_LAST_MONTH, f"R$ {prev_total_month:,.2f}")
     k3.metric(
@@ -682,6 +697,15 @@ def _render_month_vs_month_kpis(
         f"R$ {abs(diff):,.2f}",
         delta=(f"{progress_pct:.1f}%" if progress_pct is not None else None),
     )
+    if best_year is not None:
+        k4.metric(
+            label_best,
+            f"R$ {best_value:,.2f}",
+            delta=(f"{progress_best_pct:.1f}%" if progress_best_pct is not None else None),
+        )
+    else:
+        k4.metric(label_best, "N/A")
+
     st.divider()
     return cur_total_month, prev_total_month
 
