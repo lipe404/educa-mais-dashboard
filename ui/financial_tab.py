@@ -357,7 +357,7 @@ def _render_daily_comparison_chart(
             else:
                 best_month_name = C.MONTH_NAMES.get(best_month, f"{best_month:02d}")
                 st.info(
-                    f"🏆 **Melhor Mês de Referência:** {best_month_name}/{best_year} "
+                    f"**Melhor Mês de Referência:** {best_month_name}/{best_year} "
                     f"— Faturamento total: **R$ {best_total:,.2f}**"
                 )
                 merged, merged_calc, milestone_day = _build_comparison_data(
@@ -483,11 +483,11 @@ def _render_cumulative_chart(
         )
         if label_ref == "Melhor Mês":
             st.success(
-                f"🏆 Melhor mês histórico superado no dia **{int(milestone_day)}**! Recorde batido!"
+                f"Melhor mês histórico superado no dia **{int(milestone_day)}**! Recorde batido!"
             )
         else:
             st.success(
-                f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
+                f"Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
             )
 
     # Equivalence Indicator
@@ -607,11 +607,11 @@ def _render_daily_bar_chart(
         )
         if label_ref == "Melhor Mês":
             st.success(
-                f"🏆 Melhor mês histórico superado no dia **{int(milestone_day)}**! Recorde batido!"
+                f"Melhor mês histórico superado no dia **{int(milestone_day)}**! Recorde batido!"
             )
         else:
             st.success(
-                f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
+                f"Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
             )
 
     fig.update_layout(
