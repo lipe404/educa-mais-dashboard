@@ -138,6 +138,74 @@ def _render_sankey_chart(kpis: dict):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _find_best_month(full_df: pd.DataFrame, exclude_year: int, exclude_month: int):
+    """Returns (best_year, best_month, best_total) from the full dataset, excluding the focus month."""
+    tmp = full_df.dropna(subset=[C.COL_INT_DATA]).copy()
+    tmp["_year"] = tmp[C.COL_INT_DATA].dt.year
+    tmp["_month"] = tmp[C.COL_INT_DATA].dt.month
+    monthly = tmp.groupby(["_year", "_month"])[C.COL_INT_VALOR].sum().reset_index()
+    # Exclude the current focus month from the candidates
+    monthly = monthly[
+        ~((monthly["_year"] == exclude_year) & (monthly["_month"] == exclude_month))
+    ]
+    if monthly.empty:
+        return None, None, 0.0
+    best_row = monthly.loc[monthly[C.COL_INT_VALOR].idxmax()]
+    return int(best_row["_year"]), int(best_row["_month"]), float(best_row[C.COL_INT_VALOR])
+
+
+def _build_comparison_data(
+    full_df: pd.DataFrame,
+    focus_year: int, focus_month: int,
+    cmp_year: int, cmp_month: int,
+):
+    """Builds merged day-level data for focus month vs a comparison month."""
+    curr_mask = (
+        (full_df[C.COL_INT_DATA].dt.year == focus_year)
+        & (full_df[C.COL_INT_DATA].dt.month == focus_month)
+    )
+    df_curr = full_df[curr_mask].copy()
+
+    cmp_mask = (
+        (full_df[C.COL_INT_DATA].dt.year == cmp_year)
+        & (full_df[C.COL_INT_DATA].dt.month == cmp_month)
+    )
+    df_cmp = full_df[cmp_mask].copy()
+
+    daily_curr = (
+        df_curr.groupby(df_curr[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR]
+        .sum()
+        .reset_index()
+    )
+    daily_curr.columns = ["Dia", "Valor"]
+
+    daily_cmp = (
+        df_cmp.groupby(df_cmp[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR]
+        .sum()
+        .reset_index()
+    )
+    daily_cmp.columns = ["Dia", "Valor"]
+
+    all_days = pd.DataFrame({"Dia": range(1, 32)})
+    merged = all_days.merge(daily_curr, on="Dia", how="left").rename(
+        columns={"Valor": "Atual"}
+    )
+    merged = merged.merge(daily_cmp, on="Dia", how="left").rename(
+        columns={"Valor": "Anterior"}
+    )
+    merged_calc = merged.fillna(0)
+
+    total_cmp = df_cmp[C.COL_INT_VALOR].sum()
+    milestone_day = None
+    current_cumulative_series = merged_calc["Atual"].cumsum()
+    surpassed_mask = current_cumulative_series > total_cmp
+    if surpassed_mask.any():
+        idx = surpassed_mask.idxmax()
+        milestone_day = merged_calc.iloc[idx]["Dia"]
+
+    return merged, merged_calc, milestone_day
+
+
 def _render_daily_comparison_chart(
     full_df: pd.DataFrame, df: pd.DataFrame, focus_year: int, focus_month: int, prev_year: int, prev_month: int
 ):
@@ -145,68 +213,59 @@ def _render_daily_comparison_chart(
 
     if show_comparison:
         show_cumulative = st.toggle("Comparativo de Cumulativo", value=False)
+        show_best = st.toggle("Comparar com Melhor Mês", value=False)
 
-        # 1. Prepare Data
-        curr_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (
-            full_df[C.COL_INT_DATA].dt.month == focus_month
-        )
-        df_curr = full_df[curr_mask].copy()
-
-        prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (
-            full_df[C.COL_INT_DATA].dt.month == prev_month
-        )
-        df_prev = full_df[prev_mask].copy()
-
-        # Calculate Total Previous Month for Milestone
-        total_prev_month = df_prev[C.COL_INT_VALOR].sum()
-
-        # Group by Day
-        daily_curr = (
-            df_curr.groupby(df_curr[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR]
-            .sum()
-            .reset_index()
-        )
-        daily_curr.columns = ["Dia", "Valor"]
-
-        daily_prev = (
-            df_prev.groupby(df_prev[C.COL_INT_DATA].dt.day)[C.COL_INT_VALOR]
-            .sum()
-            .reset_index()
-        )
-        daily_prev.columns = ["Dia", "Valor"]
-
-        # Create full range 1-31 for merging
-        all_days = pd.DataFrame({"Dia": range(1, 32)})
-
-        # Merge Daily Data
-        merged = all_days.merge(daily_curr, on="Dia", how="left").rename(
-            columns={"Valor": "Atual"}
-        )
-        merged = merged.merge(daily_prev, on="Dia", how="left").rename(
-            columns={"Valor": "Anterior"}
-        )
-
-        # Fill NaN with 0 only for calculations, but keep track of valid days for plotting
-        merged_calc = merged.fillna(0)
-
-        # Milestone: Check when we surpassed previous month total
-        milestone_day = None
-        current_cumulative_series = merged_calc["Atual"].cumsum()
-
-        # Find first day where cumulative current > total_prev_month
-        surpassed_mask = current_cumulative_series > total_prev_month
-        if surpassed_mask.any():
-            idx = surpassed_mask.idxmax()
-            milestone_day = merged_calc.iloc[idx]["Dia"]
-
-        if show_cumulative:
-            _render_cumulative_chart(
-                merged, merged_calc, focus_month, focus_year, prev_month, prev_year, milestone_day
+        if show_best:
+            # --- Best Month Comparison ---
+            best_year, best_month, best_total = _find_best_month(
+                full_df, focus_year, focus_month
             )
+            if best_year is None:
+                st.warning("Não há dados históricos suficientes para determinar o melhor mês.")
+            else:
+                best_month_name = C.MONTH_NAMES.get(best_month, f"{best_month:02d}")
+                st.info(
+                    f"🏆 **Melhor Mês de Referência:** {best_month_name}/{best_year} "
+                    f"— Faturamento total: **R$ {best_total:,.2f}**"
+                )
+                merged, merged_calc, milestone_day = _build_comparison_data(
+                    full_df, focus_year, focus_month, best_year, best_month
+                )
+                if show_cumulative:
+                    _render_cumulative_chart(
+                        merged, merged_calc,
+                        focus_month, focus_year,
+                        best_month, best_year,
+                        milestone_day,
+                        label_ref="Melhor Mês",
+                    )
+                else:
+                    _render_daily_bar_chart(
+                        merged_calc,
+                        focus_month, focus_year,
+                        best_month, best_year,
+                        milestone_day,
+                        label_ref="Melhor Mês",
+                    )
         else:
-            _render_daily_bar_chart(
-                merged_calc, focus_month, focus_year, prev_month, prev_year, milestone_day
+            # --- Previous Month Comparison (original behavior) ---
+            merged, merged_calc, milestone_day = _build_comparison_data(
+                full_df, focus_year, focus_month, prev_year, prev_month
             )
+            if show_cumulative:
+                _render_cumulative_chart(
+                    merged, merged_calc,
+                    focus_month, focus_year,
+                    prev_month, prev_year,
+                    milestone_day,
+                )
+            else:
+                _render_daily_bar_chart(
+                    merged_calc,
+                    focus_month, focus_year,
+                    prev_month, prev_year,
+                    milestone_day,
+                )
 
         st.divider()
 
@@ -228,10 +287,12 @@ def _render_daily_comparison_chart(
 
 
 def _render_cumulative_chart(
-    merged, merged_calc, focus_month, focus_year, prev_month, prev_year, milestone_day
+    merged, merged_calc, focus_month, focus_year, prev_month, prev_year, milestone_day,
+    label_ref: str = "Mês Anterior",
 ):
     # --- CUMULATIVE: LINE CHART ---
-    chart_title = f"Comparativo Cumulativo: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+    ref_label = f"{label_ref} ({prev_month:02d}/{prev_year})"
+    chart_title = f"Comparativo Cumulativo: {focus_month:02d}/{focus_year} vs {ref_label}"
 
     # Prepare Cumulative Data
     # For Current month: We want cumulative sum up to the last valid day, then NaN
@@ -248,16 +309,19 @@ def _render_cumulative_chart(
         # If no data at all for current month
         cum_atual[:] = None
 
+    # Choose reference line color based on context
+    ref_color = "gold" if label_ref == "Melhor Mês" else "gray"
+
     fig = go.Figure()
 
-    # Previous Month Line
+    # Reference Month Line
     fig.add_trace(
         go.Scatter(
             x=merged["Dia"],
             y=cum_anterior,
             mode="lines",
-            name=f"Mês Anterior ({prev_month:02d}/{prev_year})",
-            line=dict(color="gray", dash="dot", width=2),
+            name=ref_label,
+            line=dict(color=ref_color, dash="dot", width=2),
             hovertemplate="Dia %{x}: R$ %{y:,.2f}<extra></extra>",
         )
     )
@@ -275,7 +339,7 @@ def _render_cumulative_chart(
         )
     )
 
-    # Milestone Annotation (Meta Batida)
+    # Milestone Annotation
     if milestone_day:
         fig.add_vline(
             x=milestone_day,
@@ -285,24 +349,25 @@ def _render_cumulative_chart(
             annotation_text=f"Meta Batida (Dia {int(milestone_day)})",
             annotation_position="top left",
         )
-        st.success(
-            f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
-        )
+        if label_ref == "Melhor Mês":
+            st.success(
+                f"🏆 Melhor mês histórico superado no dia **{int(milestone_day)}**! Recorde batido!"
+            )
+        else:
+            st.success(
+                f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
+            )
 
-    # Equivalence Indicator: "Where were we last month with today's revenue?"
-    # Get latest cumulative value for current month
+    # Equivalence Indicator
     if last_valid_idx is not None:
         current_val = cum_atual[last_valid_idx]
         current_day = merged.iloc[last_valid_idx]["Dia"]
 
-        # Find day in previous month where cumulative >= current_val
-        # We search in cum_anterior
         equiv_mask = cum_anterior >= current_val
         if equiv_mask.any():
             equiv_idx = equiv_mask.idxmax()
             equiv_day = merged.iloc[equiv_idx]["Dia"]
 
-            # Add Horizontal Line from Current Point to Previous Curve
             fig.add_shape(
                 type="line",
                 x0=current_day,
@@ -312,11 +377,15 @@ def _render_cumulative_chart(
                 line=dict(color="orange", width=1, dash="dot"),
             )
 
-            # Add Annotation
+            equiv_label = (
+                f"Mesmo fat. no dia {int(equiv_day)} ({label_ref})"
+                if label_ref == "Melhor Mês"
+                else f"Mesmo fat. no dia {int(equiv_day)}"
+            )
             fig.add_annotation(
                 x=equiv_day,
                 y=current_val,
-                text=f"Mesmo fat. no dia {int(equiv_day)}",
+                text=equiv_label,
                 showarrow=True,
                 arrowhead=1,
                 ax=0,
@@ -338,21 +407,26 @@ def _render_cumulative_chart(
 
 
 def _render_daily_bar_chart(
-    merged_plot, focus_month, focus_year, prev_month, prev_year, milestone_day
+    merged_plot, focus_month, focus_year, prev_month, prev_year, milestone_day,
+    label_ref: str = "Mês Anterior",
 ):
     # --- DAILY: BAR CHART ---
-    chart_title = f"Comparativo Diário: {focus_month:02d}/{focus_year} vs {prev_month:02d}/{prev_year}"
+    ref_label = f"{label_ref} ({prev_month:02d}/{prev_year})"
+    chart_title = f"Comparativo Diário: {focus_month:02d}/{focus_year} vs {ref_label}"
+
+    # Reference bar color: golden for best month, gray otherwise
+    ref_bar_color = "rgba(255, 215, 0, 0.55)" if label_ref == "Melhor Mês" else "lightgray"
 
     fig = go.Figure()
 
-    # Previous Month (Bar - Gray/Muted)
+    # Reference Month (Bar)
     fig.add_trace(
         go.Bar(
             x=merged_plot["Dia"],
             y=merged_plot["Anterior"],
-            name=f"Mês Anterior ({prev_month:02d}/{prev_year})",
-            marker_color="lightgray",
-            opacity=0.7,
+            name=ref_label,
+            marker_color=ref_bar_color,
+            opacity=0.75,
         )
     )
 
@@ -369,6 +443,9 @@ def _render_daily_bar_chart(
 
     # Add "Winner" indicators
     winning_days = merged_plot[merged_plot["Atual"] > merged_plot["Anterior"]]
+    winner_label = (
+        "Superou Melhor Mês (dia)" if label_ref == "Melhor Mês" else "Superou Mês Anterior"
+    )
     if not winning_days.empty:
         fig.add_trace(
             go.Scatter(
@@ -381,7 +458,7 @@ def _render_daily_bar_chart(
                     color="gold",
                     line=dict(width=1, color="darkorange"),
                 ),
-                name="Superou Mês Anterior",
+                name=winner_label,
                 hoverinfo="skip",
             )
         )
@@ -396,9 +473,14 @@ def _render_daily_bar_chart(
             annotation_text=f"Meta Batida (Dia {int(milestone_day)})",
             annotation_position="top right",
         )
-        st.success(
-            f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
-        )
+        if label_ref == "Melhor Mês":
+            st.success(
+                f"🏆 Melhor mês histórico superado no dia **{int(milestone_day)}**! Recorde batido!"
+            )
+        else:
+            st.success(
+                f"🚀 Faturamento do mês anterior superado no dia **{int(milestone_day)}**!"
+            )
 
     fig.update_layout(
         title=chart_title,
