@@ -153,7 +153,7 @@ def _render_day_record_banner(full_df: pd.DataFrame) -> None:
 
     if is_record_day:
         st.success(
-            f"""🏅 **Recorde no Dia {current_day}!**  
+            f"""**Recorde no Dia {current_day}!**  
             Até o dia **{current_day}**, este mês acumulou **R$ {curr_acum:,.2f}** — o maior valor já registrado 
             neste dia entre todos os meses históricos  
             *(melhor anterior: {best_hist_month_name}/{best_hist_year} com R$ {best_hist_acum:,.2f})*"""
@@ -161,7 +161,7 @@ def _render_day_record_banner(full_df: pd.DataFrame) -> None:
     else:
         diff_to_day_record = best_hist_acum - curr_acum
         st.info(
-            f"""📊 **Pace do Dia {current_day}**  
+            f"""**Pace do Dia {current_day}**  
             Acumulado até hoje: **R$ {curr_acum:,.2f}**  
             Melhor acumulado no dia {current_day}: **R$ {best_hist_acum:,.2f}** 
             *({best_hist_month_name}/{best_hist_year})* — faltam **R$ {diff_to_day_record:,.2f}** para o recorde do dia."""
@@ -170,15 +170,15 @@ def _render_day_record_banner(full_df: pd.DataFrame) -> None:
     # Projection sub-banner
     if gap_to_best <= 0:
         st.success(
-            f"""🚀 **Projeção de Recorde Mensal!**  
+            f"""**Projeção de Recorde Mensal!**  
             Com o ritmo atual (**R$ {daily_avg:,.2f}/dia**), a projeção para o mês é **R$ {projected_total:,.2f}** 
             — isso **superaria** o melhor mês histórico 
             *(R$ {best_month_total:,.2f} em {best_total_month_name}/{best_total_year})* em 
-            **R$ {abs(gap_to_best):,.2f}**! 🎯"""
+            **R$ {abs(gap_to_best):,.2f}**! """
         )
     else:
         st.warning(
-            f"""📈 **Projeção de Fim de Mês** *(ritmo atual: R$ {daily_avg:,.2f}/dia)*  
+            f"""**Projeção de Fim de Mês** *(ritmo atual: R$ {daily_avg:,.2f}/dia)*  
             Projeção: **R$ {projected_total:,.2f}** 
             ({pct_of_best:.1f}% do melhor mês histórico — {best_total_month_name}/{best_total_year}: R$ {best_month_total:,.2f})  
             Faltam **R$ {gap_to_best:,.2f}** para bater o recorde mensal."""
