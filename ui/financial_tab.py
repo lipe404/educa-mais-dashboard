@@ -53,6 +53,138 @@ def _render_kpis(kpis: dict):
     c4.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
 
 
+def _render_day_record_banner(full_df: pd.DataFrame) -> None:
+    """
+    Shows an insight banner when today's cumulative faturamento (up to today's
+    day-of-month) is a historical record for that day number, and projects
+    how close we are to beating the all-time best month.
+    """
+    today = date.today()
+    current_day = today.day
+    current_month = today.month
+    current_year = today.year
+
+    tmp = full_df.dropna(subset=[C.COL_INT_DATA]).copy()
+    tmp["_year"] = tmp[C.COL_INT_DATA].dt.year
+    tmp["_month"] = tmp[C.COL_INT_DATA].dt.month
+    tmp["_day"] = tmp[C.COL_INT_DATA].dt.day
+
+    # --- 1. Acumulado até o dia X em cada mês ---
+    # For each (year, month), sum all transactions where day <= current_day
+    up_to_day = tmp[tmp["_day"] <= current_day]
+    cum_by_month = (
+        up_to_day.groupby(["_year", "_month"])[C.COL_INT_VALOR]
+        .sum()
+        .reset_index()
+        .rename(columns={C.COL_INT_VALOR: "acum_ate_dia"})
+    )
+
+    if cum_by_month.empty:
+        return
+
+    # Current month's cumulative up to today
+    curr_row = cum_by_month[
+        (cum_by_month["_year"] == current_year)
+        & (cum_by_month["_month"] == current_month)
+    ]
+    if curr_row.empty:
+        return
+    curr_acum = float(curr_row["acum_ate_dia"].iloc[0])
+
+    # Historical months (exclude current month)
+    hist = cum_by_month[
+        ~(
+            (cum_by_month["_year"] == current_year)
+            & (cum_by_month["_month"] == current_month)
+        )
+    ]
+
+    if hist.empty:
+        return
+
+    best_hist_acum = float(hist["acum_ate_dia"].max())
+    best_hist_row = hist.loc[hist["acum_ate_dia"].idxmax()]
+    best_hist_month = int(best_hist_row["_month"])
+    best_hist_year = int(best_hist_row["_year"])
+    best_hist_month_name = C.MONTH_NAMES.get(best_hist_month, f"{best_hist_month:02d}")
+
+    is_record_day = curr_acum > best_hist_acum
+
+    # --- 2. Projection: pace-based end-of-month forecast ---
+    # Daily average for current month up to today
+    days_elapsed = current_day  # days 1..today
+    if days_elapsed > 0:
+        daily_avg = curr_acum / days_elapsed
+        import calendar
+        days_in_month = calendar.monthrange(current_year, current_month)[1]
+        projected_total = daily_avg * days_in_month
+    else:
+        projected_total = 0.0
+        days_in_month = 31
+
+    # Best month total (full month)
+    monthly_totals = (
+        tmp.groupby(["_year", "_month"])[C.COL_INT_VALOR]
+        .sum()
+        .reset_index()
+        .rename(columns={C.COL_INT_VALOR: "total_mes"})
+    )
+    hist_totals = monthly_totals[
+        ~(
+            (monthly_totals["_year"] == current_year)
+            & (monthly_totals["_month"] == current_month)
+        )
+    ]
+    if hist_totals.empty:
+        return
+
+    best_month_total = float(hist_totals["total_mes"].max())
+    best_month_row = hist_totals.loc[hist_totals["total_mes"].idxmax()]
+    best_total_month_name = C.MONTH_NAMES.get(
+        int(best_month_row["_month"]), f"{int(best_month_row['_month']):02d}"
+    )
+    best_total_year = int(best_month_row["_year"])
+
+    gap_to_best = best_month_total - projected_total
+    pct_of_best = (projected_total / best_month_total * 100) if best_month_total > 0 else 0.0
+
+    # --- 3. Render banner ---
+    st.markdown("---")
+
+    if is_record_day:
+        st.success(
+            f"""🏅 **Recorde no Dia {current_day}!**  
+            Até o dia **{current_day}**, este mês acumulou **R$ {curr_acum:,.2f}** — o maior valor já registrado 
+            neste dia entre todos os meses históricos  
+            *(melhor anterior: {best_hist_month_name}/{best_hist_year} com R$ {best_hist_acum:,.2f})*"""
+        )
+    else:
+        diff_to_day_record = best_hist_acum - curr_acum
+        st.info(
+            f"""📊 **Pace do Dia {current_day}**  
+            Acumulado até hoje: **R$ {curr_acum:,.2f}**  
+            Melhor acumulado no dia {current_day}: **R$ {best_hist_acum:,.2f}** 
+            *({best_hist_month_name}/{best_hist_year})* — faltam **R$ {diff_to_day_record:,.2f}** para o recorde do dia."""
+        )
+
+    # Projection sub-banner
+    if gap_to_best <= 0:
+        st.success(
+            f"""🚀 **Projeção de Recorde Mensal!**  
+            Com o ritmo atual (**R$ {daily_avg:,.2f}/dia**), a projeção para o mês é **R$ {projected_total:,.2f}** 
+            — isso **superaria** o melhor mês histórico 
+            *(R$ {best_month_total:,.2f} em {best_total_month_name}/{best_total_year})* em 
+            **R$ {abs(gap_to_best):,.2f}**! 🎯"""
+        )
+    else:
+        st.warning(
+            f"""📈 **Projeção de Fim de Mês** *(ritmo atual: R$ {daily_avg:,.2f}/dia)*  
+            Projeção: **R$ {projected_total:,.2f}** 
+            ({pct_of_best:.1f}% do melhor mês histórico — {best_total_month_name}/{best_total_year}: R$ {best_month_total:,.2f})  
+            Faltam **R$ {gap_to_best:,.2f}** para bater o recorde mensal."""
+        )
+
+
 def _render_sankey_chart(kpis: dict):
     total = float(kpis.get("total", 0.0) or 0.0)
     parceiros = float(kpis.get("parceiros", 0.0) or 0.0)
@@ -673,6 +805,17 @@ def render(
 
     with st.expander("Ver Detalhes do Resultado (Sankey)", expanded=False):
         _render_sankey_chart(kpis)
+
+    # 1b. Day-record & pace banner (only when viewing the current real month)
+    now = date.today()
+    _is_current_month = (
+        selected_month is None or selected_month == now.month
+    ) and (
+        isinstance(end_date, date) and end_date.month == now.month and end_date.year == now.year
+        or not isinstance(end_date, date)
+    )
+    if _is_current_month:
+        _render_day_record_banner(full_df)
 
     st.divider()
 
