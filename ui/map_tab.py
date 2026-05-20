@@ -952,6 +952,7 @@ def _render_region_state_city_sunburst(signed_unique: pd.DataFrame) -> None:
         color_continuous_scale=["#fde8ef", "#e6165d"],
         title="Distribuição de Parceiros (Assinados) por Região/Estado/Cidade",
     )
+    fig.update_traces(hovertemplate="<b>%{label}</b><extra></extra>")
     st.plotly_chart(fig, width="stretch")
 
 
