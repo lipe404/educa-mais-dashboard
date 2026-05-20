@@ -949,7 +949,7 @@ def _render_region_state_city_sunburst(signed_unique: pd.DataFrame) -> None:
         path=[C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CITY],
         values=C.UI_LABEL_COL_PARTNERS,
         color=C.UI_LABEL_COL_PARTNERS,
-        color_continuous_scale=px.colors.sequential.Blues,
+        color_continuous_scale=["#fde8ef", "#e6165d"],
         title="Distribuição de Parceiros (Assinados) por Região/Estado/Cidade",
     )
     st.plotly_chart(fig, width="stretch")
