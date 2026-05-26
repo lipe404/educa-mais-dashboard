@@ -458,6 +458,24 @@ def _get_alunos_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
         aliases=["Carteirinha", "carteirinha", "CARTEIRINHA"],
         index=8,
     )
+    process_column(
+        df,
+        C.COL_SRC_ALUNOS_CITY,
+        C.COL_INT_ALUNOS_CITY,
+        lambda x: str(x).strip().upper() if str(x).strip().lower() not in ("nan", "none", "") else "",
+        "",
+        aliases=["Cidade", "cidade", "CIDADE"],
+        index=9,
+    )
+    process_column(
+        df,
+        C.COL_SRC_ALUNOS_STATE,
+        C.COL_INT_ALUNOS_STATE,
+        lambda x: str(x).strip().upper() if str(x).strip().lower() not in ("nan", "none", "") else "",
+        "",
+        aliases=["Estado", "estado", "ESTADO"],
+        index=10,
+    )
 
     # Filter out empty rows based on Student Name or Course
     df = df[

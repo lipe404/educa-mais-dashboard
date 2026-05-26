@@ -681,6 +681,286 @@ def _render_raw_data_expander(filtered_df: pd.DataFrame) -> None:
         )
 
 
+def _prepare_geo_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepares a filtered DataFrame with only rows that have valid CIDADE and ESTADO,
+    derived from the ALUNOS sheet columns J and K.
+
+    Args:
+        df (pd.DataFrame): Filtered student DataFrame (output of _filter_students_data).
+
+    Returns:
+        pd.DataFrame: Subset with non-empty city and state values.
+    """
+    if C.COL_INT_ALUNOS_CITY not in df.columns or C.COL_INT_ALUNOS_STATE not in df.columns:
+        return pd.DataFrame()
+
+    geo = df.copy()
+    mask = (
+        geo[C.COL_INT_ALUNOS_CITY].notna()
+        & (geo[C.COL_INT_ALUNOS_CITY] != "")
+        & (~geo[C.COL_INT_ALUNOS_CITY].str.lower().isin(["nan", "none"]))
+        & geo[C.COL_INT_ALUNOS_STATE].notna()
+        & (geo[C.COL_INT_ALUNOS_STATE] != "")
+        & (~geo[C.COL_INT_ALUNOS_STATE].str.lower().isin(["nan", "none"]))
+    )
+    return geo[mask].reset_index(drop=True)
+
+
+def _render_geo_kpis(geo_df: pd.DataFrame) -> None:
+    """
+    Renders quick KPI metrics cards for geographic data.
+
+    Args:
+        geo_df (pd.DataFrame): DataFrame with valid city/state rows.
+    """
+    total_with_location = len(geo_df)
+    unique_cities = geo_df[C.COL_INT_ALUNOS_CITY].nunique()
+    unique_states = geo_df[C.COL_INT_ALUNOS_STATE].nunique()
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Alunos com Localização", f"{total_with_location:,}".replace(",", "."))
+    c2.metric("Cidades Atendidas", unique_cities)
+    c3.metric("Estados Atendidos", unique_states)
+    st.divider()
+
+
+def _render_students_by_state_chart(geo_df: pd.DataFrame) -> None:
+    """
+    Renders a horizontal bar chart with student count per Brazilian state (UF).
+
+    Args:
+        geo_df (pd.DataFrame): DataFrame with valid city/state rows.
+    """
+    st.markdown("#### Alunos por Estado (UF)")
+
+    state_counts = (
+        geo_df[C.COL_INT_ALUNOS_STATE]
+        .value_counts()
+        .reset_index()
+    )
+    state_counts.columns = ["Estado", "Quantidade"]
+
+    fig = px.bar(
+        state_counts,
+        x="Quantidade",
+        y="Estado",
+        orientation="h",
+        title="Distribuição de Alunos por Estado",
+        text_auto=True,
+        color="Quantidade",
+        color_continuous_scale=px.colors.sequential.Blues,
+    )
+    fig.update_layout(
+        yaxis={"categoryorder": "total ascending"},
+        height=max(350, len(state_counts) * 28),
+        coloraxis_showscale=False,
+    )
+    st.plotly_chart(fig, width="stretch")
+    st.divider()
+
+
+def _render_students_by_city_chart(geo_df: pd.DataFrame) -> None:
+    """
+    Renders a horizontal bar chart with the top 15 cities by student count.
+
+    Args:
+        geo_df (pd.DataFrame): DataFrame with valid city/state rows.
+    """
+    st.markdown("#### Top 15 Cidades com Mais Alunos")
+
+    city_counts = (
+        geo_df[C.COL_INT_ALUNOS_CITY]
+        .value_counts()
+        .head(15)
+        .reset_index()
+    )
+    city_counts.columns = ["Cidade", "Quantidade"]
+
+    fig = px.bar(
+        city_counts,
+        x="Quantidade",
+        y="Cidade",
+        orientation="h",
+        title="Top 15 Cidades por Número de Alunos",
+        text_auto=True,
+        color="Quantidade",
+        color_continuous_scale=px.colors.sequential.Greens,
+    )
+    fig.update_layout(
+        yaxis={"categoryorder": "total ascending"},
+        height=480,
+        coloraxis_showscale=False,
+    )
+    st.plotly_chart(fig, width="stretch")
+    st.divider()
+
+
+def _render_students_by_region_pie(geo_df: pd.DataFrame) -> None:
+    """
+    Renders a donut pie chart with student distribution by Brazilian region,
+    derived from state abbreviations using the ESTADO_REGIAO mapping.
+
+    Args:
+        geo_df (pd.DataFrame): DataFrame with valid city/state rows.
+    """
+    st.markdown("#### Distribuição de Alunos por Região")
+
+    # Map state → region using existing constant
+    region_series = geo_df[C.COL_INT_ALUNOS_STATE].map(C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
+    region_counts = region_series.value_counts().reset_index()
+    region_counts.columns = ["Região", "Quantidade"]
+
+    # Color palette matching Brazil's regional colors convention
+    region_colors = {
+        "Norte": "#2196F3",
+        "Nordeste": "#FF9800",
+        "Centro-Oeste": "#9C27B0",
+        "Sudeste": "#F44336",
+        "Sul": "#4CAF50",
+        C.DEFAULT_REGION_OTHER: "#9E9E9E",
+    }
+    color_sequence = [
+        region_colors.get(r, "#9E9E9E") for r in region_counts["Região"].tolist()
+    ]
+
+    fig = px.pie(
+        region_counts,
+        values="Quantidade",
+        names="Região",
+        title="Alunos por Região do Brasil",
+        hole=0.42,
+        color_discrete_sequence=color_sequence,
+    )
+    fig.update_traces(textposition="outside", textinfo="percent+label")
+    fig.update_layout(legend_title_text="Região")
+    st.plotly_chart(fig, width="stretch")
+    st.divider()
+
+
+def _render_students_geo_map(geo_df: pd.DataFrame) -> None:
+    """
+    Renders an interactive scatter mapbox showing student geographic distribution
+    grouped by city+state. Geocoding uses the shared GeocodingService with SQLite cache.
+    Rendering is gated behind a checkbox to avoid automatic geocoding on page load.
+
+    Args:
+        geo_df (pd.DataFrame): DataFrame with valid city/state rows.
+    """
+    st.markdown("#### Mapa Geográfico dos Alunos")
+
+    if not st.checkbox(
+        "Gerar Mapa Geográfico de Alunos (por Cidade/Estado)",
+        key="students_geo_map_checkbox",
+    ):
+        st.info(
+            "Ative o checkbox acima para gerar o mapa interativo de distribuição dos alunos. "
+            "Cidades já geocodificadas anteriormente serão carregadas do cache instantaneamente."
+        )
+        st.divider()
+        return
+
+    # Aggregate by (city, state) pair
+    city_state_counts = (
+        geo_df.groupby(
+            [C.COL_INT_ALUNOS_CITY, C.COL_INT_ALUNOS_STATE], dropna=True
+        )
+        .size()
+        .reset_index(name="alunos")
+    )
+    city_state_counts = city_state_counts[
+        (city_state_counts[C.COL_INT_ALUNOS_CITY] != "")
+        & (city_state_counts[C.COL_INT_ALUNOS_STATE] != "")
+    ].copy()
+
+    if city_state_counts.empty:
+        st.warning("Nenhuma combinação cidade/estado válida encontrada para o mapa.")
+        st.divider()
+        return
+
+    total_pairs = len(city_state_counts)
+    st.info(
+        f"Total de combinações cidade/estado únicas: **{total_pairs}**. "
+        "Cidades em cache serão carregadas imediatamente; novas serão geocodificadas."
+    )
+
+    geo_service = GeocodingService()
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    coords_data = []
+
+    for i, row in city_state_counts.iterrows():
+        city = row[C.COL_INT_ALUNOS_CITY]
+        state = row[C.COL_INT_ALUNOS_STATE]
+        count = row["alunos"]
+
+        status_text.text(f"🔍 Geocodificando: {city} / {state} ({i + 1}/{total_pairs})")
+        lat, lon = geo_service.get_coords(city, state)
+
+        if lat is not None and lon is not None:
+            coords_data.append(
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "cidade": city.title(),
+                    "estado": state,
+                    "alunos": count,
+                    "label": f"{city.title()}, {state}",
+                }
+            )
+
+        progress_bar.progress((i + 1) / total_pairs)
+
+    progress_bar.empty()
+    status_text.empty()
+
+    if not coords_data:
+        st.warning(
+            "Não foi possível obter coordenadas para as cidades encontradas. "
+            "Verifique a conexão ou tente novamente mais tarde."
+        )
+        st.divider()
+        return
+
+    map_df = pd.DataFrame(coords_data)
+    geocoded = len(map_df)
+    failed = total_pairs - geocoded
+
+    if failed > 0:
+        st.caption(f"⚠️ {failed} cidade(s) não pôde(ram) ser geocodificada(s) e não aparecerão no mapa.")
+
+    fig_map = px.scatter_mapbox(
+        map_df,
+        lat="lat",
+        lon="lon",
+        size="alunos",
+        color="alunos",
+        hover_name="label",
+        hover_data={
+            "cidade": True,
+            "estado": True,
+            "alunos": True,
+            "lat": False,
+            "lon": False,
+            "label": False,
+        },
+        color_continuous_scale=px.colors.sequential.YlOrRd,
+        zoom=3.5,
+        center={"lat": -14.235, "lon": -51.925},
+        height=580,
+        size_max=40,
+        title=f"Distribuição Geográfica dos Alunos — {geocoded} cidades mapeadas",
+        labels={"alunos": "Alunos", "cidade": "Cidade", "estado": "Estado"},
+    )
+    fig_map.update_layout(
+        mapbox_style="open-street-map",
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        coloraxis_colorbar=dict(title="Alunos"),
+    )
+    st.plotly_chart(fig_map, width="stretch")
+    st.divider()
+
+
 def _render_analysis_tab(
     students_df: pd.DataFrame, faturamento_df: pd.DataFrame | None
 ) -> None:
@@ -709,6 +989,44 @@ def _render_analysis_tab(
     _render_top_courses_chart(filtered_df)
     _render_partner_courses_chart(filtered_df)
     _render_raw_data_expander(filtered_df)
+
+    # --- Nova seção: Distribuição Geográfica dos Alunos ---
+    geo_df = _prepare_geo_df(filtered_df)
+    if geo_df.empty:
+        # Tenta também no DataFrame original (alunos antes do filtro de cursos)
+        geo_df = _prepare_geo_df(students_df)
+
+    st.markdown("---")
+    st.markdown("### 📍 Distribuição Geográfica dos Alunos")
+    st.caption(
+        "Dados baseados nas colunas CIDADE (col. J) e ESTADO (col. K) da planilha ALUNOS."
+    )
+
+    if geo_df.empty:
+        st.info(
+            "As colunas CIDADE e ESTADO ainda não possuem dados preenchidos na planilha ALUNOS. "
+            "Preencha as colunas J e K para visualizar a distribuição geográfica."
+        )
+        return
+
+    total_students = len(students_df)
+    with_location = len(geo_df)
+    pct = (with_location / total_students * 100) if total_students > 0 else 0
+    st.caption(
+        f"**{with_location}** de **{total_students}** alunos ({pct:.1f}%) possuem cidade/estado informados."
+    )
+    st.divider()
+
+    _render_geo_kpis(geo_df)
+
+    col_left, col_right = st.columns(2)
+    with col_left:
+        _render_students_by_state_chart(geo_df)
+    with col_right:
+        _render_students_by_region_pie(geo_df)
+
+    _render_students_by_city_chart(geo_df)
+    _render_students_geo_map(geo_df)
 
 
 def _render_general_metrics(df: pd.DataFrame) -> None:
