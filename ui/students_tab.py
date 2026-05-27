@@ -934,7 +934,6 @@ def _render_students_geo_map(geo_df: pd.DataFrame) -> None:
         lat="lat",
         lon="lon",
         size="alunos",
-        color="alunos",
         hover_name="label",
         hover_data={
             "cidade": True,
@@ -944,7 +943,7 @@ def _render_students_geo_map(geo_df: pd.DataFrame) -> None:
             "lon": False,
             "label": False,
         },
-        color_continuous_scale=px.colors.sequential.YlOrRd,
+        color_discrete_sequence=[C.COLOR_SECONDARY],
         zoom=3.5,
         center={"lat": -14.235, "lon": -51.925},
         height=580,
@@ -955,7 +954,6 @@ def _render_students_geo_map(geo_df: pd.DataFrame) -> None:
     fig_map.update_layout(
         mapbox_style="open-street-map",
         margin={"r": 0, "t": 40, "l": 0, "b": 0},
-        coloraxis_colorbar=dict(title="Alunos"),
     )
     st.plotly_chart(fig_map, width="stretch")
     st.divider()
@@ -1166,7 +1164,7 @@ def _render_geo_distribution_map(df: pd.DataFrame) -> None:
             size="alunos",
             hover_name="cep",
             hover_data={"alunos": True, "lat": False, "lon": False},
-            color_discrete_sequence=["blue"],
+            color_discrete_sequence=[C.COLOR_SECONDARY],
             zoom=3,
             height=500,
             size_max=15,
