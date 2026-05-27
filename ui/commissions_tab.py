@@ -199,6 +199,39 @@ def _render_team_config(all_partners_list: list):
                                 if member["id"] not in current_assignments_map: current_assignments_map[member["id"]] = {}
                                 current_assignments_map[member["id"]]["captador"] = new_ids
                                 updated_assignments = True
+                            
+                            if has_suporte and current_partners:
+                                st.write("")
+                                if st.button(
+                                    "Copiar p/ Suporte",
+                                    key=f"rep_sup_{member['id']}",
+                                    icon=":material/arrow_forward:",
+                                    use_container_width=True,
+                                ):
+                                    if member["id"] not in current_assignments_map:
+                                        current_assignments_map[member["id"]] = {}
+                                    target_partners = list(current_partners)
+                                    current_assignments_map[member["id"]]["suporte_performance"] = target_partners
+                                    
+                                    # Update session state for current member's support multiselect
+                                    target_names = [p["name"] for p in all_partners_list if p["id"] in target_partners or p["name"] in target_partners]
+                                    st.session_state[f"sup_{member['id']}"] = target_names
+                                    
+                                    # Remove these partners from any other member's support assignment to avoid conflicts
+                                    for m_id in current_assignments_map:
+                                        if m_id != member["id"]:
+                                            if "suporte_performance" in current_assignments_map[m_id]:
+                                                current_assignments_map[m_id]["suporte_performance"] = [
+                                                    pid for pid in current_assignments_map[m_id]["suporte_performance"]
+                                                    if pid not in target_partners
+                                                ]
+                                                other_sup_key = f"sup_{m_id}"
+                                                if other_sup_key in st.session_state:
+                                                    st.session_state[other_sup_key] = [
+                                                        name for name in st.session_state[other_sup_key]
+                                                        if next((p["id"] for p in all_partners_list if p["name"] == name), name) not in target_partners
+                                                    ]
+                                    updated_assignments = True
                     
                     with ac2:
                         if has_suporte:
