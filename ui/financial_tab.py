@@ -5,7 +5,510 @@ import plotly.graph_objects as go
 from typing import Tuple
 from datetime import date
 import datetime
+import base64
+import os
+import streamlit.components.v1 as components
 import constants as C
+
+
+@st.cache_data(show_spinner=False)
+def _get_sound_b64() -> str:
+    paths_to_try = [
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "foguete.mp3"),
+        "foguete.mp3"
+    ]
+    for p in paths_to_try:
+        if os.path.exists(p):
+            try:
+                with open(p, "rb") as f:
+                    return base64.b64encode(f.read()).decode("utf-8")
+            except Exception:
+                pass
+    return ""
+
+
+def _render_celebration_banner(sound_b64: str = ""):
+    """Renders the animated META DO MÊS BATIDA banner with SVG icons and a replay button."""
+    audio_tag = ""
+    if sound_b64:
+        audio_tag = f'<audio id="cel-audio" src="data:audio/mp3;base64,{sound_b64}" preload="auto"></audio>'
+
+    banner_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+html, body {{ background:transparent; font-family:'Inter','Segoe UI',sans-serif; overflow:hidden; }}
+
+@keyframes slide-in {{
+  0% {{ opacity:0; transform:translateY(-36px) scale(0.85); }}
+  60% {{ transform:translateY(6px) scale(1.03); }}
+  100% {{ opacity:1; transform:translateY(0) scale(1); }}
+}}
+@keyframes pulse-glow {{
+  0%,100% {{ filter: drop-shadow(0 0 12px #ff2d95) drop-shadow(0 0 28px #ff2d95); transform:scale(1); }}
+  50% {{ filter: drop-shadow(0 0 24px #ff2d95) drop-shadow(0 0 55px #ff2d95); transform:scale(1.05); }}
+}}
+@keyframes shimmer {{
+  0% {{ background-position:-200% center; }}
+  100% {{ background-position:200% center; }}
+}}
+@keyframes spin-slow {{
+  from {{ transform:rotate(0deg); }}
+  to {{ transform:rotate(360deg); }}
+}}
+@keyframes float-icon {{
+  0%,100% {{ transform:translateY(0px); }}
+  50% {{ transform:translateY(-6px); }}
+}}
+@keyframes btn-pulse {{
+  0%,100% {{ box-shadow:0 0 0 0 rgba(255,45,149,0.7); }}
+  60% {{ box-shadow:0 0 0 12px rgba(255,45,149,0); }}
+}}
+
+.banner {{
+  animation: slide-in 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
+  background: linear-gradient(135deg, #130820 0%, #2a0050 50%, #130820 100%);
+  border: 2px solid #ff2d95;
+  border-radius: 20px;
+  padding: 28px 36px 24px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 50px rgba(255,45,149,0.45), inset 0 0 60px rgba(255,45,149,0.04);
+}}
+.banner::before {{
+  content:'';
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,45,149,0.12) 50%, transparent 100%);
+  background-size:200% 100%;
+  animation: shimmer 2.8s infinite linear;
+  pointer-events:none;
+}}
+.icon-row {{
+  display:flex; align-items:center; justify-content:center;
+  gap:18px; margin-bottom:12px;
+}}
+.icon-trophy {{
+  animation: float-icon 2.4s ease-in-out infinite;
+}}
+.icon-star {{
+  animation: spin-slow 4s linear infinite;
+  opacity:0.85;
+}}
+.title {{
+  font-size:2.2rem; font-weight:900; letter-spacing:3px;
+  color:#ff2d95;
+  animation: pulse-glow 2s ease-in-out infinite;
+  line-height:1.1; margin-bottom:10px;
+}}
+.subtitle {{
+  display:flex; align-items:center; justify-content:center;
+  gap:10px;
+  font-size:0.95rem; color:rgba(255,255,255,0.82);
+  letter-spacing:1.5px; text-transform:uppercase; margin-bottom:20px;
+}}
+.launch-btn {{
+  display:inline-flex; align-items:center; gap:10px;
+  background: linear-gradient(135deg,#ff2d95,#c4007a);
+  color:#fff; border:none; border-radius:50px;
+  padding:13px 32px; font-size:0.95rem; font-weight:700;
+  letter-spacing:1.5px; cursor:pointer; text-transform:uppercase;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  animation: btn-pulse 2.2s ease-out infinite;
+  position:relative; z-index:1;
+}}
+.launch-btn:hover {{
+  transform:scale(1.06); box-shadow:0 0 30px rgba(255,45,149,0.7);
+}}
+.launch-btn:active {{ transform:scale(0.97); }}
+.btn-icon {{ flex-shrink:0; }}
+</style>
+</head>
+<body>
+{audio_tag}
+
+<div class="banner">
+  <!-- Trophy + star icons -->
+  <div class="icon-row">
+    <!-- Trophy SVG -->
+    <svg class="icon-trophy" width="52" height="52" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M24 34c-7.18 0-13-5.82-13-13V8h26v13c0 7.18-5.82 13-13 13z" fill="#ff2d95" opacity="0.9"/>
+      <path d="M11 12H7a4 4 0 0 0 0 8h4M37 12h4a4 4 0 0 1 0 8h-4" stroke="#ff2d95" stroke-width="2.5" stroke-linecap="round"/>
+      <rect x="18" y="34" width="12" height="4" rx="2" fill="#ff2d95" opacity="0.8"/>
+      <rect x="14" y="38" width="20" height="4" rx="2" fill="#ff2d95"/>
+      <path d="M18 21l2.4 1.8L24 19l3.6 3.8L30 21" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    </svg>
+    <!-- Sparkle SVG -->
+    <svg class="icon-star" width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2l2.09 6.26L20.18 9l-5.09 4.14L16.73 20 12 16.27 7.27 20l1.64-6.86L3.82 9l6.09-.74L12 2z" fill="#fffb00" stroke="#ffcc00" stroke-width="0.5"/>
+    </svg>
+    <!-- Trophy SVG (mirrored) -->
+    <svg class="icon-trophy" width="52" height="52" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation-delay:0.6s">
+      <path d="M24 34c-7.18 0-13-5.82-13-13V8h26v13c0 7.18-5.82 13-13 13z" fill="#ff2d95" opacity="0.9"/>
+      <path d="M11 12H7a4 4 0 0 0 0 8h4M37 12h4a4 4 0 0 1 0 8h-4" stroke="#ff2d95" stroke-width="2.5" stroke-linecap="round"/>
+      <rect x="18" y="34" width="12" height="4" rx="2" fill="#ff2d95" opacity="0.8"/>
+      <rect x="14" y="38" width="20" height="4" rx="2" fill="#ff2d95"/>
+      <path d="M18 21l2.4 1.8L24 19l3.6 3.8L30 21" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    </svg>
+  </div>
+
+  <p class="title">META DO MÊS BATIDA!</p>
+
+  <div class="subtitle">
+    <!-- Checkmark SVG -->
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00ff9f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/>
+    </svg>
+    Melhor mês de todos os tempos — continue assim!
+    <!-- Rocket SVG -->
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+      <path d="m3.29 15 1.79-1.79m7-7-1.79 1.79"/>
+      <path d="M13 4c5.33 5.33 5.33 10.67 0 16C7.67 14.67 7.67 9.33 13 4z"/>
+    </svg>
+  </div>
+
+  <!-- Launch button -->
+  <button class="launch-btn" id="launch-btn" onclick="launchCelebration()">
+    <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+      <path d="M13 4c5.33 5.33 5.33 10.67 0 16C7.67 14.67 7.67 9.33 13 4z"/>
+    </svg>
+    Lançar Fogos
+    <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+      <path d="M13 4c5.33 5.33 5.33 10.67 0 16C7.67 14.67 7.67 9.33 13 4z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+function launchCelebration() {{
+  // ---- Play real audio (user gesture allows it) ----
+  var audio = document.getElementById('cel-audio');
+  if (audio) {{
+    audio.currentTime = 0;
+    audio.volume = 0.85;
+    audio.play().catch(function() {{ synthSound(); }});
+  }} else {{
+    synthSound();
+  }}
+
+  // ---- Inject canvas into parent Streamlit window ----
+  var pd = window.parent.document;
+  var old = pd.getElementById('educa-fireworks-canvas');
+  if (old) old.remove();
+  var canvas = pd.createElement('canvas');
+  canvas.id = 'educa-fireworks-canvas';
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483647;';
+  pd.body.appendChild(canvas);
+  var ctx = canvas.getContext('2d');
+
+  function resize() {{ canvas.width=window.parent.innerWidth; canvas.height=window.parent.innerHeight; }}
+  resize();
+  window.parent.addEventListener('resize', resize);
+
+  var COLORS=['#ff2d95','#ff69b4','#00d4ff','#fffb00','#00ff9f','#ff6600','#bf00ff','#ffffff','#aaffee'];
+
+  function Pt(x,y,col) {{
+    this.x=x; this.y=y; this.color=col;
+    var a=Math.random()*Math.PI*2, sp=Math.random()*9+2;
+    this.vx=Math.cos(a)*sp; this.vy=Math.sin(a)*sp;
+    this.grav=0.13; this.fr=0.95; this.alpha=1;
+    this.dec=Math.random()*0.013+0.007; this.sz=Math.random()*3.5+1; this.tr=[];
+  }}
+  Pt.prototype.upd=function() {{
+    this.tr.push({{x:this.x,y:this.y,a:this.alpha}});
+    if(this.tr.length>6) this.tr.shift();
+    this.vx*=this.fr; this.vy*=this.fr; this.vy+=this.grav;
+    this.x+=this.vx; this.y+=this.vy; this.alpha-=this.dec;
+  }};
+  Pt.prototype.drw=function() {{
+    for(var i=0;i<this.tr.length;i++) {{
+      var t=this.tr[i]; ctx.save(); ctx.globalAlpha=t.a*0.22;
+      ctx.beginPath(); ctx.arc(t.x,t.y,this.sz*0.5,0,Math.PI*2);
+      ctx.fillStyle=this.color; ctx.fill(); ctx.restore();
+    }}
+    ctx.save(); ctx.globalAlpha=this.alpha;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.sz,0,Math.PI*2);
+    ctx.fillStyle=this.color; ctx.shadowBlur=14; ctx.shadowColor=this.color;
+    ctx.fill(); ctx.restore();
+  }};
+
+  function Rkt() {{
+    this.x=Math.random()*canvas.width*0.8+canvas.width*0.1;
+    this.y=canvas.height+10;
+    this.tx=Math.random()*canvas.width*0.8+canvas.width*0.1;
+    this.ty=Math.random()*canvas.height*0.5+canvas.height*0.05;
+    var a=Math.atan2(this.ty-this.y,this.tx-this.x), sp=Math.random()*7+13;
+    this.vx=Math.cos(a)*sp; this.vy=Math.sin(a)*sp;
+    this.color=COLORS[Math.floor(Math.random()*COLORS.length)];
+    this.sz=4; this.tr=[];
+  }}
+  Rkt.prototype.upd=function() {{
+    this.tr.push({{x:this.x,y:this.y}});
+    if(this.tr.length>14) this.tr.shift();
+    this.x+=this.vx; this.y+=this.vy;
+    if(this.vy>=-1||this.y<=this.ty) {{ this.exp(); return false; }}
+    return true;
+  }};
+  Rkt.prototype.exp=function() {{
+    var n=Math.floor(Math.random()*70)+90;
+    for(var i=0;i<n;i++) pts.push(new Pt(this.x,this.y,this.color));
+    for(var j=0;j<24;j++) {{
+      var aa=(j/24)*Math.PI*2, p=new Pt(this.x,this.y,'#ffffff');
+      p.vx=Math.cos(aa)*5; p.vy=Math.sin(aa)*5; pts.push(p);
+    }}
+  }};
+  Rkt.prototype.drw=function() {{
+    for(var i=0;i<this.tr.length;i++) {{
+      var t=this.tr[i], r=i/this.tr.length; ctx.save(); ctx.globalAlpha=r*0.65;
+      ctx.beginPath(); ctx.arc(t.x,t.y,this.sz*r*0.8,0,Math.PI*2);
+      ctx.fillStyle=this.color; ctx.shadowBlur=10; ctx.shadowColor=this.color;
+      ctx.fill(); ctx.restore();
+    }}
+    ctx.save(); ctx.beginPath(); ctx.arc(this.x,this.y,this.sz,0,Math.PI*2);
+    ctx.fillStyle='#ffffff'; ctx.shadowBlur=22; ctx.shadowColor=this.color;
+    ctx.fill(); ctx.restore();
+  }};
+
+  var pts=[], rkts=[], active=true, st=Date.now(), DUR=12000;
+
+  function launch() {{
+    if(Date.now()-st<DUR-2500) {{
+      rkts.push(new Rkt());
+      if(Math.random()<0.35) setTimeout(function(){{rkts.push(new Rkt());}},180);
+    }}
+  }}
+  launch(); launch(); launch();
+  var iv=setInterval(function() {{
+    if(Date.now()-st>=DUR-2500){{clearInterval(iv);return;}}
+    launch(); if(Math.random()<0.2) launch();
+  }},550);
+
+  function loop() {{
+    if(!active) return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    var el=Date.now()-st, fp=Math.max(0,(el-(DUR-2500))/2500);
+    if(fp<1) {{ ctx.fillStyle='rgba(0,0,0,'+(0.15*(1-fp))+')'; ctx.fillRect(0,0,canvas.width,canvas.height); }}
+    for(var i=rkts.length-1;i>=0;i--) {{
+      if(!rkts[i].upd()) rkts.splice(i,1); else rkts[i].drw();
+    }}
+    for(var j=pts.length-1;j>=0;j--) {{
+      pts[j].upd();
+      if(pts[j].alpha>0) pts[j].drw(); else pts.splice(j,1);
+    }}
+    if(el>DUR&&rkts.length===0&&pts.length===0) {{ canvas.remove(); active=false; return; }}
+    requestAnimationFrame(loop);
+  }}
+  loop();
+}}
+
+function synthSound() {{
+  try {{
+    var AC=window.AudioContext||window.webkitAudioContext||window.parent.AudioContext||window.parent.webkitAudioContext;
+    var ac=new AC();
+    function rkt(t) {{
+      var o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.setValueAtTime(900,t); o.frequency.exponentialRampToValueAtTime(120,t+0.7);
+      g.gain.setValueAtTime(0.45,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.8);
+      o.start(t); o.stop(t+0.8);
+    }}
+    function boom(t) {{
+      var b=ac.createBuffer(1,ac.sampleRate*0.5,ac.sampleRate), d=b.getChannelData(0);
+      for(var i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5);
+      var s=ac.createBufferSource(); s.buffer=b;
+      var g=ac.createGain();
+      g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+      s.connect(g); g.connect(ac.destination); s.start(t);
+    }}
+    var t=ac.currentTime;
+    rkt(t); boom(t+0.75); rkt(t+1.6); boom(t+2.35);
+    rkt(t+3.2); boom(t+3.95); rkt(t+4.8); boom(t+5.55);
+  }} catch(e) {{}}
+}}
+</script>
+</body>
+</html>"""
+    components.html(banner_html, height=230, scrolling=False)
+
+
+
+def _render_celebration_fireworks(sound_b64: str):
+    """Renders fireworks by injecting canvas into parent Streamlit window."""
+    audio_tag = ""
+    if sound_b64:
+        audio_tag = f'<audio id="celebration-audio" src="data:audio/mp3;base64,{sound_b64}"></audio>'
+
+    html_code = f"""<!DOCTYPE html>
+<html>
+<head>
+<style>
+* {{ margin:0; padding:0; }}
+html, body {{ width:100%; height:1px; overflow:hidden; background:transparent; }}
+</style>
+</head>
+<body>
+{audio_tag}
+<script>
+(function() {{
+    // Inject canvas into parent (Streamlit) window - not confined to iframe
+    var pd = window.parent.document;
+    var old = pd.getElementById('educa-fireworks-canvas');
+    if (old) old.remove();
+    var canvas = pd.createElement('canvas');
+    canvas.id = 'educa-fireworks-canvas';
+    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483647;';
+    pd.body.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+
+    function resize() {{
+        canvas.width = window.parent.innerWidth;
+        canvas.height = window.parent.innerHeight;
+    }}
+    resize();
+    window.parent.addEventListener('resize', resize);
+
+    // ---- Audio ----
+    var audio = document.getElementById('celebration-audio');
+    function trySound() {{
+        if (audio) {{ audio.volume = 0.7; audio.play().catch(synthSound); }}
+        else {{ synthSound(); }}
+    }}
+    function synthSound() {{
+        try {{
+            var AC = window.AudioContext || window.webkitAudioContext
+                  || window.parent.AudioContext || window.parent.webkitAudioContext;
+            var ac = new AC();
+            function rkt(t) {{
+                var o=ac.createOscillator(), g=ac.createGain();
+                o.connect(g); g.connect(ac.destination);
+                o.frequency.setValueAtTime(900,t);
+                o.frequency.exponentialRampToValueAtTime(120,t+0.7);
+                g.gain.setValueAtTime(0.45,t);
+                g.gain.exponentialRampToValueAtTime(0.001,t+0.8);
+                o.start(t); o.stop(t+0.8);
+            }}
+            function boom(t) {{
+                var b=ac.createBuffer(1,ac.sampleRate*0.5,ac.sampleRate), d=b.getChannelData(0);
+                for(var i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5);
+                var s=ac.createBufferSource(); s.buffer=b;
+                var g=ac.createGain();
+                g.gain.setValueAtTime(0.6,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+                s.connect(g); g.connect(ac.destination); s.start(t);
+            }}
+            var t=ac.currentTime;
+            rkt(t); boom(t+0.75); rkt(t+1.6); boom(t+2.35);
+            rkt(t+3.2); boom(t+3.95); rkt(t+4.8); boom(t+5.55);
+        }} catch(e) {{}}
+    }}
+    trySound();
+
+    // ---- Fireworks ----
+    var COLORS=['#ff2d95','#ff69b4','#00d4ff','#fffb00','#00ff9f','#ff6600','#bf00ff','#ffffff','#aaffee'];
+
+    function Pt(x,y,col) {{
+        this.x=x; this.y=y; this.color=col;
+        var a=Math.random()*Math.PI*2, sp=Math.random()*9+2;
+        this.vx=Math.cos(a)*sp; this.vy=Math.sin(a)*sp;
+        this.grav=0.13; this.fr=0.95; this.alpha=1;
+        this.dec=Math.random()*0.013+0.007;
+        this.sz=Math.random()*3.5+1; this.tr=[];
+    }}
+    Pt.prototype.upd=function() {{
+        this.tr.push({{x:this.x,y:this.y,a:this.alpha}});
+        if(this.tr.length>6) this.tr.shift();
+        this.vx*=this.fr; this.vy*=this.fr; this.vy+=this.grav;
+        this.x+=this.vx; this.y+=this.vy; this.alpha-=this.dec;
+    }};
+    Pt.prototype.drw=function() {{
+        for(var i=0;i<this.tr.length;i++) {{
+            var t=this.tr[i];
+            ctx.save(); ctx.globalAlpha=t.a*0.22;
+            ctx.beginPath(); ctx.arc(t.x,t.y,this.sz*0.5,0,Math.PI*2);
+            ctx.fillStyle=this.color; ctx.fill(); ctx.restore();
+        }}
+        ctx.save(); ctx.globalAlpha=this.alpha;
+        ctx.beginPath(); ctx.arc(this.x,this.y,this.sz,0,Math.PI*2);
+        ctx.fillStyle=this.color; ctx.shadowBlur=14; ctx.shadowColor=this.color;
+        ctx.fill(); ctx.restore();
+    }};
+
+    function Rkt() {{
+        this.x=Math.random()*canvas.width*0.8+canvas.width*0.1;
+        this.y=canvas.height+10;
+        this.tx=Math.random()*canvas.width*0.8+canvas.width*0.1;
+        this.ty=Math.random()*canvas.height*0.5+canvas.height*0.05;
+        var a=Math.atan2(this.ty-this.y,this.tx-this.x), sp=Math.random()*7+13;
+        this.vx=Math.cos(a)*sp; this.vy=Math.sin(a)*sp;
+        this.color=COLORS[Math.floor(Math.random()*COLORS.length)];
+        this.sz=4; this.tr=[];
+    }}
+    Rkt.prototype.upd=function() {{
+        this.tr.push({{x:this.x,y:this.y}});
+        if(this.tr.length>14) this.tr.shift();
+        this.x+=this.vx; this.y+=this.vy;
+        if(this.vy>=-1||this.y<=this.ty) {{ this.exp(); return false; }}
+        return true;
+    }};
+    Rkt.prototype.exp=function() {{
+        var n=Math.floor(Math.random()*70)+90;
+        for(var i=0;i<n;i++) pts.push(new Pt(this.x,this.y,this.color));
+        for(var j=0;j<24;j++) {{
+            var a=(j/24)*Math.PI*2, p=new Pt(this.x,this.y,'#ffffff');
+            p.vx=Math.cos(a)*5; p.vy=Math.sin(a)*5; pts.push(p);
+        }}
+    }};
+    Rkt.prototype.drw=function() {{
+        for(var i=0;i<this.tr.length;i++) {{
+            var t=this.tr[i], r=i/this.tr.length;
+            ctx.save(); ctx.globalAlpha=r*0.65;
+            ctx.beginPath(); ctx.arc(t.x,t.y,this.sz*r*0.8,0,Math.PI*2);
+            ctx.fillStyle=this.color; ctx.shadowBlur=10; ctx.shadowColor=this.color;
+            ctx.fill(); ctx.restore();
+        }}
+        ctx.save(); ctx.beginPath(); ctx.arc(this.x,this.y,this.sz,0,Math.PI*2);
+        ctx.fillStyle='#ffffff'; ctx.shadowBlur=22; ctx.shadowColor=this.color;
+        ctx.fill(); ctx.restore();
+    }};
+
+    var pts=[], rkts=[], active=true, st=Date.now(), DUR=12000;
+
+    function launch() {{
+        if(Date.now()-st<DUR-2500) {{
+            rkts.push(new Rkt());
+            if(Math.random()<0.35) setTimeout(function(){{rkts.push(new Rkt());}},180);
+        }}
+    }}
+    launch(); launch(); launch();
+    var iv=setInterval(function() {{
+        if(Date.now()-st>=DUR-2500){{clearInterval(iv);return;}}
+        launch(); if(Math.random()<0.2) launch();
+    }},550);
+
+    function loop() {{
+        if(!active) return;
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        var el=Date.now()-st, fp=Math.max(0,(el-(DUR-2500))/2500);
+        if(fp<1) {{ ctx.fillStyle='rgba(0,0,0,'+(0.15*(1-fp))+')'; ctx.fillRect(0,0,canvas.width,canvas.height); }}
+        for(var i=rkts.length-1;i>=0;i--) {{
+            if(!rkts[i].upd()) rkts.splice(i,1); else rkts[i].drw();
+        }}
+        for(var j=pts.length-1;j>=0;j--) {{
+            pts[j].upd();
+            if(pts[j].alpha>0) pts[j].drw(); else pts.splice(j,1);
+        }}
+        if(el>DUR&&rkts.length===0&&pts.length===0) {{ canvas.remove(); active=false; return; }}
+        requestAnimationFrame(loop);
+    }}
+    loop();
+}})();
+</script>
+</body>
+</html>"""
+    components.html(html_code, height=1, scrolling=False)
 
 
 def _calculate_kpis(df: pd.DataFrame) -> dict:
@@ -831,15 +1334,45 @@ def _render_monthly_ticket_boxplot(df: pd.DataFrame) -> None:
 def render(
     df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None
 ):
+    # --- Pre-compute month context (needed for banner before KPIs section) ---
+    now = date.today()
+    focus_year = end_date.year if isinstance(end_date, date) else now.year
+    focus_month = (
+        selected_month
+        if selected_month is not None
+        else end_date.month if isinstance(end_date, date) else now.month
+    )
+    prev_year = focus_year if focus_month > 1 else focus_year - 1
+    prev_month = focus_month - 1 if focus_month > 1 else 12
+
+    # Pre-calculate month totals for the celebration condition
+    _cur_mask = (full_df[C.COL_INT_DATA].dt.year == focus_year) & (
+        full_df[C.COL_INT_DATA].dt.month == focus_month
+    )
+    _prev_mask = (full_df[C.COL_INT_DATA].dt.year == prev_year) & (
+        full_df[C.COL_INT_DATA].dt.month == prev_month
+    )
+    _cur_total = float(full_df.loc[_cur_mask, C.COL_INT_VALOR].sum())
+    _prev_total = float(full_df.loc[_prev_mask, C.COL_INT_VALOR].sum())
+    _best_year, _best_month, _best_total = _find_best_month(full_df, focus_year, focus_month)
+    _beats_last = _cur_total > _prev_total and _prev_total > 0
+    _beats_best = _best_year is not None and _cur_total > _best_total and _best_total > 0
+    _show_celebration = _beats_last and _beats_best
+
     # 1. Calculate and Render Main KPIs
     kpis = _calculate_kpis(df)
     _render_kpis(kpis)
+
+    # 1a. Celebration banner — shown right after KPIs, above Sankey
+    if _show_celebration:
+        sound_b64 = _get_sound_b64()
+        _render_celebration_banner(sound_b64)
+
 
     with st.expander("Ver Detalhes do Resultado (Sankey)", expanded=False):
         _render_sankey_chart(kpis)
 
     # 1b. Day-record & pace banner (only when viewing the current real month)
-    now = date.today()
     _is_current_month = (
         selected_month is None or selected_month == now.month
     ) and (
@@ -852,16 +1385,6 @@ def render(
     st.divider()
 
     # 2. Daily Revenue Comparison
-    now = date.today()
-    focus_year = end_date.year if isinstance(end_date, date) else now.year
-    focus_month = (
-        selected_month
-        if selected_month is not None
-        else end_date.month if isinstance(end_date, date) else now.month
-    )
-    prev_year = focus_year if focus_month > 1 else focus_year - 1
-    prev_month = focus_month - 1 if focus_month > 1 else 12
-
     _render_daily_comparison_chart(
         full_df, df, focus_year, focus_month, prev_year, prev_month
     )
