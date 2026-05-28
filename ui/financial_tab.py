@@ -27,11 +27,14 @@ def _get_sound_b64() -> str:
     return ""
 
 
-def _render_celebration_banner(sound_b64: str = ""):
-    """Renders the animated META DO MÊS BATIDA banner with SVG icons and a replay button."""
+def _render_celebration_banner(sound_b64: str = "", monthly_values: list = None):
+    """Renders the animated META DO MÊS BATIDA banner with SVG icons, replay button, and monthly chart."""
+    import json
     audio_tag = ""
     if sound_b64:
         audio_tag = f'<audio id="cel-audio" src="data:audio/mp3;base64,{sound_b64}" preload="auto"></audio>'
+
+    vals_json = json.dumps([float(v) for v in (monthly_values or [])])
 
     banner_html = f"""<!DOCTYPE html>
 <html>
@@ -65,13 +68,17 @@ html, body {{ background:transparent; font-family:'Inter','Segoe UI',sans-serif;
   0%,100% {{ box-shadow:0 0 0 0 rgba(255,45,149,0.7); }}
   60% {{ box-shadow:0 0 0 12px rgba(255,45,149,0); }}
 }}
+@keyframes arrow-bounce {{
+  0%,100% {{ transform:translateY(0px); }}
+  50% {{ transform:translateY(-5px); }}
+}}
 
 .banner {{
   animation: slide-in 0.75s cubic-bezier(0.34,1.56,0.64,1) forwards;
   background: linear-gradient(135deg, #130820 0%, #2a0050 50%, #130820 100%);
   border: 2px solid #ff2d95;
   border-radius: 20px;
-  padding: 28px 36px 24px;
+  padding: 22px 28px 20px;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -87,64 +94,66 @@ html, body {{ background:transparent; font-family:'Inter','Segoe UI',sans-serif;
 }}
 .icon-row {{
   display:flex; align-items:center; justify-content:center;
-  gap:18px; margin-bottom:12px;
+  gap:16px; margin-bottom:8px;
 }}
-.icon-trophy {{
-  animation: float-icon 2.4s ease-in-out infinite;
-}}
-.icon-star {{
-  animation: spin-slow 4s linear infinite;
-  opacity:0.85;
-}}
+.icon-trophy {{ animation: float-icon 2.4s ease-in-out infinite; }}
+.icon-star {{ animation: spin-slow 4s linear infinite; opacity:0.85; }}
 .title {{
-  font-size:2.2rem; font-weight:900; letter-spacing:3px;
+  font-size:2rem; font-weight:900; letter-spacing:3px;
   color:#ff2d95;
   animation: pulse-glow 2s ease-in-out infinite;
-  line-height:1.1; margin-bottom:10px;
+  line-height:1.1; margin-bottom:8px;
 }}
 .subtitle {{
-  display:flex; align-items:center; justify-content:center;
-  gap:10px;
-  font-size:0.95rem; color:rgba(255,255,255,0.82);
-  letter-spacing:1.5px; text-transform:uppercase; margin-bottom:20px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  font-size:0.88rem; color:rgba(255,255,255,0.82);
+  letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px;
 }}
 .launch-btn {{
   display:inline-flex; align-items:center; gap:10px;
   background: linear-gradient(135deg,#ff2d95,#c4007a);
   color:#fff; border:none; border-radius:50px;
-  padding:13px 32px; font-size:0.95rem; font-weight:700;
+  padding:11px 28px; font-size:0.88rem; font-weight:700;
   letter-spacing:1.5px; cursor:pointer; text-transform:uppercase;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   animation: btn-pulse 2.2s ease-out infinite;
   position:relative; z-index:1;
 }}
-.launch-btn:hover {{
-  transform:scale(1.06); box-shadow:0 0 30px rgba(255,45,149,0.7);
-}}
+.launch-btn:hover {{ transform:scale(1.06); box-shadow:0 0 30px rgba(255,45,149,0.7); }}
 .launch-btn:active {{ transform:scale(0.97); }}
 .btn-icon {{ flex-shrink:0; }}
+
+.chart-wrap {{
+  margin-top:16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,45,149,0.2);
+  border-radius: 12px;
+  padding: 14px 14px 8px;
+  position: relative;
+}}
+.chart-label {{
+  font-size:0.65rem; color:rgba(255,255,255,0.35);
+  letter-spacing:2px; text-transform:uppercase; margin-bottom:10px;
+}}
+#chart-svg {{ overflow: visible; display:block; width:100%; }}
 </style>
 </head>
 <body>
 {audio_tag}
 
 <div class="banner">
-  <!-- Trophy + star icons -->
   <div class="icon-row">
-    <!-- Trophy SVG -->
-    <svg class="icon-trophy" width="52" height="52" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg class="icon-trophy" width="46" height="46" viewBox="0 0 48 48" fill="none">
       <path d="M24 34c-7.18 0-13-5.82-13-13V8h26v13c0 7.18-5.82 13-13 13z" fill="#ff2d95" opacity="0.9"/>
       <path d="M11 12H7a4 4 0 0 0 0 8h4M37 12h4a4 4 0 0 1 0 8h-4" stroke="#ff2d95" stroke-width="2.5" stroke-linecap="round"/>
       <rect x="18" y="34" width="12" height="4" rx="2" fill="#ff2d95" opacity="0.8"/>
       <rect x="14" y="38" width="20" height="4" rx="2" fill="#ff2d95"/>
       <path d="M18 21l2.4 1.8L24 19l3.6 3.8L30 21" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
     </svg>
-    <!-- Sparkle SVG -->
-    <svg class="icon-star" width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg class="icon-star" width="32" height="32" viewBox="0 0 24 24" fill="none">
       <path d="M12 2l2.09 6.26L20.18 9l-5.09 4.14L16.73 20 12 16.27 7.27 20l1.64-6.86L3.82 9l6.09-.74L12 2z" fill="#fffb00" stroke="#ffcc00" stroke-width="0.5"/>
     </svg>
-    <!-- Trophy SVG (mirrored) -->
-    <svg class="icon-trophy" width="52" height="52" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation-delay:0.6s">
+    <svg class="icon-trophy" width="46" height="46" viewBox="0 0 48 48" fill="none" style="animation-delay:0.6s">
       <path d="M24 34c-7.18 0-13-5.82-13-13V8h26v13c0 7.18-5.82 13-13 13z" fill="#ff2d95" opacity="0.9"/>
       <path d="M11 12H7a4 4 0 0 0 0 8h4M37 12h4a4 4 0 0 1 0 8h-4" stroke="#ff2d95" stroke-width="2.5" stroke-linecap="round"/>
       <rect x="18" y="34" width="12" height="4" rx="2" fill="#ff2d95" opacity="0.8"/>
@@ -156,46 +165,257 @@ html, body {{ background:transparent; font-family:'Inter','Segoe UI',sans-serif;
   <p class="title">META DO MÊS BATIDA!</p>
 
   <div class="subtitle">
-    <!-- Checkmark SVG -->
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00ff9f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00ff9f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20 6L9 17l-5-5"/>
     </svg>
     Melhor mês de todos os tempos — continue assim!
-    <!-- Rocket SVG -->
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
-      <path d="m3.29 15 1.79-1.79m7-7-1.79 1.79"/>
       <path d="M13 4c5.33 5.33 5.33 10.67 0 16C7.67 14.67 7.67 9.33 13 4z"/>
     </svg>
   </div>
 
-  <!-- Launch button -->
   <button class="launch-btn" id="launch-btn" onclick="launchCelebration()">
-    <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
       <path d="M13 4c5.33 5.33 5.33 10.67 0 16C7.67 14.67 7.67 9.33 13 4z"/>
     </svg>
     Lançar Fogos
-    <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
       <path d="M13 4c5.33 5.33 5.33 10.67 0 16C7.67 14.67 7.67 9.33 13 4z"/>
     </svg>
   </button>
+
+  <!-- Monthly Growth Chart -->
+  <div class="chart-wrap">
+    <div class="chart-label">Crescimento Mensal</div>
+    <svg id="chart-svg" height="130"></svg>
+  </div>
 </div>
 
 <script>
-function launchCelebration() {{
-  // ---- Play real audio (user gesture allows it) ----
-  var audio = document.getElementById('cel-audio');
-  if (audio) {{
-    audio.currentTime = 0;
-    audio.volume = 0.85;
-    audio.play().catch(function() {{ synthSound(); }});
-  }} else {{
-    synthSound();
+var MONTHLY_VALS = {vals_json};
+
+// ---- Chart ----
+function easeOutBack(t) {{
+  var c1=1.70158, c3=c1+1;
+  return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2);
+}}
+function easeOutCubic(t) {{ return 1 - Math.pow(1-t,3); }}
+
+function buildChart() {{
+  var svg = document.getElementById('chart-svg');
+  if (!svg || MONTHLY_VALS.length === 0) return;
+  var W = svg.getBoundingClientRect().width || 680;
+  if (W < 10) W = 680;
+  var H = 130;
+  svg.setAttribute('viewBox', '0 0 '+W+' '+H);
+  svg.setAttribute('width', W);
+
+  var ns = 'http://www.w3.org/2000/svg';
+  var defs = document.createElementNS(ns,'defs');
+
+  // Bar gradient
+  var grad = document.createElementNS(ns,'linearGradient');
+  grad.setAttribute('id','barGrad'); grad.setAttribute('x1','0'); grad.setAttribute('y1','0');
+  grad.setAttribute('x2','0'); grad.setAttribute('y2','1');
+  var s1=document.createElementNS(ns,'stop'); s1.setAttribute('offset','0%'); s1.setAttribute('stop-color','#ff69b4');
+  var s2=document.createElementNS(ns,'stop'); s2.setAttribute('offset','100%'); s2.setAttribute('stop-color','#c4007a');
+  grad.appendChild(s1); grad.appendChild(s2); defs.appendChild(grad);
+
+  // Last bar gradient (brighter)
+  var grad2 = document.createElementNS(ns,'linearGradient');
+  grad2.setAttribute('id','barGradLast'); grad2.setAttribute('x1','0'); grad2.setAttribute('y1','0');
+  grad2.setAttribute('x2','0'); grad2.setAttribute('y2','1');
+  var s3=document.createElementNS(ns,'stop'); s3.setAttribute('offset','0%'); s3.setAttribute('stop-color','#ffffff');
+  var s4=document.createElementNS(ns,'stop'); s4.setAttribute('offset','30%'); s4.setAttribute('stop-color','#ff2d95');
+  var s5=document.createElementNS(ns,'stop'); s5.setAttribute('offset','100%'); s5.setAttribute('stop-color','#ff0070');
+  grad2.appendChild(s3); grad2.appendChild(s4); grad2.appendChild(s5); defs.appendChild(grad2);
+
+  // Glow filter
+  var filt = document.createElementNS(ns,'filter');
+  filt.setAttribute('id','glow'); filt.setAttribute('x','-50%'); filt.setAttribute('y','-50%');
+  filt.setAttribute('width','200%'); filt.setAttribute('height','200%');
+  var blur=document.createElementNS(ns,'feGaussianBlur'); blur.setAttribute('stdDeviation','4'); blur.setAttribute('result','cb');
+  var merge=document.createElementNS(ns,'feMerge');
+  var mn1=document.createElementNS(ns,'feMergeNode'); mn1.setAttribute('in','cb');
+  var mn2=document.createElementNS(ns,'feMergeNode'); mn2.setAttribute('in','SourceGraphic');
+  merge.appendChild(mn1); merge.appendChild(mn2);
+  filt.appendChild(blur); filt.appendChild(merge); defs.appendChild(filt);
+
+  // Arrow glow filter
+  var filt2=document.createElementNS(ns,'filter');
+  filt2.setAttribute('id','arrowGlow'); filt2.setAttribute('x','-80%'); filt2.setAttribute('y','-80%');
+  filt2.setAttribute('width','260%'); filt2.setAttribute('height','260%');
+  var blur2=document.createElementNS(ns,'feGaussianBlur'); blur2.setAttribute('stdDeviation','5'); blur2.setAttribute('result','cb2');
+  var merge2=document.createElementNS(ns,'feMerge');
+  var mn3=document.createElementNS(ns,'feMergeNode'); mn3.setAttribute('in','cb2');
+  var mn4=document.createElementNS(ns,'feMergeNode'); mn4.setAttribute('in','SourceGraphic');
+  merge2.appendChild(mn3); merge2.appendChild(mn4);
+  filt2.appendChild(blur2); filt2.appendChild(merge2); defs.appendChild(filt2);
+
+  svg.appendChild(defs);
+
+  var n = MONTHLY_VALS.length;
+  var maxV = Math.max.apply(null, MONTHLY_VALS);
+  var pad = 8;
+  var chartH = H - pad;
+  var barW = Math.max(5, Math.min(28, (W - 20) / (n * 1.55)));
+  var gap = barW * 0.55;
+  var totalW = n*barW + (n-1)*gap;
+  var startX = (W - totalW) / 2;
+
+  var topPoints = [];
+  var rects = [];
+
+  for (var i=0; i<n; i++) {{
+    var h = maxV>0 ? Math.max(3, (MONTHLY_VALS[i]/maxV)*chartH) : 3;
+    var x = startX + i*(barW+gap);
+    var midX = x + barW/2;
+    topPoints.push({{x:midX, y:H-h}});
+
+    var rect = document.createElementNS(ns,'rect');
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', H);
+    rect.setAttribute('width', barW);
+    rect.setAttribute('height', 0);
+    rect.setAttribute('rx', Math.min(4, barW/2));
+    rect.setAttribute('fill', i===n-1 ? 'url(#barGradLast)' : 'url(#barGrad)');
+    if (i===n-1) rect.setAttribute('filter','url(#glow)');
+    svg.appendChild(rect);
+    rects.push({{el:rect, targetY:H-h, targetH:h, delay:80+i*55}});
   }}
 
-  // ---- Inject canvas into parent Streamlit window ----
+  // Animate bars
+  rects.forEach(function(r) {{
+    setTimeout(function() {{
+      var st=null, dur=650;
+      function step(ts) {{
+        if(!st) st=ts;
+        var p=Math.min(1,(ts-st)/dur);
+        var e=easeOutBack(p);
+        var curH=r.targetH*e;
+        if(curH<0) curH=0;
+        r.el.setAttribute('y', H-curH);
+        r.el.setAttribute('height', curH);
+        if(p<1) requestAnimationFrame(step);
+      }}
+      requestAnimationFrame(step);
+    }}, r.delay);
+  }});
+
+  // Animate trend line + arrow after bars
+  var lineDelay = 80 + n*55 + 250;
+  setTimeout(function() {{
+    if (topPoints.length < 2) return;
+
+    // Trend polyline
+    var poly = document.createElementNS(ns,'polyline');
+    var pts = topPoints.map(function(p){{return p.x.toFixed(1)+','+p.y.toFixed(1);}}).join(' ');
+    poly.setAttribute('points', pts);
+    poly.setAttribute('fill','none');
+    poly.setAttribute('stroke','rgba(255,255,255,0.75)');
+    poly.setAttribute('stroke-width','2');
+    poly.setAttribute('stroke-linecap','round');
+    poly.setAttribute('stroke-linejoin','round');
+    svg.appendChild(poly);
+
+    // Compute total length
+    var len = 0;
+    for (var k=1;k<topPoints.length;k++) {{
+      var dx=topPoints[k].x-topPoints[k-1].x, dy=topPoints[k].y-topPoints[k-1].y;
+      len += Math.sqrt(dx*dx+dy*dy);
+    }}
+    len += 10;
+    poly.setAttribute('stroke-dasharray', len);
+    poly.setAttribute('stroke-dashoffset', len);
+
+    // Animate line draw
+    var lineStart=null, lineDur=900;
+    function animLine(ts) {{
+      if(!lineStart) lineStart=ts;
+      var p=Math.min(1,(ts-lineStart)/lineDur);
+      var e=easeOutCubic(p);
+      poly.setAttribute('stroke-dashoffset', len*(1-e));
+      if(p<1) {{ requestAnimationFrame(animLine); return; }}
+      // Done drawing line — show arrow
+      addArrow();
+    }}
+    requestAnimationFrame(animLine);
+
+    function addArrow() {{
+      var last = topPoints[topPoints.length-1];
+      var prev = topPoints[topPoints.length-2];
+      var angle = Math.atan2(last.y-prev.y, last.x-prev.x);
+      var sz = 14;
+      // Arrowhead at last point
+      var ax=last.x+Math.cos(angle)*sz, ay=last.y+Math.sin(angle)*sz;
+      var bx=last.x+Math.cos(angle+2.5)*sz*0.55, by=last.y+Math.sin(angle+2.5)*sz*0.55;
+      var cx=last.x+Math.cos(angle-2.5)*sz*0.55, cy=last.y+Math.sin(angle-2.5)*sz*0.55;
+
+      var arrow = document.createElementNS(ns,'polygon');
+      arrow.setAttribute('points', ax.toFixed(1)+','+ay.toFixed(1)+' '+bx.toFixed(1)+','+by.toFixed(1)+' '+cx.toFixed(1)+','+cy.toFixed(1));
+      arrow.setAttribute('fill','#ffffff');
+      arrow.setAttribute('filter','url(#arrowGlow)');
+      arrow.style.opacity='0';
+      svg.appendChild(arrow);
+
+      // Fade in arrow + animate it bouncing
+      setTimeout(function() {{
+        arrow.style.transition='opacity 0.3s ease';
+        arrow.style.opacity='1';
+        // Pulsing glow animation on the arrowhead
+        setInterval(function() {{
+          arrow.setAttribute('filter', arrow.getAttribute('filter')==='url(#arrowGlow)' ? 'url(#glow)' : 'url(#arrowGlow)');
+        }}, 800);
+      }}, 100);
+
+      // Big upward arrow on the right side
+      var bigX = W - 14;
+      var bigYBottom = H - 4;
+      var bigYTop = topPoints[topPoints.length-1].y - 10;
+      if (bigYTop < 8) bigYTop = 8;
+
+      var lineEl = document.createElementNS(ns,'line');
+      lineEl.setAttribute('x1',bigX); lineEl.setAttribute('y1',bigYBottom);
+      lineEl.setAttribute('x2',bigX); lineEl.setAttribute('y2',bigYTop+10);
+      lineEl.setAttribute('stroke','#ff2d95'); lineEl.setAttribute('stroke-width','2.5');
+      lineEl.setAttribute('stroke-linecap','round');
+      lineEl.setAttribute('filter','url(#arrowGlow)');
+      lineEl.style.opacity='0';
+      svg.appendChild(lineEl);
+
+      var arrowUp = document.createElementNS(ns,'polygon');
+      var tip = bigX+','+bigYTop;
+      var left = (bigX-6)+','+(bigYTop+10);
+      var right = (bigX+6)+','+(bigYTop+10);
+      arrowUp.setAttribute('points',tip+' '+left+' '+right);
+      arrowUp.setAttribute('fill','#ff2d95');
+      arrowUp.setAttribute('filter','url(#arrowGlow)');
+      arrowUp.style.opacity='0';
+      svg.appendChild(arrowUp);
+
+      setTimeout(function() {{
+        lineEl.style.transition='opacity 0.4s ease'; lineEl.style.opacity='1';
+        arrowUp.style.transition='opacity 0.4s ease'; arrowUp.style.opacity='1';
+        // Animate bouncing up
+        var bStart=null, bDur=1000;
+        function bounce(ts) {{
+          if(!bStart) bStart=ts;
+          var off = Math.sin((ts-bStart)/bDur*Math.PI*2)*5;
+          arrowUp.setAttribute('transform','translate(0,'+off+')');
+          lineEl.setAttribute('transform','translate(0,'+off+')');
+          requestAnimationFrame(bounce);
+        }}
+        requestAnimationFrame(bounce);
+      }}, 150);
+    }}
+  }}, lineDelay);
+}}
+
+// ---- Fireworks (visual only - auto-launch on load) ----
+function launchFireworks() {{
   var pd = window.parent.document;
   var old = pd.getElementById('educa-fireworks-canvas');
   if (old) old.remove();
@@ -305,6 +525,17 @@ function launchCelebration() {{
   loop();
 }}
 
+// ---- Button: fireworks + audio ----
+function launchCelebration() {{
+  var audio = document.getElementById('cel-audio');
+  if (audio) {{
+    audio.currentTime = 0;
+    audio.volume = 0.85;
+    audio.play().catch(function() {{ synthSound(); }});
+  }} else {{ synthSound(); }}
+  launchFireworks();
+}}
+
 function synthSound() {{
   try {{
     var AC=window.AudioContext||window.webkitAudioContext||window.parent.AudioContext||window.parent.webkitAudioContext;
@@ -329,11 +560,16 @@ function synthSound() {{
     rkt(t+3.2); boom(t+3.95); rkt(t+4.8); boom(t+5.55);
   }} catch(e) {{}}
 }}
+
+// Auto-launch on load (visual fireworks, no audio)
+window.addEventListener('load', function() {{
+  buildChart();
+  launchFireworks();
+}});
 </script>
 </body>
 </html>"""
-    components.html(banner_html, height=230, scrolling=False)
-
+    components.html(banner_html, height=450, scrolling=False)
 
 
 def _render_celebration_fireworks(sound_b64: str):
@@ -1366,7 +1602,17 @@ def render(
     # 1a. Celebration banner — shown right after KPIs, above Sankey
     if _show_celebration:
         sound_b64 = _get_sound_b64()
-        _render_celebration_banner(sound_b64)
+        # Compute monthly totals for chart
+        _tmp = full_df.dropna(subset=[C.COL_INT_DATA]).copy()
+        _tmp['_y'] = _tmp[C.COL_INT_DATA].dt.year
+        _tmp['_m'] = _tmp[C.COL_INT_DATA].dt.month
+        _monthly_vals = (
+            _tmp.groupby(['_y', '_m'])[C.COL_INT_VALOR].sum()
+            .reset_index()
+            .sort_values(['_y', '_m'])[C.COL_INT_VALOR]
+            .tolist()
+        )
+        _render_celebration_banner(sound_b64, _monthly_vals)
 
 
     with st.expander("Ver Detalhes do Resultado (Sankey)", expanded=False):
