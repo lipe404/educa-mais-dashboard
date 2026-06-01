@@ -304,11 +304,14 @@ def _generate_pdf(report_data: dict, month_str: str) -> bytes:
     
     # Summary Table
     summary = report_data["summary"]
+    tax_pct_val = summary.get("tax_rate", 0.30) * 100.0
     summary_data = [
         ["Métrica", "Valor"],
         ["Faturamento Total", f"R$ {summary['total_gross_revenue']:,.2f}"],
         ["Comissão Parceiros", f"R$ {summary['total_partners_commission']:,.2f}"],
-        ["Base para Equipe", f"R$ {summary['team_base_value']:,.2f}"],
+        ["Base Restante (50%)", f"R$ {summary['team_base_value']:,.2f}"],
+        [f"Imposto ({tax_pct_val:.1f}%)", f"R$ {summary.get('tax_value', 0.0):,.2f}"],
+        ["Base Líquida (após Imposto)", f"R$ {summary.get('remaining_after_tax', 0.0):,.2f}"],
         ["Comissão Fixa Equipe", f"R$ {summary['total_fixed_commission']:,.2f}"],
         ["Comissão Variável Equipe", f"R$ {summary['total_partner_based_commission']:,.2f}"],
         ["Total Equipe", f"R$ {summary['total_team_commission']:,.2f}"],
@@ -421,8 +424,15 @@ def render(dados_df: pd.DataFrame, access_key: str):
             st.info("Nenhum dado financeiro para o mês selecionado.")
             return
 
+        # Retrieve global tax rate
+        global_tax_pct = st.session_state.get("global_tax_pct", 30.0)
+
         # Prepare Partners Data from DataFrame
-        default_partner_pct = st.number_input("Porcentagem Padrão Parceiros (%)", value=50.0, step=5.0)
+        col_pct1, col_pct2 = st.columns(2)
+        default_partner_pct = col_pct1.number_input("Porcentagem Padrão Parceiros (%)", value=50.0, step=5.0)
+        tax_pct = col_pct2.number_input("Alíquota de Imposto (%)", value=global_tax_pct, step=1.0, key="com_tax_pct")
+        # Keep global in sync if modified locally
+        st.session_state["global_tax_pct"] = tax_pct
         
         # Grouping
         partner_groups = df_filtered.groupby(C.COL_INT_PARTNER)[C.COL_INT_VALOR].sum().reset_index()
@@ -473,18 +483,20 @@ def render(dados_df: pd.DataFrame, access_key: str):
             result = CommissionEngine.calculate_commissions(
                 partners_data=partners_data_input,
                 team_members=team_members,
-                assignments=assignments
+                assignments=assignments,
+                tax_rate=tax_pct / 100.0
             )
             
             # Display Results
             summary = result["summary"]
             
             # 1. Summary Metrics
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4, c5 = st.columns(5)
             c1.metric("Faturamento Total", f"R$ {summary['total_gross_revenue']:,.2f}")
             c2.metric("Comissão Parceiros", f"R$ {summary['total_partners_commission']:,.2f}")
-            c3.metric("Comissão Equipe", f"R$ {summary['total_team_commission']:,.2f}")
-            c4.metric("Líquido Final", f"R$ {summary['final_remaining_value']:,.2f}")
+            c3.metric(f"Imposto ({tax_pct:.1f}%)", f"R$ {summary.get('tax_value', 0.0):,.2f}")
+            c4.metric("Comissão Equipe", f"R$ {summary['total_team_commission']:,.2f}")
+            c5.metric("Líquido Final", f"R$ {summary['final_remaining_value']:,.2f}")
             
             st.divider()
             
@@ -641,10 +653,13 @@ def render(dados_df: pd.DataFrame, access_key: str):
         st.caption("Simule o ganho da equipe com base em um faturamento hipotético. "
                    "O cálculo considera os membros configurados acima.")
         
+        global_tax_pct = st.session_state.get("global_tax_pct", 30.0)
+
         with st.container(border=True):
-            sim_col1, sim_col2 = st.columns(2)
+            sim_col1, sim_col2, sim_col3 = st.columns(3)
             sim_revenue = sim_col1.number_input("Faturamento Simulado (R$)", value=100000.0, step=10000.0, format="%.2f")
             sim_partner_pct = sim_col2.number_input("Comissão Média Parceiros (%)", value=50.0, step=5.0)
+            sim_tax_pct = sim_col3.number_input("Alíquota de Imposto (%)", value=global_tax_pct, step=1.0, key="sim_tab_tax_pct")
             
             st.divider()
             st.markdown("##### Atribuição de Responsáveis (Opcional)")
@@ -701,18 +716,20 @@ def render(dados_df: pd.DataFrame, access_key: str):
                 sim_result = CommissionEngine.calculate_commissions(
                     partners_data=sim_partner_data,
                     team_members=team_members,
-                    assignments=sim_assignments
+                    assignments=sim_assignments,
+                    tax_rate=sim_tax_pct / 100.0
                 )
                 
                 # Display Sim Results
                 sim_summary = sim_result["summary"]
                 
                 # Metrics
-                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1, sc2, sc3, sc4, sc5 = st.columns(5)
                 sc1.metric("Faturamento Simulado", f"R$ {sim_summary['total_gross_revenue']:,.2f}")
                 sc2.metric("Comissão Parceiros", f"R$ {sim_summary['total_partners_commission']:,.2f}")
-                sc3.metric("Comissão Equipe", f"R$ {sim_summary['total_team_commission']:,.2f}")
-                sc4.metric("Líquido Final", f"R$ {sim_summary['final_remaining_value']:,.2f}")
+                sc3.metric(f"Imposto ({sim_tax_pct:.1f}%)", f"R$ {sim_summary.get('tax_value', 0.0):,.2f}")
+                sc4.metric("Comissão Equipe", f"R$ {sim_summary['total_team_commission']:,.2f}")
+                sc5.metric("Líquido Final", f"R$ {sim_summary['final_remaining_value']:,.2f}")
                 
                 st.divider()
                 st.subheader("Ganhos da Equipe (Simulação)")

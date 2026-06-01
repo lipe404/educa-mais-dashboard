@@ -144,6 +144,17 @@ selected_contract_type = st.sidebar.radio(
     C.UI_LABEL_CONTRACT_TYPE, contract_type_options
 )
 
+# Alíquota de Imposto (Global)
+global_tax_pct = st.sidebar.number_input(
+    "Alíquota de Imposto (%)",
+    min_value=0.0,
+    max_value=100.0,
+    value=30.0,
+    step=1.0,
+    help="Alíquota de imposto aplicada sobre os 50% restantes da comissão."
+)
+st.session_state["global_tax_pct"] = global_tax_pct
+
 # Geographic Filters
 unique_regions = sorted([r for r in dados[C.COL_INT_REGION].unique() if r])
 selected_regions = st.sidebar.multiselect(C.UI_LABEL_FILTER_REGION, unique_regions)

@@ -121,6 +121,7 @@ class CommissionEngine:
         partners_data: List[Dict[str, Any]],
         team_members: List[Dict[str, Any]],
         assignments: List[Dict[str, Any]],
+        tax_rate: float = 0.30,
     ) -> Dict[str, Any]:
         """
         Calculates the comprehensive commission report.
@@ -130,6 +131,7 @@ class CommissionEngine:
             team_members: List of dicts with keys: id, name, roles (list of strings)
             assignments: List of dicts mapping partner_id to captador_id and suporte_id
                          e.g. [{'partner_id': 1, 'captador_id': 10, 'suporte_id': 11}]
+            tax_rate: The rate of tax applied to the remaining 50% revenue (defaults to 30% / 0.30)
 
         Returns:
             Dict containing summary, partners_calculated, and team_calculated.
@@ -149,6 +151,10 @@ class CommissionEngine:
 
         # 2. Remaining Value for Team Base
         remaining_value_for_team_fixed = total_partners_revenue - total_partners_commission
+        
+        # Calculate Tax
+        tax_value = remaining_value_for_team_fixed * tax_rate
+        remaining_after_tax = remaining_value_for_team_fixed - tax_value
 
         # 3. Team Calculations
         
@@ -188,7 +194,8 @@ class CommissionEngine:
             
             if total_theoretical_fixed > 0:
                 proportional_share = (member_fixed_percentage / total_theoretical_fixed) * effective_percentage
-                fixed_commission_for_pool = (remaining_value_for_team_fixed * proportional_share) / 100.0
+                # Use remaining_after_tax instead of remaining_value_for_team_fixed
+                fixed_commission_for_pool = (remaining_after_tax * proportional_share) / 100.0
             
             # Calculate Partner-Based Component
             partner_commission = 0.0
@@ -224,7 +231,8 @@ class CommissionEngine:
             total_partner_based_commission_value += partner_commission
 
         # 4. Normalization
-        target_team_commission = remaining_value_for_team_fixed * 0.13
+        # target team commission is 13% of remainder after tax
+        target_team_commission = remaining_after_tax * 0.13
         available_for_fixed = target_team_commission - total_partner_based_commission_value
         
         if available_for_fixed < 0:
@@ -232,12 +240,6 @@ class CommissionEngine:
             
         normalization_factor = 1.0
         if sum_fixed_pre_norm > 0:
-            # Logic from TS: if sumFixedPreNorm > 0...
-            # The TS logic seems to imply we ONLY normalize if available < sumFixedPreNorm?
-            # "if (availableForFixed < sumFixedPreNorm)"
-            # Let's double check TS lines 210.
-            # Yes: if (availableForFixed < sumFixedPreNorm) memberData.fixed *= normalizationFactor
-            
             if available_for_fixed < sum_fixed_pre_norm:
                  normalization_factor = available_for_fixed / sum_fixed_pre_norm
         
@@ -251,7 +253,7 @@ class CommissionEngine:
         # 5. Final Totals
         total_fixed_commission_final = sum(m["fixed_commission"] for m in team_calculated)
         total_team_commission_final = total_fixed_commission_final + total_partner_based_commission_value
-        final_remaining_value = remaining_value_for_team_fixed - total_team_commission_final
+        final_remaining_value = remaining_after_tax - total_team_commission_final
         
         avg_partner_commission_pct = 0.0
         if partners_calculated:
@@ -261,6 +263,9 @@ class CommissionEngine:
             "total_gross_revenue": total_partners_revenue,
             "total_partners_commission": total_partners_commission,
             "team_base_value": remaining_value_for_team_fixed,
+            "tax_rate": tax_rate,
+            "tax_value": tax_value,
+            "remaining_after_tax": remaining_after_tax,
             "total_theoretical_fixed_percentage": total_theoretical_fixed,
             "total_team_commission": total_team_commission_final,
             "total_fixed_commission": total_fixed_commission_final,

@@ -749,10 +749,14 @@ html, body {{ width:100%; height:1px; overflow:hidden; background:transparent; }
 
 
 def _calculate_kpis(df: pd.DataFrame) -> dict:
+    tax_pct = st.session_state.get("global_tax_pct", 30.0)
     total = df[C.COL_INT_VALOR].sum()
     parceiros = (df[C.COL_INT_VALOR] * df[C.COL_INT_COMISSAO]).sum()
-    equipe = C.COMMISSION_RATE_TEAM * (total - parceiros)
-    liquido = total - parceiros - equipe
+    base_restante = total - parceiros
+    imposto = base_restante * (tax_pct / 100.0)
+    base_equipe = base_restante - imposto
+    equipe = C.COMMISSION_RATE_TEAM * base_equipe
+    liquido = base_equipe - equipe
 
     # Novos KPIs
     today = date.today()
@@ -769,6 +773,8 @@ def _calculate_kpis(df: pd.DataFrame) -> dict:
     return {
         "total": total,
         "parceiros": parceiros,
+        "imposto": imposto,
+        "tax_pct": tax_pct,
         "equipe": equipe,
         "liquido": liquido,
         "fat_hoje": fat_hoje,
@@ -783,14 +789,15 @@ def _render_kpis(kpis: dict):
     new_k2.metric(C.UI_LABEL_REVENUE_WEEK, f"R$ {kpis['fat_semana']:,.2f}")
     new_k3.metric(C.UI_LABEL_REVENUE_MONTH, f"R$ {kpis['fat_mes']:,.2f}")
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric(C.UI_LABEL_TOTAL_REVENUE, f"R$ {kpis['total']:,.2f}")
     c2.metric(C.UI_LABEL_PARTNER_COMMISSION, f"R$ {kpis['parceiros']:,.2f}")
-    c3.metric(
-        f"{C.UI_LABEL_TEAM_COMMISSION_BASE} ({int(C.COMMISSION_RATE_TEAM*100)}%)",
+    c3.metric(f"Imposto ({kpis['tax_pct']:.1f}%)", f"R$ {kpis['imposto']:,.2f}")
+    c4.metric(
+        f"Comissão Equipe ({int(C.COMMISSION_RATE_TEAM*100)}%)",
         f"R$ {kpis['equipe']:,.2f}",
     )
-    c4.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
+    c5.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
 
 
 def _render_day_record_banner(full_df: pd.DataFrame) -> None:
@@ -928,10 +935,13 @@ def _render_day_record_banner(full_df: pd.DataFrame) -> None:
 def _render_sankey_chart(kpis: dict):
     total = float(kpis.get("total", 0.0) or 0.0)
     parceiros = float(kpis.get("parceiros", 0.0) or 0.0)
+    imposto = float(kpis.get("imposto", 0.0) or 0.0)
     equipe_total = float(kpis.get("equipe", 0.0) or 0.0)
     liquido = float(kpis.get("liquido", 0.0) or 0.0)
+    tax_pct = float(kpis.get("tax_pct", 30.0))
 
-    base_equipe = max(0.0, total - parceiros)
+    base_restante = max(0.0, total - parceiros)
+    base_equipe = max(0.0, base_restante - imposto)
 
     equipe_fixa = max(0.0, min(equipe_total, base_equipe))
     equipe_variavel = max(0.0, base_equipe - equipe_fixa - liquido)
@@ -940,6 +950,8 @@ def _render_sankey_chart(kpis: dict):
     labels = [
         "Faturamento Bruto",
         "Comissão Parceiros",
+        "Base Restante (50%)",
+        f"Imposto ({tax_pct:.1f}%)",
         "Base Equipe",
         "Comissão Equipe (Fixa)",
         "Comissão Equipe (Variável)",
@@ -950,21 +962,27 @@ def _render_sankey_chart(kpis: dict):
     sources = [
         idx["Faturamento Bruto"],
         idx["Faturamento Bruto"],
+        idx["Base Restante (50%)"],
+        idx["Base Restante (50%)"],
         idx["Base Equipe"],
         idx["Base Equipe"],
         idx["Base Equipe"],
     ]
     targets = [
         idx["Comissão Parceiros"],
+        idx["Base Restante (50%)"],
+        idx[f"Imposto ({tax_pct:.1f}%)"],
         idx["Base Equipe"],
         idx["Comissão Equipe (Fixa)"],
         idx["Comissão Equipe (Variável)"],
         idx["Resultado Líquido"],
     ]
-    values = [parceiros, base_equipe, equipe_fixa, equipe_variavel, liquido_sankey]
+    values = [parceiros, base_restante, imposto, base_equipe, equipe_fixa, equipe_variavel, liquido_sankey]
 
     link_colors = [
         "rgba(239,85,59,0.55)",
+        "rgba(45,159,255,0.35)",
+        "rgba(255,165,0,0.55)",
         "rgba(45,159,255,0.35)",
         "rgba(239,85,59,0.55)",
         "rgba(239,85,59,0.35)",
@@ -974,6 +992,8 @@ def _render_sankey_chart(kpis: dict):
         "rgba(45,159,255,0.9)",
         "rgba(239,85,59,0.9)",
         "rgba(45,159,255,0.6)",
+        "rgba(255,165,0,0.9)",
+        "rgba(45,159,255,0.7)",
         "rgba(239,85,59,0.8)",
         "rgba(239,85,59,0.55)",
         "rgba(0,204,150,0.9)",
@@ -1463,6 +1483,7 @@ def _render_simulator(
 ):
     total = kpis["total"]
     parceiros = kpis["parceiros"]
+    tax_pct = st.session_state.get("global_tax_pct", 30.0)
     
     st.markdown(C.UI_LABEL_SIMULATOR_TITLE)
     sim_add = st.number_input(
@@ -1471,16 +1492,19 @@ def _render_simulator(
     avg_comissao = (parceiros / total) if total > 0 else 0.0
     sim_total = total + sim_add
     sim_parceiros = parceiros + sim_add * avg_comissao
-    sim_equipe = C.COMMISSION_RATE_TEAM * (sim_total - sim_parceiros)
-    sim_liquido = sim_total - sim_parceiros - sim_equipe
-    s1, s2, s3, s4 = st.columns(4)
+    sim_restante = sim_total - sim_parceiros
+    sim_imposto = sim_restante * (tax_pct / 100.0)
+    sim_equipe = C.COMMISSION_RATE_TEAM * (sim_restante - sim_imposto)
+    sim_liquido = sim_restante - sim_imposto - sim_equipe
+    s1, s2, s3, s4, s5 = st.columns(5)
     s1.metric(C.UI_LABEL_SIMULATOR_TOTAL, f"R$ {sim_total:,.2f}")
     s2.metric(C.UI_LABEL_SIMULATOR_PARTNER, f"R$ {sim_parceiros:,.2f}")
-    s3.metric(
+    s3.metric(f"Imposto ({tax_pct:.1f}%) (simulado)", f"R$ {sim_imposto:,.2f}")
+    s4.metric(
         f"{C.UI_LABEL_SIMULATOR_TEAM} ({int(C.COMMISSION_RATE_TEAM*100)}%) (simulado)",
         f"R$ {sim_equipe:,.2f}",
     )
-    s4.metric(C.UI_LABEL_SIMULATOR_NET, f"R$ {sim_liquido:,.2f}")
+    s5.metric(C.UI_LABEL_SIMULATOR_NET, f"R$ {sim_liquido:,.2f}")
     cur_total_month_sim = cur_total_month + sim_add
     diff_sim = cur_total_month_sim - prev_total_month
     progress_pct_sim = (
@@ -1502,18 +1526,20 @@ def _render_simulator(
 def _render_revenue_waterfall(kpis: dict) -> None:
     total = float(kpis.get("total", 0.0) or 0.0)
     parceiros = float(kpis.get("parceiros", 0.0) or 0.0)
+    imposto = float(kpis.get("imposto", 0.0) or 0.0)
     equipe = float(kpis.get("equipe", 0.0) or 0.0)
     liquido = float(kpis.get("liquido", 0.0) or 0.0)
 
     fig = go.Figure(
         go.Waterfall(
             orientation="v",
-            measure=["absolute", "relative", "relative", "total"],
-            x=["Bruto", "Comissão Parceiros", "Comissão Equipe", "Líquido"],
-            y=[total, -parceiros, -equipe, liquido],
+            measure=["absolute", "relative", "relative", "relative", "total"],
+            x=["Bruto", "Comissão Parceiros", "Imposto", "Comissão Equipe", "Líquido"],
+            y=[total, -parceiros, -imposto, -equipe, liquido],
             text=[
                 f"R$ {total:,.2f}",
                 f"- R$ {parceiros:,.2f}",
+                f"- R$ {imposto:,.2f}",
                 f"- R$ {equipe:,.2f}",
                 f"R$ {liquido:,.2f}",
             ],
