@@ -209,13 +209,13 @@ class CommissionEngine:
                 if assignment.get("captador_id") == member_id:
                     if "captador" in roles:
                         cat_info = TEAM_CATEGORIES["captador"]
-                        partner_commission += p_revenue * (cat_info["percentage"] / 100.0)
+                        partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - tax_rate)
                 
                 # Suporte Check
                 if assignment.get("suporte_id") == member_id:
                     if "suporte_performance" in roles:
                         cat_info = TEAM_CATEGORIES["suporte_performance"]
-                        partner_commission += p_revenue * (cat_info["percentage"] / 100.0)
+                        partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - tax_rate)
 
             team_calculated.append({
                 "member_id": member_id,

@@ -85,3 +85,51 @@ def test_calculate_commissions_default_tax():
     assert summary["remaining_after_tax"] == 3500.0
     assert summary["total_team_commission"] == pytest.approx(455.0)
     assert summary["final_remaining_value"] == pytest.approx(3045.0)
+
+
+def test_calculate_commissions_variable_tax():
+    # Setup test data: one partner with 10000 faturamento at 50% commission
+    partners_data = [
+        {"id": "partner1", "name": "Parceiro 1", "revenue": 10000.0, "commission_percentage": 50.0}
+    ]
+    
+    # 2 team members, one with fixed gerente role (3%), another with variable captador role (1.0%)
+    team_members = [
+        {"id": 1, "name": "Membro 1", "roles": ["gerente_expansao"]},
+        {"id": 2, "name": "Membro 2", "roles": ["captador"]}
+    ]
+    
+    # Membro 2 is the captador for partner1
+    assignments = [
+        {"partner_id": "partner1", "captador_id": 2}
+    ]
+
+    # Test with 30% tax
+    res = CommissionEngine.calculate_commissions(
+        partners_data=partners_data,
+        team_members=team_members,
+        assignments=assignments,
+        tax_rate=0.30
+    )
+    
+    summary = res["summary"]
+    # Total revenue = 10000
+    # Partner commission = 5000
+    # Base remaining = 5000
+    # Tax = 1500
+    # Remaining after tax = 3500
+    # Target team pool = 13% of 3500 = 455
+    # Variable commission for Membro 2 (Captador): 1% of 10000 = 100, scaled by (1 - 0.3) = 70.0
+    # Available for fixed = 455 - 70 = 385.0
+    # Membro 1 fixed = (3/3) * 13% of 3500 = 455.0 (theoretical)
+    # Since available for fixed (385) is less than theoretical fixed (455), scale by normalisation factor = 385 / 455 = 0.84615
+    # Membro 1 actual fixed = 455 * 0.84615 = 385.0
+    # Total team commission = 385 (fixed) + 70 (variable) = 455.0
+    
+    assert summary["tax_value"] == 1500.0
+    assert summary["remaining_after_tax"] == 3500.0
+    assert summary["total_partner_based_commission"] == pytest.approx(70.0)
+    assert summary["total_fixed_commission"] == pytest.approx(385.0)
+    assert summary["total_team_commission"] == pytest.approx(455.0)
+    assert summary["final_remaining_value"] == pytest.approx(3045.0)
+
