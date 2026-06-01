@@ -1594,7 +1594,10 @@ def render(
     _best_year, _best_month, _best_total = _find_best_month(full_df, focus_year, focus_month)
     _beats_last = _cur_total > _prev_total and _prev_total > 0
     _beats_best = _best_year is not None and _cur_total > _best_total and _best_total > 0
-    _show_celebration = _beats_last and _beats_best
+    # Only celebrate if the user is actually viewing the current real calendar month
+    _is_viewing_current_month = (focus_year == now.year and focus_month == now.month)
+    _show_celebration = _beats_last and _beats_best and _is_viewing_current_month
+
 
     # 1. Calculate KPIs
     kpis = _calculate_kpis(df)
