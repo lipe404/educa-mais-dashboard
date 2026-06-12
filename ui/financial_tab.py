@@ -783,7 +783,9 @@ def _calculate_kpis(df: pd.DataFrame) -> dict:
     }
 
 
-def _render_kpis(kpis: dict):
+def _render_kpis(kpis: dict, bolsas_controle_df: pd.DataFrame = None):
+    """Renders KPI metrics. Commission always uses normal faturamento only.
+    If bolsas_controle_df is provided, an extra bolsas summary row is shown."""
     new_k1, new_k2, new_k3 = st.columns(3)
     new_k1.metric(C.UI_LABEL_REVENUE_TODAY, f"R$ {kpis['fat_hoje']:,.2f}")
     new_k2.metric(C.UI_LABEL_REVENUE_WEEK, f"R$ {kpis['fat_semana']:,.2f}")
@@ -798,6 +800,40 @@ def _render_kpis(kpis: dict):
         f"R$ {kpis['equipe']:,.2f}",
     )
     c5.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
+
+    # --- Bolsas summary (shown separately below normal KPIs) ---
+    if bolsas_controle_df is not None and not bolsas_controle_df.empty:
+        st.markdown("---")
+        st.markdown(
+            "<p style='color:#ff2d95;font-weight:700;font-size:0.9rem;margin-bottom:6px;'>'"
+            "🎫 Faturamento de Bolsas (separado — sem cálculo de comissão)</p>",
+            unsafe_allow_html=True,
+        )
+        total_bolsas = bolsas_controle_df[C.COL_INT_BOLSA_VALOR].sum()
+        today = date.today()
+        start_of_week = today - datetime.timedelta(days=today.weekday())
+        start_of_month = today.replace(day=1)
+
+        bolsas_hoje = 0.0
+        bolsas_semana = 0.0
+        bolsas_mes = 0.0
+        total_cotas = 0
+
+        if C.COL_INT_BOLSA_DATA in bolsas_controle_df.columns:
+            tmp_b = bolsas_controle_df.dropna(subset=[C.COL_INT_BOLSA_DATA])
+            bolsas_hoje = tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date == today][C.COL_INT_BOLSA_VALOR].sum()
+            bolsas_semana = tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date >= start_of_week][C.COL_INT_BOLSA_VALOR].sum()
+            bolsas_mes = tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date >= start_of_month][C.COL_INT_BOLSA_VALOR].sum()
+        if C.COL_INT_BOLSA_COTAS in bolsas_controle_df.columns:
+            total_cotas = int(bolsas_controle_df[C.COL_INT_BOLSA_COTAS].sum())
+
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("💰 Bolsas — Total", f"R$ {total_bolsas:,.2f}")
+        b2.metric("💰 Bolsas — Hoje", f"R$ {bolsas_hoje:,.2f}")
+        b3.metric("💰 Bolsas — Esta Semana", f"R$ {bolsas_semana:,.2f}")
+        b4.metric("🎫 Cotas Adquiridas", f"{total_cotas:,}")
+        st.markdown("<br>", unsafe_allow_html=True)
+
 
 
 def _render_day_record_banner(full_df: pd.DataFrame) -> None:
@@ -1595,7 +1631,11 @@ def _render_monthly_ticket_boxplot(df: pd.DataFrame) -> None:
 
 
 def render(
-    df: pd.DataFrame, full_df: pd.DataFrame, end_date: date, selected_month: int | None
+    df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    end_date: date,
+    selected_month: int | None,
+    bolsas_controle_df: pd.DataFrame = None,
 ):
     # --- Pre-compute month context (needed for banner before KPIs section) ---
     now = date.today()
@@ -1644,7 +1684,7 @@ def render(
         _render_celebration_banner(sound_b64, _monthly_vals)
 
     # Render KPIs below banner
-    _render_kpis(kpis)
+    _render_kpis(kpis, bolsas_controle_df=bolsas_controle_df)
 
 
     with st.expander("Ver Detalhes do Resultado (Sankey)", expanded=False):

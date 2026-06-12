@@ -424,7 +424,129 @@ def _get_bolsas_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     return df, ts
 
 
+def get_bolsas_controle(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """L1-cached wrapper for the CONTROLE DE BOLSAS sheet (financial records)."""
+    key = ("get_bolsas_controle", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_bolsas_controle_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_bolsas_controle_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads and processes the CONTROLE DE BOLSAS sheet.
+    Columns expected: PARCEIRO, VALOR, COTAS, DATA
+    """
+    df, ts = load_sheet(sheet_id, C.SHEET_NAME_BOLSAS_CONTROLE, gid=C.GID_BOLSAS_CONTROLE)
+    if df.empty:
+        return df, ts
+
+    process_column(
+        df,
+        "PARCEIRO",
+        C.COL_INT_BOLSA_PARCEIRO,
+        lambda x: str(x).strip(),
+        "",
+        aliases=["Parceiro", "parceiro", "NOME", "Nome", "nome"],
+        index=0,
+    )
+    process_column(
+        df,
+        "VALOR",
+        C.COL_INT_BOLSA_VALOR,
+        to_float_any,
+        0.0,
+        aliases=["Valor", "valor"],
+        index=1,
+    )
+    process_column(
+        df,
+        "COTAS",
+        C.COL_INT_BOLSA_COTAS,
+        lambda x: int(to_float_any(x)) if pd.notna(to_float_any(x)) else 0,
+        0,
+        aliases=["Cotas", "cotas", "COTA", "Cota"],
+        index=2,
+    )
+    process_column(
+        df,
+        "DATA",
+        C.COL_INT_BOLSA_DATA,
+        parse_datetime_any,
+        None,
+        aliases=["Data", "data"],
+        index=3,
+    )
+
+    if C.COL_INT_BOLSA_DATA in df.columns:
+        df[C.COL_INT_BOLSA_DATA] = pd.to_datetime(df[C.COL_INT_BOLSA_DATA], errors="coerce")
+
+    # Drop rows with no partner or no value
+    df = df[
+        df[C.COL_INT_BOLSA_PARCEIRO].notna()
+        & (df[C.COL_INT_BOLSA_PARCEIRO] != "")
+        & (df[C.COL_INT_BOLSA_PARCEIRO].str.lower() != "nan")
+    ]
+
+    return df, ts
+
+
+def get_bolsas_quantidade(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """L1-cached wrapper for the QUANTIDADE BOLSAS sheet (total cotas control)."""
+    key = ("get_bolsas_quantidade", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_bolsas_quantidade_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_bolsas_quantidade_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads and processes the QUANTIDADE BOLSAS sheet.
+    Columns expected: NOME, QNTD
+    """
+    df, ts = load_sheet(sheet_id, C.SHEET_NAME_BOLSAS_QNTD, gid=C.GID_BOLSAS_QNTD)
+    if df.empty:
+        return df, ts
+
+    process_column(
+        df,
+        "NOME",
+        C.COL_INT_BOLSAQTD_NOME,
+        lambda x: str(x).strip(),
+        "",
+        aliases=["Nome", "nome", "PARCEIRO", "Parceiro"],
+        index=0,
+    )
+    process_column(
+        df,
+        "QNTD",
+        C.COL_INT_BOLSAQTD_QNTD,
+        lambda x: int(to_float_any(x)) if pd.notna(to_float_any(x)) else 0,
+        0,
+        aliases=["Quantidade", "quantidade", "QUANTIDADE", "Qntd", "qntd"],
+        index=1,
+    )
+
+    # Drop rows with no name
+    df = df[
+        df[C.COL_INT_BOLSAQTD_NOME].notna()
+        & (df[C.COL_INT_BOLSAQTD_NOME] != "")
+        & (df[C.COL_INT_BOLSAQTD_NOME].str.lower() != "nan")
+    ]
+
+    return df, ts
+
+
 def get_alunos(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+
 
     key = ("get_alunos", sheet_id)
     cached = _l1_cache_get(key)

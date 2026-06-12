@@ -22,6 +22,7 @@ from ui import (
     unit_analysis_tab,
     students_tab,
     commissions_tab,
+    bolsas_tab,
 )
 
 # Setup Logging
@@ -50,9 +51,14 @@ dados, ts_dados = data_service.get_dados(DEFAULT_SHEET_ID)
 faturamento, ts_faturamento = data_service.get_faturamento(DEFAULT_SHEET_ID)
 alunos, ts_alunos = data_service.get_alunos(DEFAULT_SHEET_ID)
 bolsas, ts_bolsas = data_service.get_bolsas(DEFAULT_SHEET_ID)
+bolsas_controle, ts_bolsas_controle = data_service.get_bolsas_controle(DEFAULT_SHEET_ID)
+bolsas_quantidade, ts_bolsas_quantidade = data_service.get_bolsas_quantidade(DEFAULT_SHEET_ID)
 
 timestamps = [
-    t for t in [ts_dados, ts_faturamento, ts_alunos, ts_bolsas] if isinstance(t, datetime)
+    t for t in [
+        ts_dados, ts_faturamento, ts_alunos, ts_bolsas,
+        ts_bolsas_controle, ts_bolsas_quantidade,
+    ] if isinstance(t, datetime)
 ]
 if timestamps:
     last_updated = min(timestamps)
@@ -77,14 +83,16 @@ max_dt_dados = dados[C.COL_INT_DT].max()
 max_dt_fat = faturamento[C.COL_INT_DATA].max()
 min_dt_bolsas = bolsas[C.COL_INT_DT].min() if not bolsas.empty and C.COL_INT_DT in bolsas.columns else pd.NaT
 max_dt_bolsas = bolsas[C.COL_INT_DT].max() if not bolsas.empty and C.COL_INT_DT in bolsas.columns else pd.NaT
+min_dt_bolsas_ctrl = bolsas_controle[C.COL_INT_BOLSA_DATA].min() if not bolsas_controle.empty and C.COL_INT_BOLSA_DATA in bolsas_controle.columns else pd.NaT
+max_dt_bolsas_ctrl = bolsas_controle[C.COL_INT_BOLSA_DATA].max() if not bolsas_controle.empty and C.COL_INT_BOLSA_DATA in bolsas_controle.columns else pd.NaT
 
 # Default to today if no data
 default_date = date.today()
 min_date = default_date
 max_date = default_date
 
-all_mins = [dt for dt in [min_dt_dados, min_dt_fat, min_dt_bolsas] if pd.notna(dt)]
-all_maxs = [dt for dt in [max_dt_dados, max_dt_fat, max_dt_bolsas] if pd.notna(dt)]
+all_mins = [dt for dt in [min_dt_dados, min_dt_fat, min_dt_bolsas, min_dt_bolsas_ctrl] if pd.notna(dt)]
+all_maxs = [dt for dt in [max_dt_dados, max_dt_fat, max_dt_bolsas, max_dt_bolsas_ctrl] if pd.notna(dt)]
 if all_mins:
     min_date = min(all_mins).date()
 if all_maxs:
@@ -104,7 +112,8 @@ else:
 
 # Year and Month Filters
 bolsas_dates = bolsas[C.COL_INT_DT] if not bolsas.empty and C.COL_INT_DT in bolsas.columns else pd.Series(dtype="datetime64[ns]")
-all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA], bolsas_dates]).dropna()
+bolsas_ctrl_dates = bolsas_controle[C.COL_INT_BOLSA_DATA] if not bolsas_controle.empty and C.COL_INT_BOLSA_DATA in bolsas_controle.columns else pd.Series(dtype="datetime64[ns]")
+all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA], bolsas_dates, bolsas_ctrl_dates]).dropna()
 years = sorted(all_dates.dt.year.unique(), reverse=True)
 year_label = st.sidebar.selectbox(
     "Filtrar por Ano", [C.UI_LABEL_ALL] + [str(int(y)) for y in years]
@@ -314,6 +323,29 @@ def _get_filtered_frames():
 
 dados_filtered, fat_filtered, fat_filtered_base = _get_filtered_frames()
 
+# --- Filter bolsas_controle by date/year/month ---
+# Commission calculation always uses faturamento (normal) only — bolsas are excluded.
+# In 'Todos' mode: financial_tab shows normal KPIs + separate bolsas row.
+# In 'Bolsas' mode: financial_tab shows only bolsas row (fat_filtered will be empty).
+def _filter_bolsas_controle():
+    ctrl = bolsas_controle.copy() if not bolsas_controle.empty else pd.DataFrame()
+    if ctrl.empty or C.COL_INT_BOLSA_DATA not in ctrl.columns:
+        return ctrl
+    ctrl = ctrl.dropna(subset=[C.COL_INT_BOLSA_DATA])
+    ctrl = ctrl[(ctrl[C.COL_INT_BOLSA_DATA].dt.date >= start_date) &
+                (ctrl[C.COL_INT_BOLSA_DATA].dt.date <= end_date)]
+    if selected_year:
+        ctrl = ctrl[ctrl[C.COL_INT_BOLSA_DATA].dt.year == selected_year]
+    if selected_month:
+        ctrl = ctrl[ctrl[C.COL_INT_BOLSA_DATA].dt.month == selected_month]
+    # When filtering by Técnico or Pós: don't show bolsas in faturamento tab
+    if selected_contract_type in (C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS):
+        return pd.DataFrame()
+    return ctrl
+
+bolsas_controle_filtered = _filter_bolsas_controle()
+
+
 # --- Sidebar Metrics ---
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Métricas")
@@ -412,6 +444,11 @@ st.markdown(
         div[data-testid="stTabs"] button:nth-of-type(9) > div > p::before {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='2' width='16' height='20' rx='2'%3E%3C/rect%3E%3Cline x1='8' y1='6' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='16' y1='14' x2='16' y2='14'%3E%3C/line%3E%3Cline x1='12' y1='14' x2='12' y2='14'%3E%3C/line%3E%3Cline x1='8' y1='14' x2='8' y2='14'%3E%3C/line%3E%3Cline x1='16' y1='18' x2='16' y2='18'%3E%3C/line%3E%3Cline x1='12' y1='18' x2='12' y2='18'%3E%3C/line%3E%3Cline x1='8' y1='18' x2='8' y2='18'%3E%3C/line%3E%3C/svg%3E");
         }
+
+        /* 10. Bolsas - Ticket icon (pink) */
+        div[data-testid="stTabs"] button:nth-of-type(10) > div > p::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff2d95' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z'%3E%3C/path%3E%3Cline x1='9' y1='12' x2='15' y2='12'%3E%3C/line%3E%3C/svg%3E");
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -419,7 +456,7 @@ st.markdown(
 
 geo_service = GeocodingService()
 
-t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs(
+t1, t2, t3, t4, t5, t6, t7, t8, t9, t10 = st.tabs(
     [
         C.TAB_NAME_CONTRACTS,
         C.TAB_NAME_MAP,
@@ -430,6 +467,7 @@ t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs(
         C.TAB_NAME_UNIT_ANALYSIS,
         C.TAB_NAME_STUDENTS,
         C.TAB_NAME_COMMISSIONS,
+        C.TAB_NAME_BOLSAS,
     ]
 )
 
@@ -443,7 +481,13 @@ with t2:
         geo_service.get_coords,
     )
 with t3:
-    financial_tab.render(fat_filtered, fat_filtered_base, end_date, selected_month)
+    financial_tab.render(
+        fat_filtered,
+        fat_filtered_base,
+        end_date,
+        selected_month,
+        bolsas_controle_df=bolsas_controle_filtered,
+    )
 with t4:
     forecast_tab.render(
         dados_filtered,
@@ -477,3 +521,12 @@ with t8:
 with t9:
     # Pass faturamento dataframe because it has the financial data
     commissions_tab.render(faturamento, KEY_API)
+with t10:
+    bolsas_tab.render(
+        controle=bolsas_controle_filtered if not bolsas_controle_filtered.empty else bolsas_controle,
+        quantidade=bolsas_quantidade,
+        start_date=start_date,
+        end_date=end_date,
+        selected_year=selected_year,
+        selected_month=selected_month,
+    )
