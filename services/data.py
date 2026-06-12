@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import streamlit as st
 import pandas as pd
 import requests
@@ -357,7 +358,74 @@ def _get_faturamento_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
     return df, ts
 
 
+def get_bolsas(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    key = ("get_bolsas", sheet_id)
+    cached = _l1_cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_bolsas_l2(sheet_id)
+    _l1_cache_set(key, value)
+    return value
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _get_bolsas_l2(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+    """
+    Loads and processes the CONTRATO BOLSAS - PARCEIRO sheet.
+
+    Args:
+        sheet_id (str): The Google Sheet ID.
+
+    Returns:
+        Tuple[pd.DataFrame, datetime]: A tuple containing the processed DataFrame and timestamp.
+    """
+    df, ts = load_sheet(sheet_id, C.SHEET_NAME_BOLSAS, gid=C.GID_BOLSAS)
+    if df.empty:
+        return df, ts
+
+    process_column(df, C.COL_SRC_TIMESTAMP, C.COL_INT_DT, parse_datetime_any)
+    process_column(
+        df, C.COL_SRC_STATUS, C.COL_INT_STATUS, lambda x: str(x).strip().upper(), ""
+    )
+    process_column(
+        df, C.COL_SRC_CAPTADOR, C.COL_INT_CAPTADOR, lambda x: str(x).strip(), ""
+    )
+    process_column(
+        df, C.COL_SRC_STATE, C.COL_INT_STATE, lambda x: str(x).strip().upper(), ""
+    )
+    process_column(df, C.COL_SRC_CITY, C.COL_INT_CITY, lambda x: str(x).strip(), "")
+    process_column(df, C.COL_SRC_CEP, C.COL_INT_CEP, lambda x: str(x).strip(), "")
+    process_column(
+        df,
+        C.COL_SRC_CONTRACT_TYPE,
+        C.COL_INT_CONTRACT_TYPE,
+        lambda x: str(x).strip(),
+        "",
+    )
+
+    try:
+        df[C.COL_INT_PARTNER] = df.iloc[:, 0].astype(str).str.strip()
+    except Exception:
+        df[C.COL_INT_PARTNER] = ""
+
+    if C.COL_INT_DT in df.columns:
+        df[C.COL_INT_DT] = pd.to_datetime(df[C.COL_INT_DT], errors="coerce")
+
+    # Map Regions
+    if C.COL_INT_STATE in df.columns:
+        df[C.COL_INT_REGION] = (
+            df[C.COL_INT_STATE].map(C.ESTADO_REGIAO).fillna(C.DEFAULT_REGION_OTHER)
+        )
+
+    # Tag bolsas rows
+    df["_source"] = "bolsas"
+    df[C.COL_INT_CONTRACT_TYPE] = C.CONTRACT_TYPE_BOLSA
+
+    return df, ts
+
+
 def get_alunos(sheet_id: str) -> Tuple[pd.DataFrame, datetime]:
+
     key = ("get_alunos", sheet_id)
     cached = _l1_cache_get(key)
     if cached is not None:

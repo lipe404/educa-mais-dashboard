@@ -49,9 +49,10 @@ st.sidebar.title(C.APP_TITLE)
 dados, ts_dados = data_service.get_dados(DEFAULT_SHEET_ID)
 faturamento, ts_faturamento = data_service.get_faturamento(DEFAULT_SHEET_ID)
 alunos, ts_alunos = data_service.get_alunos(DEFAULT_SHEET_ID)
+bolsas, ts_bolsas = data_service.get_bolsas(DEFAULT_SHEET_ID)
 
 timestamps = [
-    t for t in [ts_dados, ts_faturamento, ts_alunos] if isinstance(t, datetime)
+    t for t in [ts_dados, ts_faturamento, ts_alunos, ts_bolsas] if isinstance(t, datetime)
 ]
 if timestamps:
     last_updated = min(timestamps)
@@ -74,25 +75,20 @@ min_dt_dados = dados[C.COL_INT_DT].min()
 min_dt_fat = faturamento[C.COL_INT_DATA].min()
 max_dt_dados = dados[C.COL_INT_DT].max()
 max_dt_fat = faturamento[C.COL_INT_DATA].max()
+min_dt_bolsas = bolsas[C.COL_INT_DT].min() if not bolsas.empty and C.COL_INT_DT in bolsas.columns else pd.NaT
+max_dt_bolsas = bolsas[C.COL_INT_DT].max() if not bolsas.empty and C.COL_INT_DT in bolsas.columns else pd.NaT
 
 # Default to today if no data
 default_date = date.today()
 min_date = default_date
 max_date = default_date
 
-if pd.notna(min_dt_dados) and pd.notna(min_dt_fat):
-    min_date = min(min_dt_dados, min_dt_fat).date()
-elif pd.notna(min_dt_dados):
-    min_date = min_dt_dados.date()
-elif pd.notna(min_dt_fat):
-    min_date = min_dt_fat.date()
-
-if pd.notna(max_dt_dados) and pd.notna(max_dt_fat):
-    max_date = max(max_dt_dados, max_dt_fat).date()
-elif pd.notna(max_dt_dados):
-    max_date = max_dt_dados.date()
-elif pd.notna(max_dt_fat):
-    max_date = max_dt_fat.date()
+all_mins = [dt for dt in [min_dt_dados, min_dt_fat, min_dt_bolsas] if pd.notna(dt)]
+all_maxs = [dt for dt in [max_dt_dados, max_dt_fat, max_dt_bolsas] if pd.notna(dt)]
+if all_mins:
+    min_date = min(all_mins).date()
+if all_maxs:
+    max_date = max(all_maxs).date()
 
 date_range = st.sidebar.date_input(C.UI_LABEL_DATE_RANGE, value=(min_date, max_date))
 if isinstance(date_range, tuple) and len(date_range) == 2:
@@ -107,7 +103,8 @@ else:
         start_date, end_date = min_date, max_date
 
 # Year and Month Filters
-all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA]]).dropna()
+bolsas_dates = bolsas[C.COL_INT_DT] if not bolsas.empty and C.COL_INT_DT in bolsas.columns else pd.Series(dtype="datetime64[ns]")
+all_dates = pd.concat([dados[C.COL_INT_DT], faturamento[C.COL_INT_DATA], bolsas_dates]).dropna()
 years = sorted(all_dates.dt.year.unique(), reverse=True)
 year_label = st.sidebar.selectbox(
     "Filtrar por Ano", [C.UI_LABEL_ALL] + [str(int(y)) for y in years]
@@ -139,6 +136,7 @@ contract_type_options = [
     C.UI_LABEL_ALL,
     C.CONTRACT_TYPE_UI_TECNICO,
     C.CONTRACT_TYPE_UI_POS,
+    C.CONTRACT_TYPE_UI_BOLSAS,
 ]
 selected_contract_type = st.sidebar.radio(
     C.UI_LABEL_CONTRACT_TYPE, contract_type_options
@@ -156,7 +154,12 @@ global_tax_pct = st.sidebar.number_input(
 st.session_state["global_tax_pct"] = global_tax_pct
 
 # Geographic Filters
-unique_regions = sorted([r for r in dados[C.COL_INT_REGION].unique() if r])
+# Combine dados and bolsas for geographic filter options
+_all_contract_data = pd.concat(
+    [dados, bolsas if not bolsas.empty else pd.DataFrame()],
+    ignore_index=True, sort=False
+) if not bolsas.empty else dados
+unique_regions = sorted([r for r in _all_contract_data[C.COL_INT_REGION].unique() if r and str(r).strip() not in ("", "nan", "None")])
 selected_regions = st.sidebar.multiselect(C.UI_LABEL_FILTER_REGION, unique_regions)
 
 # State Filter (dependent on Region)
@@ -164,12 +167,12 @@ if selected_regions:
     available_states = sorted(
         [
             s
-            for s in dados[C.COL_INT_STATE].unique()
+            for s in _all_contract_data[C.COL_INT_STATE].unique()
             if s and C.ESTADO_REGIAO.get(s) in selected_regions
         ]
     )
 else:
-    available_states = sorted([s for s in dados[C.COL_INT_STATE].unique() if s])
+    available_states = sorted([s for s in _all_contract_data[C.COL_INT_STATE].unique() if s and str(s).strip() not in ("", "nan", "None")])
 
 selected_states = st.sidebar.multiselect(C.UI_LABEL_FILTER_STATE, available_states)
 
@@ -178,15 +181,14 @@ if selected_states:
     available_cities = sorted(
         [
             c
-            for c in dados[dados[C.COL_INT_STATE].isin(selected_states)][
+            for c in _all_contract_data[_all_contract_data[C.COL_INT_STATE].isin(selected_states)][
                 C.COL_INT_CITY
             ].unique()
-            if c
+            if c and str(c).strip() not in ("", "nan", "None")
         ]
     )
 else:
-    # If no state selected, show all cities (or maybe none to avoid clutter, but let's show all for now)
-    available_cities = sorted([c for c in dados[C.COL_INT_CITY].unique() if c])
+    available_cities = sorted([c for c in _all_contract_data[C.COL_INT_CITY].unique() if c and str(c).strip() not in ("", "nan", "None")])
 
 selected_cities = st.sidebar.multiselect("Filtrar por Cidade", available_cities)
 
@@ -195,10 +197,12 @@ def _filtered_cache_key():
     ts_fat_key = (
         ts_faturamento.timestamp() if isinstance(ts_faturamento, datetime) else None
     )
+    ts_bolsas_key = ts_bolsas.timestamp() if isinstance(ts_bolsas, datetime) else None
     return (
         DEFAULT_SHEET_ID,
         ts_dados_key,
         ts_fat_key,
+        ts_bolsas_key,
         start_date,
         end_date,
         selected_year,
@@ -217,6 +221,7 @@ def _get_filtered_frames():
     if cached is not None:
         return cached
 
+    # --- Filter DADOS (Técnico / Pós) ---
     mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
         dados[C.COL_INT_DT].dt.date <= end_date
     )
@@ -232,6 +237,9 @@ def _get_filtered_frames():
         )
     elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
         mask_dados &= dados[C.COL_INT_CONTRACT_TYPE] == C.CONTRACT_TYPE_POS
+    elif selected_contract_type == C.CONTRACT_TYPE_UI_BOLSAS:
+        # Only bolsas — dados won't contribute anything; use empty mask
+        mask_dados &= pd.Series(False, index=dados.index)
 
     if selected_regions:
         mask_dados &= dados[C.COL_INT_REGION].isin(selected_regions)
@@ -244,6 +252,31 @@ def _get_filtered_frames():
 
     dados_filtered = dados[mask_dados].copy()
 
+    # --- Filter BOLSAS ---
+    if not bolsas.empty and C.COL_INT_DT in bolsas.columns:
+        mask_bolsas = (bolsas[C.COL_INT_DT].dt.date >= start_date) & (
+            bolsas[C.COL_INT_DT].dt.date <= end_date
+        )
+        if selected_year:
+            mask_bolsas &= bolsas[C.COL_INT_DT].dt.year == selected_year
+        if selected_month:
+            mask_bolsas &= bolsas[C.COL_INT_DT].dt.month == selected_month
+        if selected_regions:
+            mask_bolsas &= bolsas[C.COL_INT_REGION].isin(selected_regions)
+        if selected_states:
+            mask_bolsas &= bolsas[C.COL_INT_STATE].isin(selected_states)
+        if selected_cities:
+            mask_bolsas &= bolsas[C.COL_INT_CITY].isin(selected_cities)
+        bolsas_filtered = bolsas[mask_bolsas].copy()
+    else:
+        bolsas_filtered = pd.DataFrame()
+
+    # Merge bolsas into dados_filtered when Todos or Bolsas is selected
+    if selected_contract_type in (C.UI_LABEL_ALL, C.CONTRACT_TYPE_UI_BOLSAS):
+        if not bolsas_filtered.empty:
+            dados_filtered = pd.concat([dados_filtered, bolsas_filtered], ignore_index=True, sort=False)
+
+    # --- Filter FATURAMENTO ---
     mask_fat_base = pd.Series(True, index=faturamento.index)
 
     if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
@@ -252,6 +285,9 @@ def _get_filtered_frames():
         )
     elif selected_contract_type == C.CONTRACT_TYPE_UI_POS:
         mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
+    elif selected_contract_type == C.CONTRACT_TYPE_UI_BOLSAS:
+        # Bolsas have no separate faturamento sheet — return empty
+        mask_fat_base &= pd.Series(False, index=faturamento.index)
 
     mask_fat = (
         mask_fat_base
