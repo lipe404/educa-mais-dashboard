@@ -198,11 +198,11 @@ Sobre a **receita bruta total**, qual é a % real que cada cargo recebe?
 
 | Cargo | % Nominal | Base de cálculo | % Real efetiva (aprox.) |
 |---|---|---|---|
-| Gerente de Expansão | 3% do pool fixo | 13% × líquido | ~**1.84%** do bruto |
-| Coord./Suporte | 2.5% do pool fixo | 13% × líquido | ~**1.53%** do bruto |
-| Gestor Tecnologia | 1.5% do pool fixo | 13% × líquido | ~**0.92%** do bruto |
-| Gestor Tráfego | 1% do pool fixo | 13% × líquido | ~**0.61%** do bruto |
-| Designer | 1% do pool fixo | 13% × líquido | ~**0.61%** do bruto |
+| Gerente de Expansão | 3% do pool fixo | 13% × líquido | ~**0.58%** do bruto |
+| Coord./Suporte | 2.5% do pool fixo | 13% × líquido | ~**0.49%** do bruto |
+| Gestor Tecnologia | 1.5% do pool fixo | 13% × líquido | ~**0.29%** do bruto |
+| Gestor Tráfego | 1% do pool fixo | 13% × líquido | ~**0.19%** do bruto |
+| Designer | 1% do pool fixo | 13% × líquido | ~**0.19%** do bruto |
 | Captador | 1% por parceiro | receita × 70% | ~**0.70%** do bruto do parceiro |
 | Suporte de Performance | 3% por parceiro | receita × 70% | ~**2.10%** do bruto do parceiro |
 

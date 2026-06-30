@@ -91,7 +91,40 @@ def get_assignment_key(role_name: str) -> str:
         return "suporte_id"
     return f"{role_name}_id"
 
-def _render_team_config(all_partners_list: list):
+def nominal_to_real(key, nominal_pct, categories, tax_pct, partner_pct):
+    tax_rate = tax_pct / 100.0
+    if categories[key]["type"] == "partner_based":
+        return nominal_pct * (1.0 - tax_rate)
+    else:
+        total_fixed = sum(float(c["percentage"]) for c in categories.values() if c["type"] == "fixed")
+        if total_fixed == 0:
+            return 0.0
+        liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
+        pool_factor = liquid_factor * 0.13
+        partner_based_sum = sum(float(c["percentage"]) * (1.0 - tax_rate) for c in categories.values() if c["type"] == "partner_based")
+        available_fixed_factor = pool_factor - (partner_based_sum / 100.0)
+        if available_fixed_factor < 0:
+            available_fixed_factor = 0.0
+        return available_fixed_factor * (nominal_pct / total_fixed) * 100.0
+
+def real_to_nominal(key, real_pct, categories, tax_pct, partner_pct):
+    tax_rate = tax_pct / 100.0
+    if categories[key]["type"] == "partner_based":
+        if tax_rate >= 1.0:
+            return 0.0
+        return real_pct / (1.0 - tax_rate)
+    else:
+        F = sum(float(c["percentage"]) for k, c in categories.items() if c["type"] == "fixed" and k != key)
+        liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
+        pool_factor = liquid_factor * 0.13
+        partner_based_sum = sum(float(c["percentage"]) * (1.0 - tax_rate) for c in categories.values() if c["type"] == "partner_based")
+        available_fixed_factor = pool_factor - (partner_based_sum / 100.0)
+        denom = (100.0 * available_fixed_factor) - real_pct
+        if denom <= 0.0001:
+            return 0.0
+        return (real_pct * F) / denom
+
+def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_pct: float = 50.0):
     with st.expander("Gestão de Equipe e Configurações", expanded=True, icon=":material/groups:"):
         # Initialize Session State
         if "team_members" not in st.session_state:
@@ -381,21 +414,39 @@ def _render_team_config(all_partners_list: list):
                 
                 for key, role_info in list(categories.items()):
                     with st.container(border=True):
-                        col_rname, col_rpct, col_rtype, col_rdel = st.columns([2, 1, 2, 1])
+                        col_rname, col_rpct_nom, col_rpct_real, col_rtype, col_rdel = st.columns([2, 1.5, 1.5, 1.5, 1])
                         
                         col_rname.markdown(f"**{role_info['name']}**\n`({key})`")
                         
-                        new_pct = col_rpct.number_input(
-                            "%",
+                        nominal_val = float(role_info["percentage"])
+                        real_val = nominal_to_real(key, nominal_val, categories, tax_pct, partner_pct)
+                        
+                        new_pct = col_rpct_nom.number_input(
+                            "Nominal (%)",
                             min_value=0.0,
                             max_value=100.0,
-                            value=float(role_info["percentage"]),
+                            value=nominal_val,
                             step=0.1,
                             format="%.1f",
                             key=f"pct_{key}"
                         )
-                        if new_pct != role_info["percentage"]:
+                        
+                        new_real = col_rpct_real.number_input(
+                            "Real Efetivo (%)",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=real_val,
+                            step=0.01,
+                            format="%.2f",
+                            key=f"real_pct_{key}"
+                        )
+                        
+                        if abs(new_pct - nominal_val) > 0.0001:
                             categories[key]["percentage"] = new_pct
+                            roles_updated = True
+                        elif abs(new_real - real_val) > 0.0001:
+                            new_nominal = real_to_nominal(key, new_real, categories, tax_pct, partner_pct)
+                            categories[key]["percentage"] = new_nominal
                             roles_updated = True
                             
                         type_str = "Fixo" if role_info["type"] == "fixed" else "Baseado em Parceiro"
@@ -608,7 +659,7 @@ def render(dados_df: pd.DataFrame, access_key: str):
         
         all_partners_list = sorted(all_partners_list, key=lambda x: x["name"])
 
-        _render_team_config(all_partners_list)
+        _render_team_config(all_partners_list, tax_pct=tax_pct, partner_pct=default_partner_pct)
 
         st.write(f"Encontrados {len(partners_data_input)} parceiros com faturamento neste mês.")
         
