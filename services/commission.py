@@ -122,6 +122,7 @@ class CommissionEngine:
         team_members: List[Dict[str, Any]],
         assignments: List[Dict[str, Any]],
         tax_rate: float = 0.30,
+        team_categories: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Calculates the comprehensive commission report.
@@ -132,10 +133,13 @@ class CommissionEngine:
             assignments: List of dicts mapping partner_id to captador_id and suporte_id
                          e.g. [{'partner_id': 1, 'captador_id': 10, 'suporte_id': 11}]
             tax_rate: The rate of tax applied to the remaining 50% revenue (defaults to 30% / 0.30)
+            team_categories: Custom dictionary of team categories/roles and percentages
 
         Returns:
             Dict containing summary, partners_calculated, and team_calculated.
         """
+        if team_categories is None:
+            team_categories = TEAM_CATEGORIES
         
         # 1. Calculate Partners Data
         partners_calculated = []
@@ -166,7 +170,7 @@ class CommissionEngine:
         
         for member in team_members:
             for role in member.get("roles", []):
-                cat_info = TEAM_CATEGORIES.get(role)
+                cat_info = team_categories.get(role)
                 if cat_info and cat_info["type"] == "fixed":
                     total_theoretical_fixed += cat_info["percentage"]
 
@@ -185,7 +189,7 @@ class CommissionEngine:
             # Calculate Fixed Component Share
             member_fixed_percentage = 0.0
             for role in roles:
-                cat_info = TEAM_CATEGORIES.get(role)
+                cat_info = team_categories.get(role)
                 if cat_info and cat_info["type"] == "fixed":
                     member_fixed_percentage += cat_info["percentage"]
             
@@ -205,17 +209,14 @@ class CommissionEngine:
                 p_revenue = p_data["revenue"]
                 assignment = assignments_map.get(p_id, {})
                 
-                # Captador Check
-                if assignment.get("captador_id") == member_id:
-                    if "captador" in roles:
-                        cat_info = TEAM_CATEGORIES["captador"]
-                        partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - tax_rate)
-                
-                # Suporte Check
-                if assignment.get("suporte_id") == member_id:
-                    if "suporte_performance" in roles:
-                        cat_info = TEAM_CATEGORIES["suporte_performance"]
-                        partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - tax_rate)
+                # Check all roles of type partner_based assigned to this member
+                for role in roles:
+                    cat_info = team_categories.get(role)
+                    if cat_info and cat_info.get("type") == "partner_based":
+                        role_id_key = f"{role}_id" if role != "suporte_performance" else "suporte_id"
+                        assigned_member_id = assignment.get(role_id_key) or assignment.get(role)
+                        if assigned_member_id == member_id:
+                            partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - tax_rate)
 
             team_calculated.append({
                 "member_id": member_id,
