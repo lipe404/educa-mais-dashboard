@@ -101,28 +101,69 @@ def nominal_to_real(key, nominal_pct, categories, tax_pct, partner_pct):
             return 0.0
         liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
         pool_factor = liquid_factor * 0.13
-        partner_based_sum = sum(float(c["percentage"]) * (1.0 - tax_rate) for c in categories.values() if c["type"] == "partner_based")
-        available_fixed_factor = pool_factor - (partner_based_sum / 100.0)
-        if available_fixed_factor < 0:
-            available_fixed_factor = 0.0
-        return available_fixed_factor * (nominal_pct / total_fixed) * 100.0
+        return pool_factor * (nominal_pct / total_fixed) * 100.0
 
 def real_to_nominal(key, real_pct, categories, tax_pct, partner_pct):
-    tax_rate = tax_pct / 100.0
-    if categories[key]["type"] == "partner_based":
-        if tax_rate >= 1.0:
-            return 0.0
-        return real_pct / (1.0 - tax_rate)
-    else:
-        F = sum(float(c["percentage"]) for k, c in categories.items() if c["type"] == "fixed" and k != key)
-        liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
-        pool_factor = liquid_factor * 0.13
-        partner_based_sum = sum(float(c["percentage"]) * (1.0 - tax_rate) for c in categories.values() if c["type"] == "partner_based")
-        available_fixed_factor = pool_factor - (partner_based_sum / 100.0)
-        denom = (100.0 * available_fixed_factor) - real_pct
-        if denom <= 0.0001:
-            return 0.0
-        return (real_pct * F) / denom
+    log_file = r"C:\Users\toled\.gemini\antigravity-ide\brain\b0e3241d-a550-4b5e-b537-e9beda20e2d4\scratch\debug_commissions.log"
+    try:
+        tax_rate = tax_pct / 100.0
+        if categories[key]["type"] == "partner_based":
+            if tax_rate >= 1.0:
+                res = 0.0
+            else:
+                res = real_pct / (1.0 - tax_rate)
+            F = 0.0
+            pool_factor = 0.0
+            denom = 0.0
+        else:
+            F = sum(float(c["percentage"]) for k, c in categories.items() if c["type"] == "fixed" and k != key)
+            liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
+            pool_factor = liquid_factor * 0.13
+            denom = (100.0 * pool_factor) - real_pct
+            if denom <= 0.0001:
+                res = 0.0
+            else:
+                res = (real_pct * F) / denom
+        
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"real_to_nominal: key={key}, real_pct={real_pct}, tax_pct={tax_pct}, partner_pct={partner_pct}, F={F}, pool_factor={pool_factor}, denom={denom}, result={res}\n")
+        return res
+    except Exception as e:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"ERROR in real_to_nominal: {e}\n")
+        return 0.0
+
+def on_nominal_change(key, tax_pct, partner_pct):
+    widget_key = f"pct_{key}"
+    if widget_key in st.session_state:
+        new_pct = st.session_state[widget_key]
+        st.session_state["team_categories"][key]["percentage"] = new_pct
+        _save_team_categories(st.session_state["team_categories"])
+        
+        # Keep real percentage in sync
+        categories = st.session_state["team_categories"]
+        new_real = nominal_to_real(key, new_pct, categories, tax_pct, partner_pct)
+        st.session_state[f"real_pct_{key}"] = new_real
+
+def on_real_change(key, tax_pct, partner_pct):
+    log_file = r"C:\Users\toled\.gemini\antigravity-ide\brain\b0e3241d-a550-4b5e-b537-e9beda20e2d4\scratch\debug_commissions.log"
+    try:
+        widget_key = f"real_pct_{key}"
+        if widget_key in st.session_state:
+            new_real = st.session_state[widget_key]
+            categories = st.session_state["team_categories"]
+            new_nominal = real_to_nominal(key, new_real, categories, tax_pct, partner_pct)
+            
+            st.session_state["team_categories"][key]["percentage"] = new_nominal
+            _save_team_categories(st.session_state["team_categories"])
+            st.session_state[f"pct_{key}"] = new_nominal
+            
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"on_real_change: key={key}, new_real={new_real}, new_nominal={new_nominal}\n")
+    except Exception as e:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"ERROR in on_real_change: {e}\n")
+
 
 def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_pct: float = 50.0):
     with st.expander("Gestão de Equipe e Configurações", expanded=True, icon=":material/groups:"):
@@ -352,11 +393,19 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_
                         del st.session_state["team_members"][idx]
                     st.rerun()
 
-        # Tab for configuring Roles and Percentages
         with tab_cargos:
             st.markdown("#### :material/settings: Gerenciar Cargos")
             categories = st.session_state["team_categories"]
             
+            # Initialize widget state values from config on first run
+            for k, role_info in list(categories.items()):
+                nom_key = f"pct_{k}"
+                real_key = f"real_pct_{k}"
+                if nom_key not in st.session_state:
+                    st.session_state[nom_key] = float(role_info["percentage"])
+                if real_key not in st.session_state:
+                    st.session_state[real_key] = nominal_to_real(k, float(role_info["percentage"]), categories, tax_pct, partner_pct)
+
             col_add_role, col_list_roles = st.columns([1, 2], gap="large")
             
             with col_add_role:
@@ -410,7 +459,6 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_
                 st.markdown("##### :material/list: Cargos Cadastrados")
                 
                 roles_to_delete = []
-                roles_updated = False
                 
                 for key, role_info in list(categories.items()):
                     with st.container(border=True):
@@ -418,57 +466,80 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_
                         
                         col_rname.markdown(f"**{role_info['name']}**\n`({key})`")
                         
-                        nominal_val = float(role_info["percentage"])
-                        real_val = nominal_to_real(key, nominal_val, categories, tax_pct, partner_pct)
-                        
-                        new_pct = col_rpct_nom.number_input(
+                        col_rpct_nom.number_input(
                             "Nominal (%)",
                             min_value=0.0,
                             max_value=100.0,
-                            value=nominal_val,
                             step=0.1,
                             format="%.1f",
-                            key=f"pct_{key}"
+                            key=f"pct_{key}",
+                            on_change=on_nominal_change,
+                            args=(key, tax_pct, partner_pct)
                         )
                         
-                        new_real = col_rpct_real.number_input(
+                        col_rpct_real.number_input(
                             "Real Efetivo (%)",
                             min_value=0.0,
                             max_value=100.0,
-                            value=real_val,
                             step=0.01,
                             format="%.2f",
-                            key=f"real_pct_{key}"
+                            key=f"real_pct_{key}",
+                            on_change=on_real_change,
+                            args=(key, tax_pct, partner_pct)
                         )
                         
-                        if abs(new_pct - nominal_val) > 0.0001:
-                            categories[key]["percentage"] = new_pct
-                            roles_updated = True
-                        elif abs(new_real - real_val) > 0.0001:
-                            new_nominal = real_to_nominal(key, new_real, categories, tax_pct, partner_pct)
-                            categories[key]["percentage"] = new_nominal
-                            roles_updated = True
-                            
                         type_str = "Fixo" if role_info["type"] == "fixed" else "Baseado em Parceiro"
                         col_rtype.markdown(f"\nTipo: *{type_str}*")
                         
                         if col_rdel.button("Excluir", key=f"del_role_{key}", icon=":material/delete:", use_container_width=True):
                             roles_to_delete.append(key)
                 
+                # Totals general
+                total_fixed_nom = sum(float(c["percentage"]) for c in categories.values() if c["type"] == "fixed")
+                total_fixed_real = sum(nominal_to_real(k, float(c["percentage"]), categories, tax_pct, partner_pct) for k, c in categories.items() if c["type"] == "fixed")
+                
+                total_partner_nom = sum(float(c["percentage"]) for c in categories.values() if c["type"] == "partner_based")
+                total_partner_real = sum(nominal_to_real(k, float(c["percentage"]), categories, tax_pct, partner_pct) for k, c in categories.items() if c["type"] == "partner_based")
+                
+                total_gen_nom = total_fixed_nom + total_partner_nom
+                total_gen_real = total_fixed_real + total_partner_real
+                
+                st.markdown("---")
+                st.markdown("##### :material/analytics: Totais Gerais dos Cargos")
+                totals_html = f"""
+                <div style="display: flex; gap: 15px; justify-content: space-between; margin-top: 10px; flex-wrap: wrap;">
+                  <div style="flex: 1; min-width: 150px; background-color: #171b26; padding: 12px; border-radius: 8px; border: 1px solid #2d3142;">
+                    <div style="font-size: 0.8rem; color: #8a8d9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Cargos Fixos</div>
+                    <div style="font-size: 1.15rem; font-weight: bold; margin-top: 6px; color: #e2e8f0;">{total_fixed_nom:.1f}% <span style="font-size: 0.75rem; color: #8a8d9a; font-weight: normal;">Nominal</span></div>
+                    <div style="font-size: 0.95rem; color: #10b981; margin-top: 3px; font-weight: 500;">Real: {total_fixed_real:.2f}%</div>
+                  </div>
+                  <div style="flex: 1; min-width: 150px; background-color: #171b26; padding: 12px; border-radius: 8px; border: 1px solid #2d3142;">
+                    <div style="font-size: 0.8rem; color: #8a8d9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Cargos de Parceiro</div>
+                    <div style="font-size: 1.15rem; font-weight: bold; margin-top: 6px; color: #e2e8f0;">{total_partner_nom:.1f}% <span style="font-size: 0.75rem; color: #8a8d9a; font-weight: normal;">Nominal</span></div>
+                    <div style="font-size: 0.95rem; color: #10b981; margin-top: 3px; font-weight: 500;">Real: {total_partner_real:.2f}%</div>
+                  </div>
+                  <div style="flex: 1; min-width: 150px; background-color: #171b26; padding: 12px; border-radius: 8px; border: 1px solid #2d3142;">
+                    <div style="font-size: 0.8rem; color: #8a8d9a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total Geral</div>
+                    <div style="font-size: 1.15rem; font-weight: bold; margin-top: 6px; color: #e2e8f0;">{total_gen_nom:.1f}% <span style="font-size: 0.75rem; color: #8a8d9a; font-weight: normal;">Nominal</span></div>
+                    <div style="font-size: 0.95rem; color: #10b981; margin-top: 3px; font-weight: 500;">Real: {total_gen_real:.2f}%</div>
+                  </div>
+                </div>
+                """
+                st.markdown(totals_html, unsafe_allow_html=True)
+                st.write("")
+
                 if roles_to_delete:
                     for k in roles_to_delete:
                         for m in st.session_state["team_members"]:
                             if k in m.get("roles", []):
                                 m["roles"].remove(k)
                         del categories[k]
+                        if f"pct_{k}" in st.session_state:
+                            del st.session_state[f"pct_{k}"]
+                        if f"real_pct_{k}" in st.session_state:
+                            del st.session_state[f"real_pct_{k}"]
                     st.session_state["team_categories"] = categories
                     _save_team_categories(categories)
-                    st.rerun()
-                    
-                if roles_updated:
-                    st.session_state["team_categories"] = categories
-                    _save_team_categories(categories)
-                    st.success("Porcentagens atualizadas com sucesso!")
                     st.rerun()
 
 
