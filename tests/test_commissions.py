@@ -117,14 +117,14 @@ def test_calculate_commissions_variable_tax():
     # Base remaining = 5000
     # Tax = 1500
     # Remaining after tax = 3500
-    # Variable commission for Membro 2 (Captador): 1% of 10000 = 100, scaled by (1 - 0.3) = 70.0
+    # Variable commission for Membro 2 (Captador): 1% of 10000 = 100, scaled by (1 - 0.5) * (1 - 0.3) = 35.0
     # Membro 1 fixed = 3% of 3500 = 105.0
-    # Total team commission = 105 (fixed) + 70 (variable) = 175.0
+    # Total team commission = 105 (fixed) + 35 (variable) = 140.0
     
     assert summary["tax_value"] == 1500.0
     assert summary["remaining_after_tax"] == 3500.0
-    assert summary["total_partner_based_commission"] == pytest.approx(70.0)
+    assert summary["total_partner_based_commission"] == pytest.approx(35.0)
     assert summary["total_fixed_commission"] == pytest.approx(105.0)
-    assert summary["total_team_commission"] == pytest.approx(175.0)
-    assert summary["final_remaining_value"] == pytest.approx(3325.0)
+    assert summary["total_team_commission"] == pytest.approx(140.0)
+    assert summary["final_remaining_value"] == pytest.approx(3360.0)
 

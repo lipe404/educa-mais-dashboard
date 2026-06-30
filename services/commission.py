@@ -212,7 +212,8 @@ class CommissionEngine:
                         role_id_key = f"{role}_id" if role != "suporte_performance" else "suporte_id"
                         assigned_member_id = assignment.get(role_id_key) or assignment.get(role)
                         if assigned_member_id == member_id:
-                            partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - tax_rate)
+                            partner_split = p_data.get("commission_percentage", 50.0) / 100.0
+                            partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - partner_split) * (1.0 - tax_rate)
 
             team_calculated.append({
                 "member_id": member_id,

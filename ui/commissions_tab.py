@@ -93,23 +93,15 @@ def get_assignment_key(role_name: str) -> str:
 
 def nominal_to_real(key, nominal_pct, categories, tax_pct, partner_pct):
     tax_rate = tax_pct / 100.0
-    if categories[key]["type"] == "partner_based":
-        return nominal_pct * (1.0 - tax_rate)
-    else:
-        liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
-        return nominal_pct * liquid_factor
+    liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
+    return nominal_pct * liquid_factor
 
 def real_to_nominal(key, real_pct, categories, tax_pct, partner_pct):
     tax_rate = tax_pct / 100.0
-    if categories[key]["type"] == "partner_based":
-        if tax_rate >= 1.0:
-            return 0.0
-        return real_pct / (1.0 - tax_rate)
-    else:
-        liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
-        if liquid_factor <= 0.0001:
-            return 0.0
-        return real_pct / liquid_factor
+    liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
+    if liquid_factor <= 0.0001:
+        return 0.0
+    return real_pct / liquid_factor
 
 def on_nominal_change(key, tax_pct, partner_pct):
     widget_key = f"pct_{key}"
@@ -135,7 +127,7 @@ def on_real_change(key, tax_pct, partner_pct):
         st.session_state[f"real_pct_{key}"] = new_real
 
 
-def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_pct: float = 50.0):
+def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_pct: float = 56.815):
     with st.expander("Gestão de Equipe e Configurações", expanded=True, icon=":material/groups:"):
         # Initialize Session State
         if "team_members" not in st.session_state:
@@ -653,11 +645,11 @@ def render(dados_df: pd.DataFrame, access_key: str):
             return
 
         # Retrieve global tax rate
-        global_tax_pct = st.session_state.get("global_tax_pct", 30.0)
+        global_tax_pct = st.session_state.get("global_tax_pct", 0.0)
 
         # Prepare Partners Data from DataFrame
         col_pct1, col_pct2 = st.columns(2)
-        default_partner_pct = col_pct1.number_input("Porcentagem Padrão Parceiros (%)", value=50.0, step=5.0)
+        default_partner_pct = col_pct1.number_input("Porcentagem Padrão Parceiros (%)", value=56.815, step=1.0)
         tax_pct = col_pct2.number_input("Alíquota de Imposto (%)", value=global_tax_pct, step=1.0, key="com_tax_pct")
         # Keep global in sync if modified locally
         st.session_state["global_tax_pct"] = tax_pct
