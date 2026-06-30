@@ -194,12 +194,8 @@ class CommissionEngine:
                     member_fixed_percentage += cat_info["percentage"]
             
             fixed_commission_for_pool = 0.0
-            effective_percentage = 13.0 if total_theoretical_fixed > 0 else 0.0
-            
-            if total_theoretical_fixed > 0:
-                proportional_share = (member_fixed_percentage / total_theoretical_fixed) * effective_percentage
-                # Use remaining_after_tax instead of remaining_value_for_team_fixed
-                fixed_commission_for_pool = (remaining_after_tax * proportional_share) / 100.0
+            if member_fixed_percentage > 0:
+                fixed_commission_for_pool = (remaining_after_tax * member_fixed_percentage) / 100.0
             
             # Calculate Partner-Based Component
             partner_commission = 0.0

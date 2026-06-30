@@ -45,8 +45,8 @@ def test_calculate_commissions_zero_tax():
     assert summary["total_partners_commission"] == 5000.0
     assert summary["tax_value"] == 0.0
     assert summary["remaining_after_tax"] == 5000.0
-    assert summary["total_team_commission"] == pytest.approx(650.0)
-    assert summary["final_remaining_value"] == pytest.approx(4350.0)
+    assert summary["total_team_commission"] == pytest.approx(275.0)
+    assert summary["final_remaining_value"] == pytest.approx(4725.0)
 
 
 def test_calculate_commissions_default_tax():
@@ -73,18 +73,17 @@ def test_calculate_commissions_default_tax():
     # Base remaining = 5000
     # Tax = 30% of 5000 = 1500
     # Remaining after tax = 5000 - 1500 = 3500
-    # Target team commission = 13% of 3500 = 455
-    # Membro 1: (3 / 5.5) * 13% of 3500 = 248.1818...
-    # Membro 2: (2.5 / 5.5) * 13% of 3500 = 206.8181...
-    # Total team commission = 455
-    # final_remaining_value = 3500 - 455 = 3045
+    # Membro 1: 3% of 3500 = 105
+    # Membro 2: 2.5% of 3500 = 87.5
+    # Total team commission = 192.5
+    # final_remaining_value = 3500 - 192.5 = 3307.5
     
     assert summary["total_gross_revenue"] == 10000.0
     assert summary["total_partners_commission"] == 5000.0
     assert summary["tax_value"] == 1500.0
     assert summary["remaining_after_tax"] == 3500.0
-    assert summary["total_team_commission"] == pytest.approx(455.0)
-    assert summary["final_remaining_value"] == pytest.approx(3045.0)
+    assert summary["total_team_commission"] == pytest.approx(192.5)
+    assert summary["final_remaining_value"] == pytest.approx(3307.5)
 
 
 def test_calculate_commissions_variable_tax():
@@ -118,18 +117,14 @@ def test_calculate_commissions_variable_tax():
     # Base remaining = 5000
     # Tax = 1500
     # Remaining after tax = 3500
-    # Target team pool = 13% of 3500 = 455
     # Variable commission for Membro 2 (Captador): 1% of 10000 = 100, scaled by (1 - 0.3) = 70.0
-    # Available for fixed = 455 - 70 = 385.0
-    # Membro 1 fixed = (3/3) * 13% of 3500 = 455.0 (theoretical)
-    # Since available for fixed (385) is less than theoretical fixed (455), scale by normalisation factor = 385 / 455 = 0.84615
-    # Membro 1 actual fixed = 455 * 0.84615 = 385.0
-    # Total team commission = 385 (fixed) + 70 (variable) = 455.0
+    # Membro 1 fixed = 3% of 3500 = 105.0
+    # Total team commission = 105 (fixed) + 70 (variable) = 175.0
     
     assert summary["tax_value"] == 1500.0
     assert summary["remaining_after_tax"] == 3500.0
     assert summary["total_partner_based_commission"] == pytest.approx(70.0)
-    assert summary["total_fixed_commission"] == pytest.approx(385.0)
-    assert summary["total_team_commission"] == pytest.approx(455.0)
-    assert summary["final_remaining_value"] == pytest.approx(3045.0)
+    assert summary["total_fixed_commission"] == pytest.approx(105.0)
+    assert summary["total_team_commission"] == pytest.approx(175.0)
+    assert summary["final_remaining_value"] == pytest.approx(3325.0)
 

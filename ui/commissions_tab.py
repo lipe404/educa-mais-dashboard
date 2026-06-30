@@ -96,42 +96,20 @@ def nominal_to_real(key, nominal_pct, categories, tax_pct, partner_pct):
     if categories[key]["type"] == "partner_based":
         return nominal_pct * (1.0 - tax_rate)
     else:
-        total_fixed = sum(float(c["percentage"]) for c in categories.values() if c["type"] == "fixed")
-        if total_fixed == 0:
-            return 0.0
         liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
-        pool_factor = liquid_factor * 0.13
-        return pool_factor * (nominal_pct / total_fixed) * 100.0
+        return nominal_pct * liquid_factor
 
 def real_to_nominal(key, real_pct, categories, tax_pct, partner_pct):
-    log_file = r"C:\Users\toled\.gemini\antigravity-ide\brain\b0e3241d-a550-4b5e-b537-e9beda20e2d4\scratch\debug_commissions.log"
-    try:
-        tax_rate = tax_pct / 100.0
-        if categories[key]["type"] == "partner_based":
-            if tax_rate >= 1.0:
-                res = 0.0
-            else:
-                res = real_pct / (1.0 - tax_rate)
-            F = 0.0
-            pool_factor = 0.0
-            denom = 0.0
-        else:
-            F = sum(float(c["percentage"]) for k, c in categories.items() if c["type"] == "fixed" and k != key)
-            liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
-            pool_factor = liquid_factor * 0.13
-            denom = (100.0 * pool_factor) - real_pct
-            if denom <= 0.0001:
-                res = 0.0
-            else:
-                res = (real_pct * F) / denom
-        
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"real_to_nominal: key={key}, real_pct={real_pct}, tax_pct={tax_pct}, partner_pct={partner_pct}, F={F}, pool_factor={pool_factor}, denom={denom}, result={res}\n")
-        return res
-    except Exception as e:
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"ERROR in real_to_nominal: {e}\n")
-        return 0.0
+    tax_rate = tax_pct / 100.0
+    if categories[key]["type"] == "partner_based":
+        if tax_rate >= 1.0:
+            return 0.0
+        return real_pct / (1.0 - tax_rate)
+    else:
+        liquid_factor = (1.0 - partner_pct / 100.0) * (1.0 - tax_rate)
+        if liquid_factor <= 0.0001:
+            return 0.0
+        return real_pct / liquid_factor
 
 def on_nominal_change(key, tax_pct, partner_pct):
     widget_key = f"pct_{key}"
@@ -142,27 +120,19 @@ def on_nominal_change(key, tax_pct, partner_pct):
         
         # Keep real percentage in sync
         categories = st.session_state["team_categories"]
-        new_real = nominal_to_real(key, new_pct, categories, tax_pct, partner_pct)
-        st.session_state[f"real_pct_{key}"] = new_real
+        st.session_state[f"real_pct_{key}"] = nominal_to_real(key, new_pct, categories, tax_pct, partner_pct)
 
 def on_real_change(key, tax_pct, partner_pct):
-    log_file = r"C:\Users\toled\.gemini\antigravity-ide\brain\b0e3241d-a550-4b5e-b537-e9beda20e2d4\scratch\debug_commissions.log"
-    try:
-        widget_key = f"real_pct_{key}"
-        if widget_key in st.session_state:
-            new_real = st.session_state[widget_key]
-            categories = st.session_state["team_categories"]
-            new_nominal = real_to_nominal(key, new_real, categories, tax_pct, partner_pct)
-            
-            st.session_state["team_categories"][key]["percentage"] = new_nominal
-            _save_team_categories(st.session_state["team_categories"])
-            st.session_state[f"pct_{key}"] = new_nominal
-            
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"on_real_change: key={key}, new_real={new_real}, new_nominal={new_nominal}\n")
-    except Exception as e:
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"ERROR in on_real_change: {e}\n")
+    widget_key = f"real_pct_{key}"
+    if widget_key in st.session_state:
+        new_real = st.session_state[widget_key]
+        categories = st.session_state["team_categories"]
+        new_nominal = real_to_nominal(key, new_real, categories, tax_pct, partner_pct)
+        
+        st.session_state["team_categories"][key]["percentage"] = new_nominal
+        _save_team_categories(st.session_state["team_categories"])
+        st.session_state[f"pct_{key}"] = new_nominal
+        st.session_state[f"real_pct_{key}"] = new_real
 
 
 def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_pct: float = 50.0):
@@ -397,14 +367,13 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 30.0, partner_
             st.markdown("#### :material/settings: Gerenciar Cargos")
             categories = st.session_state["team_categories"]
             
-            # Initialize widget state values from config on first run
+            # Initialize widget state values from config and keep real percentage synced on every run
             for k, role_info in list(categories.items()):
                 nom_key = f"pct_{k}"
                 real_key = f"real_pct_{k}"
                 if nom_key not in st.session_state:
                     st.session_state[nom_key] = float(role_info["percentage"])
-                if real_key not in st.session_state:
-                    st.session_state[real_key] = nominal_to_real(k, float(role_info["percentage"]), categories, tax_pct, partner_pct)
+                st.session_state[real_key] = nominal_to_real(k, float(st.session_state[nom_key]), categories, tax_pct, partner_pct)
 
             col_add_role, col_list_roles = st.columns([1, 2], gap="large")
             
