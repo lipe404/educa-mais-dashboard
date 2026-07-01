@@ -21,7 +21,8 @@ from ui.captadores_tab import (
     _calculate_captador_commission_projection,
     _aggregate_seasonality,
     _load_partner_overrides,
-    _get_faturamento_captador_map
+    _get_faturamento_captador_map,
+    _aggregate_dominant_captador_per_state
 )
 
 class TestCaptadoresTab:
@@ -496,6 +497,39 @@ class TestCaptadoresTab:
                 os.remove(original_path)
             if has_original:
                 shutil.move(backup_path, original_path)
+
+    def test_aggregate_dominant_captador_per_state(self):
+        # Sample dados
+        data = {
+            C.COL_INT_CAPTADOR: ["Leila", "Leila", "Thais", "Ana Beatriz"],
+            C.COL_INT_STATUS: [C.STATUS_ASSINADO, C.STATUS_ASSINADO, C.STATUS_ASSINADO, C.STATUS_ASSINADO],
+            C.COL_INT_PARTNER: ["P1", "P2", "P3", "P4"],
+            C.COL_INT_STATE: ["SP", "SP", "RJ", "RJ"] # Leila dominates SP, Thais/Ana Beatriz tied in RJ
+        }
+        df = pd.DataFrame(data)
+        
+        res = _aggregate_dominant_captador_per_state(df)
+        
+        # Should have 27 UFs
+        assert len(res) == 27
+        
+        sp_row = res[res["uf"] == "SP"].iloc[0]
+        rj_row = res[res["uf"] == "RJ"].iloc[0]
+        ac_row = res[res["uf"] == "AC"].iloc[0] # empty state
+        
+        assert sp_row["Captador Dominante"] == "Leila"
+        assert sp_row["Parceiros do Líder"] == 2
+        assert sp_row["Total de Parceiros"] == 2
+        
+        # RJ can be Thais or Ana Beatriz due to tie
+        assert rj_row["Captador Dominante"] in ["Thais", "Ana Beatriz"]
+        assert rj_row["Parceiros do Líder"] == 1
+        assert rj_row["Total de Parceiros"] == 2
+        
+        assert ac_row["Captador Dominante"] == "Ninguém"
+        assert ac_row["Parceiros do Líder"] == 0
+        assert ac_row["Total de Parceiros"] == 0
+
 
 
 

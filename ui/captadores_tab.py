@@ -1257,48 +1257,67 @@ def _render_mom_growth_chart(df: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
-def _render_geo_treemap_chart(dados_df: pd.DataFrame) -> None:
+def _render_geo_state_captador_map(dados_df: pd.DataFrame) -> None:
     """
-    Renders a treemap showing Região -> Estado -> Captador based on unique signed partners.
+    Renders an interactive map of Brazil colored by the dominant captador in each state.
     """
-    MAIN_CAPTADORES = ["Leila", "Thais", "Ana Beatriz", "Fernanda", "Lorena Oliveira", "Luiza Martins"]
-    if dados_df.empty:
-        st.info(C.UI_LABEL_NO_DATA_PERIOD)
+    from ui.map_tab import _get_states_geojson, _guess_featureidkey
+
+    with st.spinner("Carregando malha de estados (IBGE)..."):
+        geojson = _get_states_geojson()
+    if not geojson:
+        st.warning("Não foi possível carregar o GeoJSON de estados do IBGE.")
         return
 
-    # Filter signed contracts
-    df_tree = dados_df.dropna(subset=[C.COL_INT_REGION, C.COL_INT_STATE, C.COL_INT_CAPTADOR, C.COL_INT_PARTNER]).copy()
-    df_tree = df_tree[
-        (df_tree[C.COL_INT_STATUS].astype(str).str.strip() == C.STATUS_ASSINADO) &
-        (df_tree[C.COL_INT_PARTNER].astype(str).str.strip() != "")
-    ]
-    df_tree["Captador"] = df_tree[C.COL_INT_CAPTADOR].apply(_format_captador_name)
-    df_tree = df_tree[df_tree["Captador"].isin(MAIN_CAPTADORES)]
-
-    if df_tree.empty:
-        st.info(C.UI_LABEL_NO_DATA_PERIOD)
+    featureidkey = _guess_featureidkey(geojson)
+    if not featureidkey:
+        st.warning("GeoJSON de estados não possui chave de UF compatível.")
         return
 
-    g = (
-        df_tree.groupby([C.COL_INT_REGION, C.COL_INT_STATE, "Captador"])[C.COL_INT_PARTNER]
-        .nunique()
-        .reset_index(name="Parceiros")
+    df_counts = _aggregate_dominant_captador_per_state(dados_df)
+
+    # Brand colors for each captador
+    captador_colors = {
+        "Leila": "#ff2d95",
+        "Thais": "#2d9fff",
+        "Ana Beatriz": "#00ff7f",
+        "Fernanda": "#ffaa00",
+        "Lorena Oliveira": "#9b5de5",
+        "Luiza Martins": "#f15bb5",
+        "Ninguém": "#2d3142"
+    }
+
+    fig = px.choropleth_mapbox(
+        df_counts,
+        geojson=geojson,
+        locations="uf",
+        featureidkey=featureidkey,
+        color="Captador Dominante",
+        hover_name="uf",
+        hover_data={
+            "Captador Dominante": True,
+            "Parceiros do Líder": True,
+            "Total de Parceiros": True,
+            "uf": False
+        },
+        color_discrete_map=captador_colors,
+        opacity=0.75,
+        center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+        zoom=3,
+        title="Domínio Territorial: Captador com Mais Parceiros por Estado",
     )
-
-    if g.empty:
-        st.info(C.UI_LABEL_NO_DATA_PERIOD)
-        return
-
-    fig = px.treemap(
-        g,
-        path=[C.COL_INT_REGION, C.COL_INT_STATE, "Captador"],
-        values="Parceiros",
-        color="Parceiros",
-        color_continuous_scale="Blues",
-        title=C.UI_LABEL_CAPTADORES_TREEMAP_TITLE
+    
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        height=600,
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#8a8d9a")
     )
-    fig.update_traces(textinfo="label+value")
+    
     st.plotly_chart(fig, width="stretch")
+
 
 
 def _render_geo_state_heatmap(dados_df: pd.DataFrame) -> None:
@@ -1399,6 +1418,69 @@ def _render_regional_stacked_bar(dados_df: pd.DataFrame) -> None:
         font=dict(color="#8a8d9a")
     )
     st.plotly_chart(fig, width="stretch")
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _aggregate_dominant_captador_per_state(dados_filtered: pd.DataFrame) -> pd.DataFrame:
+    """
+    Finds the captador with the most signed partners in each state.
+    Returns a DataFrame with all UF codes, the dominant captador,
+    the count of their partners, and the total partners in that state.
+    """
+    MAIN_CAPTADORES = ["Leila", "Thais", "Ana Beatriz", "Fernanda", "Lorena Oliveira", "Luiza Martins"]
+    
+    # Initialize all states from constants
+    all_states = sorted(list(C.ESTADO_REGIAO.keys()))
+    df_res = pd.DataFrame({
+        "uf": all_states,
+        "Captador Dominante": "Ninguém",
+        "Parceiros do Líder": 0,
+        "Total de Parceiros": 0
+    })
+    
+    if dados_filtered.empty:
+        return df_res
+        
+    # Filter signed contracts with valid UF and Captador
+    df_signed = dados_filtered.dropna(subset=[C.COL_INT_STATE, C.COL_INT_PARTNER, C.COL_INT_CAPTADOR]).copy()
+    df_signed = df_signed[
+        (df_signed[C.COL_INT_STATUS].astype(str).str.strip() == C.STATUS_ASSINADO) &
+        (df_signed[C.COL_INT_PARTNER].astype(str).str.strip() != "")
+    ]
+    df_signed["Captador"] = df_signed[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    df_signed = df_signed[df_signed["Captador"].isin(MAIN_CAPTADORES)]
+    
+    if df_signed.empty:
+        return df_res
+        
+    # Clean UF codes to match all_states
+    df_signed["Clean_UF"] = df_signed[C.COL_INT_STATE].astype(str).str.strip().str.upper()
+    df_signed = df_signed[df_signed["Clean_UF"].isin(all_states)]
+    
+    if df_signed.empty:
+        return df_res
+        
+    # Total unique partners per state
+    total_per_state = df_signed.groupby("Clean_UF")[C.COL_INT_PARTNER].nunique()
+    
+    # Count per state and captador
+    counts = df_signed.groupby(["Clean_UF", "Captador"])[C.COL_INT_PARTNER].nunique().reset_index(name="Parceiros")
+    
+    if counts.empty:
+        return df_res
+        
+    # Find dominant row (max Parceiros) per Clean_UF
+    dominant = counts.loc[counts.groupby("Clean_UF")["Parceiros"].idxmax()]
+    
+    dom_map = dict(zip(dominant["Clean_UF"], dominant["Captador"]))
+    cnt_map = dict(zip(dominant["Clean_UF"], dominant["Parceiros"]))
+    tot_map = total_per_state.to_dict()
+    
+    df_res["Captador Dominante"] = df_res["uf"].map(dom_map).fillna("Ninguém")
+    df_res["Parceiros do Líder"] = df_res["uf"].map(cnt_map).fillna(0).astype(int)
+    df_res["Total de Parceiros"] = df_res["uf"].map(tot_map).fillna(0).astype(int)
+    
+    return df_res
 
 
 @st.cache_data(show_spinner=False, ttl=600)
@@ -1909,10 +1991,10 @@ def render(dados_filtered: pd.DataFrame, fat_filtered: pd.DataFrame, raw_dados: 
         # Compute geo dispersion metrics
         geo_df = _aggregate_geo_dispersion(dados_filtered)
 
-        # Row 1: Treemap and Heatmap Estado x Captador
+        # Row 1: Mapa de Domínio Territorial e Heatmap Estado x Captador
         col_geo1, col_geo2 = st.columns(2)
         with col_geo1:
-            _render_geo_treemap_chart(dados_filtered)
+            _render_geo_state_captador_map(dados_filtered)
         with col_geo2:
             _render_geo_state_heatmap(dados_filtered)
 
