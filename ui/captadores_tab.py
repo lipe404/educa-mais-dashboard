@@ -3,7 +3,10 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import re
+import unicodedata
 import constants as C
+
 
 
 
@@ -45,19 +48,149 @@ def _format_captador_name(name) -> str:
     return name_str.title()
 
 
+def _strip_accents(s: str) -> str:
+    """
+    Strips accents/diacritics from a string.
+    """
+    return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+
+
+def _clean_partner_name(name: str) -> str:
+    """
+    Standardizes a partner name by removing CNPJ/CPF prefixes, hidden characters,
+    accents, extra spaces, and converting to uppercase.
+    """
+    if not isinstance(name, str):
+        return ""
+    name = name.replace('\u2060', '')
+    name = name.strip().upper()
+    
+    # Remove prefix composed of digits, dots, dashes, slashes, and spaces at the start
+    cleaned = re.sub(r'^[0-9./\-\s]+', '', name)
+    cleaned = _strip_accents(cleaned)
+    
+    # Remove multiple spaces/newlines
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    return cleaned.strip()
+
+
+def _find_best_captador(fat_partner: str, partner_map: pd.DataFrame) -> str:
+    """
+    Fuzzy matches a faturamento partner name against the partner-captador map.
+    Returns the captador name or None.
+    """
+    if not isinstance(fat_partner, str) or partner_map.empty:
+        return None
+    
+    cleaned_fat = _clean_partner_name(fat_partner)
+    if not cleaned_fat:
+        return None
+
+    # Self-heal if _cleaned_partner is missing
+    if "_cleaned_partner" not in partner_map.columns and C.COL_INT_PARTNER in partner_map.columns:
+        partner_map = partner_map.copy()
+        partner_map["_cleaned_partner"] = partner_map[C.COL_INT_PARTNER].apply(_clean_partner_name)
+
+    # 1. Exact match
+    exact_match = partner_map[partner_map["_cleaned_partner"] == cleaned_fat]
+    if not exact_match.empty:
+        return exact_match.iloc[0][C.COL_INT_CAPTADOR]
+
+
+    # 2. Substring match (minimum length 6 to prevent single-letter/short word noise matches)
+    candidates = []
+    for _, row in partner_map.iterrows():
+        cleaned_dados = row["_cleaned_partner"]
+        if len(cleaned_fat) >= 6 and len(cleaned_dados) >= 6:
+            if cleaned_fat in cleaned_dados or cleaned_dados in cleaned_fat:
+                candidates.append((row[C.COL_INT_CAPTADOR], cleaned_dados))
+
+    if candidates:
+        # Prefer the one with closest length
+        candidates.sort(key=lambda x: abs(len(x[1]) - len(cleaned_fat)))
+        return candidates[0][0]
+
+    # 3. Word-by-word intersection match
+    COMMON_WORDS = {
+        # Common Brazilian last names
+        "SILVA", "SANTOS", "OLIVEIRA", "SOUZA", "RODRIGUES", "FERREIRA", "ALVES", 
+        "GOMES", "LIMA", "COSTA", "ROCHA", "BARBOSA", "RIBEIRO", "MARTINS", "CARVALHO",
+        "TEIXEIRA", "FREITAS", "CAMPOS", "AZEVEDO", "CANDIDO", "ANDRADE", "PINTO",
+        "DIAS", "MOREIRA", "NUNES", "VIEIRA", "CARDOSO", "MACHADO", "MENDES",
+        
+        # Common first names
+        "MARIA", "JOSE", "ANTONIO", "FRANCISCO", "CARLOS", "PAULO", "PEDRO", 
+        "LUCAS", "LUIZ", "MARCOS", "ANA", "JOAO", "ANDRE", "VICENTE", "GABRIEL", 
+        "BRUNO", "FELIPE", "MATEUS", "JULIA", "BEATRIZ", "ALICE", "TIAGO", "ROBERTO",
+        
+        # Common company/polo/institution terms
+        "EIRELI", "LTDA", "MEI", "POLO", "CENTRO", "CURSO", "ENSINO", "EDUCACIONAL", 
+        "GRUPO", "INSTITUTO", "COGNITIVA", "EMOCIONA", "EAD", "ONLINE", "PRO", "DIGITAL",
+        "NEGOCIOS", "ASSOCIACAO", "SEGURANCA", "INTEGRADO", "INTERATIVO", "CONSULTORIA",
+        "PARTNER", "PARCEIRO", "PARCEIROS",
+        
+        # Common words and states
+        "RIO", "JANEIRO", "SUL", "NORTE", "LESTE", "OESTE", "GRANDE", "MINAS", "GERAIS",
+        "SAO", "PAULO", "SANTA", "CATARINA", "PARANA", "BAHIA", "CEARA", "PERNAMBUCO",
+        "BRASIL", "NOVA", "IGUACU"
+    }
+
+    fat_words = [w for w in cleaned_fat.split() if len(w) >= 3]
+    if fat_words:
+        word_candidates = []
+        for _, row in partner_map.iterrows():
+            cleaned_dados = row["_cleaned_partner"]
+            dados_words = [w for w in cleaned_dados.split() if len(w) >= 3]
+            intersection = set(fat_words).intersection(set(dados_words))
+            if intersection:
+                # If only 1 word matches, it must not be a common word/stopword
+                if len(intersection) == 1:
+                    matched_word = list(intersection)[0]
+                    if matched_word in COMMON_WORDS:
+                        continue
+                word_candidates.append((row[C.COL_INT_CAPTADOR], len(intersection), cleaned_dados))
+        
+        if word_candidates:
+            # Sort by number of matching words descending, then by shortest length diff
+            word_candidates.sort(key=lambda x: (-x[1], abs(len(x[2]) - len(cleaned_fat))))
+            return word_candidates[0][0]
+
+    return None
+
+
+def _get_faturamento_captador_map(fat_df: pd.DataFrame, partner_map: pd.DataFrame) -> dict:
+    """
+    Creates a mapping dictionary of faturamento partner names to captador names.
+    Uses fuzzy/intelligent matching to resolve dirty or simplified names.
+    """
+    if fat_df.empty or partner_map.empty:
+        return {}
+    
+    unique_partners = fat_df[C.COL_INT_PARTNER].dropna().unique()
+    mapping = {}
+    for p in unique_partners:
+        p_str = str(p).strip()
+        if not p_str:
+            continue
+        captador = _find_best_captador(p_str, partner_map)
+        mapping[p_str] = captador if captador else C.UI_LABEL_UNIDENTIFIED
+    return mapping
+
+
 @st.cache_data(show_spinner=False, ttl=600)
 def _aggregate_partner_captador_map(raw_dados: pd.DataFrame) -> pd.DataFrame:
     """
     Creates a unique mapping between partners and their respective captadores from raw_dados.
+    Includes a standardized cleaned partner column for robust matching.
 
     Args:
         raw_dados (pd.DataFrame): The raw, unfiltered dados DataFrame.
 
     Returns:
-        pd.DataFrame: A DataFrame with columns [C.COL_INT_PARTNER, C.COL_INT_CAPTADOR].
+        pd.DataFrame: A DataFrame with columns [C.COL_INT_PARTNER, C.COL_INT_CAPTADOR, "_cleaned_partner"].
     """
     if raw_dados.empty:
-        return pd.DataFrame(columns=[C.COL_INT_PARTNER, C.COL_INT_CAPTADOR])
+        return pd.DataFrame(columns=[C.COL_INT_PARTNER, C.COL_INT_CAPTADOR, "_cleaned_partner"])
 
     # Select partner and captador columns
     df_map = raw_dados[[C.COL_INT_PARTNER, C.COL_INT_CAPTADOR]].copy()
@@ -68,11 +201,17 @@ def _aggregate_partner_captador_map(raw_dados: pd.DataFrame) -> pd.DataFrame:
 
     # Clean captador name (strip)
     df_map[C.COL_INT_CAPTADOR] = df_map[C.COL_INT_CAPTADOR].astype(str).str.strip()
+    df_map = df_map[df_map[C.COL_INT_CAPTADOR] != ""]
 
-    # Drop duplicates to have unique partner -> captador
-    df_map = df_map.drop_duplicates(subset=[C.COL_INT_PARTNER])
+    # Add cleaned partner column
+    df_map["_cleaned_partner"] = df_map[C.COL_INT_PARTNER].apply(_clean_partner_name)
+    df_map = df_map[df_map["_cleaned_partner"] != ""]
+
+    # Drop duplicates on the cleaned name to guarantee 1-to-1 match
+    df_map = df_map.drop_duplicates(subset=["_cleaned_partner"])
 
     return df_map
+
 
 
 @st.cache_data(show_spinner=False, ttl=600)
@@ -156,24 +295,16 @@ def _aggregate_revenue_by_captador(fat_df: pd.DataFrame, partner_captador_map: p
     if fat_df.empty:
         return pd.DataFrame(columns=[C.UI_LABEL_CAPTADOR_COLUMN, C.UI_LABEL_REVENUE_COLUMN, "Contratos"])
 
-    # Clean partner names in faturamento
     df_fat = fat_df.copy()
     df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
     df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
 
-    # Merge with partner_captador_map
-    df_merged = pd.merge(
-        df_fat,
-        partner_captador_map,
-        on=C.COL_INT_PARTNER,
-        how="left"
-    )
-
-    # Clean and standardize captador column using mapper
-    df_merged[C.COL_INT_CAPTADOR] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    fat_captador_map = _get_faturamento_captador_map(df_fat, partner_captador_map)
+    df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
 
     # Aggregate
-    df_grouped = df_merged.groupby(C.COL_INT_CAPTADOR).agg(
+    df_grouped = df_fat.groupby("Captador").agg(
         faturamento=(C.COL_INT_VALOR, "sum"),
         contratos=(C.COL_INT_VALOR, "count")
     ).reset_index()
@@ -300,29 +431,21 @@ def _aggregate_ticket_medio_by_captador(fat_df: pd.DataFrame, partner_captador_m
     if fat_df.empty:
         return pd.DataFrame(columns=[C.UI_LABEL_CAPTADOR_COLUMN, C.UI_LABEL_TICKET_MEDIO_COLUMN])
 
-    # Clean partner names in faturamento
     df_fat = fat_df.copy()
     df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
     df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
 
-    # Merge with partner_captador_map
-    df_merged = pd.merge(
-        df_fat,
-        partner_captador_map,
-        on=C.COL_INT_PARTNER,
-        how="left"
-    )
-
-    # Clean and standardize captador column
-    df_merged[C.COL_INT_CAPTADOR] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    fat_captador_map = _get_faturamento_captador_map(df_fat, partner_captador_map)
+    df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
 
     # Group by Captador and Partner to get total faturamento per partner
-    partner_grouped = df_merged.groupby([C.COL_INT_CAPTADOR, C.COL_INT_PARTNER]).agg(
+    partner_grouped = df_fat.groupby(["Captador", C.COL_INT_PARTNER]).agg(
         faturamento_parceiro=(C.COL_INT_VALOR, "sum")
     ).reset_index()
 
     # Group by Captador to get total faturamento and count of unique partners
-    captador_grouped = partner_grouped.groupby(C.COL_INT_CAPTADOR).agg(
+    captador_grouped = partner_grouped.groupby("Captador").agg(
         total_faturamento=("faturamento_parceiro", "sum"),
         qtd_parceiros=("faturamento_parceiro", "count")
     ).reset_index()
@@ -334,7 +457,7 @@ def _aggregate_ticket_medio_by_captador(fat_df: pd.DataFrame, partner_captador_m
     captador_grouped = captador_grouped.sort_values(by=C.UI_LABEL_TICKET_MEDIO_COLUMN, ascending=False)
 
     # Select columns
-    df_result = captador_grouped[[C.COL_INT_CAPTADOR, C.UI_LABEL_TICKET_MEDIO_COLUMN]].copy()
+    df_result = captador_grouped[["Captador", C.UI_LABEL_TICKET_MEDIO_COLUMN]].copy()
     df_result.columns = [C.UI_LABEL_CAPTADOR_COLUMN, C.UI_LABEL_TICKET_MEDIO_COLUMN]
 
     return df_result
@@ -542,24 +665,16 @@ def _aggregate_revenue_per_contract(fat_df: pd.DataFrame, partner_captador_map: 
     if fat_df.empty:
         return pd.DataFrame(columns=[C.UI_LABEL_CAPTADOR_COLUMN, C.UI_LABEL_REVENUE_PER_CONTRACT_COLUMN])
 
-    # Clean partner names in faturamento
     df_fat = fat_df.copy()
     df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
     df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
 
-    # Merge with partner_captador_map
-    df_merged = pd.merge(
-        df_fat,
-        partner_captador_map,
-        on=C.COL_INT_PARTNER,
-        how="left"
-    )
-
-    # Clean and standardize captador column
-    df_merged[C.COL_INT_CAPTADOR] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    fat_captador_map = _get_faturamento_captador_map(df_fat, partner_captador_map)
+    df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
 
     # Aggregate total faturamento and number of contracts
-    df_grouped = df_merged.groupby(C.COL_INT_CAPTADOR).agg(
+    df_grouped = df_fat.groupby("Captador").agg(
         total_faturamento=(C.COL_INT_VALOR, "sum"),
         total_contratos=(C.COL_INT_VALOR, "count")
     ).reset_index()
@@ -570,7 +685,7 @@ def _aggregate_revenue_per_contract(fat_df: pd.DataFrame, partner_captador_map: 
     # Sort descending
     df_grouped = df_grouped.sort_values(by=C.UI_LABEL_REVENUE_PER_CONTRACT_COLUMN, ascending=False)
 
-    df_result = df_grouped[[C.COL_INT_CAPTADOR, C.UI_LABEL_REVENUE_PER_CONTRACT_COLUMN]].copy()
+    df_result = df_grouped[["Captador", C.UI_LABEL_REVENUE_PER_CONTRACT_COLUMN]].copy()
     df_result.columns = [C.UI_LABEL_CAPTADOR_COLUMN, C.UI_LABEL_REVENUE_PER_CONTRACT_COLUMN]
 
     return df_result
@@ -674,22 +789,15 @@ def _aggregate_cumulative_revenue(fat_filtered: pd.DataFrame, partner_captador_m
     if fat_filtered.empty or C.COL_INT_DATA not in fat_filtered.columns or C.COL_INT_VALOR not in fat_filtered.columns:
         return pd.DataFrame(columns=["Data", "Captador", "Faturamento Acumulado"])
 
-    # Clean partner names in faturamento
     df_fat = fat_filtered.copy()
     df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
     df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
 
-    # Merge with partner_captador_map
-    df_merged = pd.merge(
-        df_fat,
-        partner_captador_map,
-        on=C.COL_INT_PARTNER,
-        how="left"
-    )
+    fat_captador_map = _get_faturamento_captador_map(df_fat, partner_captador_map)
+    df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
 
-    # Clean captador name
-    df_merged["Captador"] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
-    df_merged = df_merged[df_merged["Captador"].isin(MAIN_CAPTADORES)]
+    df_merged = df_fat[df_fat["Captador"].isin(MAIN_CAPTADORES)].copy()
 
     if df_merged.empty:
         return pd.DataFrame(columns=["Data", "Captador", "Faturamento Acumulado"])
@@ -792,22 +900,15 @@ def _aggregate_bump_chart_data(fat_filtered: pd.DataFrame, partner_captador_map:
     if fat_filtered.empty or C.COL_INT_DATA not in fat_filtered.columns or C.COL_INT_VALOR not in fat_filtered.columns:
         return pd.DataFrame(columns=["_ano", "_mes", "Mês Extenso", "Captador", "Faturamento", "rank"])
 
-    # Clean partner names in faturamento
     df_fat = fat_filtered.copy()
     df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
     df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
 
-    # Merge with partner_captador_map
-    df_merged = pd.merge(
-        df_fat,
-        partner_captador_map,
-        on=C.COL_INT_PARTNER,
-        how="left"
-    )
+    fat_captador_map = _get_faturamento_captador_map(df_fat, partner_captador_map)
+    df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
 
-    # Clean captador name
-    df_merged["Captador"] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
-    df_merged = df_merged[df_merged["Captador"].isin(MAIN_CAPTADORES)]
+    df_merged = df_fat[df_fat["Captador"].isin(MAIN_CAPTADORES)].copy()
 
     if df_merged.empty:
         return pd.DataFrame(columns=["_ano", "_mes", "Mês Extenso", "Captador", "Faturamento", "rank"])
@@ -906,9 +1007,12 @@ def _aggregate_heatmap_data(
         partner_map = _aggregate_partner_captador_map(raw_dados)
         df_fat = fat_filtered.copy()
         df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
-        df_merged = pd.merge(df_fat, partner_map, on=C.COL_INT_PARTNER, how="left")
-        df_merged["Captador"] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
-        df_merged = df_merged[df_merged["Captador"].isin(MAIN_CAPTADORES)]
+        df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
+        
+        fat_captador_map = _get_faturamento_captador_map(df_fat, partner_map)
+        df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+        df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
+        df_merged = df_fat[df_fat["Captador"].isin(MAIN_CAPTADORES)].copy()
 
         if df_merged.empty:
             return pd.DataFrame()
@@ -1303,9 +1407,13 @@ def _calculate_captador_commission_projection(fat_filtered: pd.DataFrame, partne
     total_days = max_date.days_in_month
     remaining_days = total_days - elapsed_days
 
-    # Merge with partner_map
-    df_month = pd.merge(df_month, partner_map, on=C.COL_INT_PARTNER, how="left")
-    df_month["Captador"] = df_month[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    # Map to captador
+    df_month[C.COL_INT_PARTNER] = df_month[C.COL_INT_PARTNER].astype(str).str.strip()
+    df_month = df_month[df_month[C.COL_INT_PARTNER] != ""]
+    
+    fat_captador_map = _get_faturamento_captador_map(df_month, partner_map)
+    df_month["Captador"] = df_month[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_month["Captador"] = df_month["Captador"].apply(_format_captador_name)
 
     records = []
     for cap in MAIN_CAPTADORES:
@@ -1373,14 +1481,17 @@ def _render_revenue_waterfall(fat_filtered: pd.DataFrame, partner_map: pd.DataFr
 
     df_fat = fat_filtered.copy()
     df_fat[C.COL_INT_PARTNER] = df_fat[C.COL_INT_PARTNER].astype(str).str.strip()
-    df_merged = pd.merge(df_fat, partner_map, on=C.COL_INT_PARTNER, how="left")
-    df_merged["Captador"] = df_merged[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    df_fat = df_fat[df_fat[C.COL_INT_PARTNER] != ""]
+    
+    fat_captador_map = _get_faturamento_captador_map(df_fat, partner_map)
+    df_fat["Captador"] = df_fat[C.COL_INT_PARTNER].map(fat_captador_map)
+    df_fat["Captador"] = df_fat["Captador"].apply(_format_captador_name)
 
     sums = {}
     for cap in MAIN_CAPTADORES:
-        sums[cap] = df_merged[df_merged["Captador"] == cap][C.COL_INT_VALOR].sum()
+        sums[cap] = df_fat[df_fat["Captador"] == cap][C.COL_INT_VALOR].sum()
 
-    unidentified = df_merged[~df_merged["Captador"].isin(MAIN_CAPTADORES)][C.COL_INT_VALOR].sum()
+    unidentified = df_fat[~df_fat["Captador"].isin(MAIN_CAPTADORES)][C.COL_INT_VALOR].sum()
     
     x_labels = list(sums.keys())
     y_values = list(sums.values())
