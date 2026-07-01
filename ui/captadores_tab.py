@@ -1259,7 +1259,8 @@ def _render_mom_growth_chart(df: pd.DataFrame) -> None:
 
 def _render_geo_state_captador_map(dados_df: pd.DataFrame) -> None:
     """
-    Renders an interactive map of Brazil colored by the dominant captador in each state.
+    Renders an interactive map of Brazil colored by the dominant captador
+    in each state, with a toggle to switch between 1st and 2nd place.
     """
     from ui.map_tab import _get_states_geojson, _guess_featureidkey
 
@@ -1287,24 +1288,52 @@ def _render_geo_state_captador_map(dados_df: pd.DataFrame) -> None:
         "Ninguém": "#2d3142"
     }
 
+    # Toggle for 1st or 2nd place
+    ranking_option = st.radio(
+        "Exibir no mapa:",
+        ["1º Captador (Mais Parceiros)", "2º Captador (Segundo Maior)"],
+        horizontal=True,
+        key="geo_map_ranking"
+    )
+
+    if ranking_option == "1º Captador (Mais Parceiros)":
+        color_col = "Captador Dominante"
+        partner_col = "Parceiros do Líder"
+        title = "Domínio Territorial: Captador com Mais Parceiros por Estado"
+        hover_data_map = {
+            "Captador Dominante": True,
+            "Parceiros do Líder": True,
+            "Total de Parceiros": True,
+            "uf": False,
+            "Segundo Captador": False,
+            "Parceiros do Segundo": False,
+        }
+    else:
+        color_col = "Segundo Captador"
+        partner_col = "Parceiros do Segundo"
+        title = "Domínio Territorial: Segundo Captador com Mais Parceiros por Estado"
+        hover_data_map = {
+            "Segundo Captador": True,
+            "Parceiros do Segundo": True,
+            "Total de Parceiros": True,
+            "uf": False,
+            "Captador Dominante": False,
+            "Parceiros do Líder": False,
+        }
+
     fig = px.choropleth_mapbox(
         df_counts,
         geojson=geojson,
         locations="uf",
         featureidkey=featureidkey,
-        color="Captador Dominante",
+        color=color_col,
         hover_name="uf",
-        hover_data={
-            "Captador Dominante": True,
-            "Parceiros do Líder": True,
-            "Total de Parceiros": True,
-            "uf": False
-        },
+        hover_data=hover_data_map,
         color_discrete_map=captador_colors,
         opacity=0.75,
         center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
         zoom=3,
-        title="Domínio Territorial: Captador com Mais Parceiros por Estado",
+        title=title,
     )
     
     fig.update_layout(
@@ -1370,6 +1399,139 @@ def _render_geo_state_heatmap(dados_df: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
+@st.cache_data(show_spinner=False, ttl=600)
+def _aggregate_captador_state_matrix(dados_filtered: pd.DataFrame) -> pd.DataFrame:
+    """
+    Returns a full matrix of (captador, uf) with partner counts for all 6 main captadores
+    and all 27 states, used for coverage detail.
+    """
+    MAIN_CAPTADORES = ["Leila", "Thais", "Ana Beatriz", "Fernanda", "Lorena Oliveira", "Luiza Martins"]
+    all_states = sorted(list(C.ESTADO_REGIAO.keys()))
+
+    rows = []
+    for cap in MAIN_CAPTADORES:
+        for uf in all_states:
+            rows.append({"Captador": cap, "uf": uf, "Parceiros": 0})
+    base = pd.DataFrame(rows)
+
+    if dados_filtered.empty:
+        return base
+
+    df_signed = dados_filtered.dropna(subset=[C.COL_INT_STATE, C.COL_INT_PARTNER, C.COL_INT_CAPTADOR]).copy()
+    df_signed = df_signed[
+        (df_signed[C.COL_INT_STATUS].astype(str).str.strip() == C.STATUS_ASSINADO) &
+        (df_signed[C.COL_INT_PARTNER].astype(str).str.strip() != "")
+    ]
+    df_signed["Captador"] = df_signed[C.COL_INT_CAPTADOR].apply(_format_captador_name)
+    df_signed = df_signed[df_signed["Captador"].isin(MAIN_CAPTADORES)]
+    if df_signed.empty:
+        return base
+
+    df_signed["Clean_UF"] = df_signed[C.COL_INT_STATE].astype(str).str.strip().str.upper()
+    df_signed = df_signed[df_signed["Clean_UF"].isin(all_states)]
+    if df_signed.empty:
+        return base
+
+    counts = df_signed.groupby(["Captador", "Clean_UF"])[C.COL_INT_PARTNER].nunique().reset_index(name="Parceiros")
+    counts = counts.rename(columns={"Clean_UF": "uf"})
+
+    merged = base.merge(counts, on=["Captador", "uf"], how="left", suffixes=("", "_real"))
+    merged["Parceiros"] = merged["Parceiros_real"].fillna(0).astype(int)
+    merged = merged.drop(columns=["Parceiros_real"])
+    return merged
+
+
+def _render_captador_state_coverage(dados_df: pd.DataFrame) -> None:
+    """
+    Allows selecting a captador and visualizes which states they have partners in
+    and which they don't, using a binary choropleth map + side-by-side tables.
+    """
+    MAIN_CAPTADORES = ["Leila", "Thais", "Ana Beatriz", "Fernanda", "Lorena Oliveira", "Luiza Martins"]
+    from ui.map_tab import _get_states_geojson, _guess_featureidkey
+
+    st.subheader("Detalhamento por Captador")
+    st.markdown("Selecione um captador para visualizar sua cobertura geográfica: estados com e sem parceiros.")
+
+    captador_selected = st.selectbox(
+        "Captador:",
+        MAIN_CAPTADORES,
+        key="geo_captador_coverage"
+    )
+
+    matrix = _aggregate_captador_state_matrix(dados_df)
+    df_cap = matrix[matrix["Captador"] == captador_selected].copy()
+
+    if df_cap.empty:
+        st.info("Sem dados disponíveis para este captador.")
+        return
+
+    df_cap["Cobertura"] = df_cap["Parceiros"].apply(lambda x: "Com Parceiros" if x > 0 else "Sem Parceiros")
+
+    states_with = df_cap[df_cap["Parceiros"] > 0].sort_values("uf")
+    states_without = df_cap[df_cap["Parceiros"] == 0].sort_values("uf")
+
+    cov_metrics, cov_map_col = st.columns([1, 2])
+    with cov_metrics:
+        st.metric("Estados com Parceiros", len(states_with))
+        st.metric("Estados sem Parceiros", len(states_without))
+        st.metric("Cobertura (%)", f"{len(states_with) / len(df_cap) * 100:.0f}%")
+
+    with cov_map_col:
+        with st.spinner("Carregando mapa de cobertura..."):
+            geojson = _get_states_geojson()
+        if geojson:
+            featureidkey = _guess_featureidkey(geojson)
+            if featureidkey:
+                color_map = {"Com Parceiros": "#00ff7f", "Sem Parceiros": "#ff2d95"}
+                fig = px.choropleth_mapbox(
+                    df_cap,
+                    geojson=geojson,
+                    locations="uf",
+                    featureidkey=featureidkey,
+                    color="Cobertura",
+                    hover_name="uf",
+                    hover_data={"Parceiros": True, "Cobertura": False},
+                    color_discrete_map=color_map,
+                    opacity=0.75,
+                    center={"lat": C.MAP_LAT_DEFAULT, "lon": C.MAP_LON_DEFAULT},
+                    zoom=3,
+                    title=f"Cobertura de {captador_selected} por Estado",
+                )
+                fig.update_layout(
+                    mapbox_style="open-street-map",
+                    height=450,
+                    margin={"r": 0, "t": 40, "l": 0, "b": 0},
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#8a8d9a"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig, width="stretch")
+
+    st.divider()
+
+    col_tables_left, col_tables_right = st.columns(2)
+    with col_tables_left:
+        st.markdown(f"✅ **Estados com Parceiros ({len(states_with)})**")
+        if not states_with.empty:
+            display_with = states_with[["uf", "Parceiros"]].copy()
+            display_with["Região"] = display_with["uf"].map(C.ESTADO_REGIAO)
+            display_with.columns = ["UF", "Nº Parceiros", "Região"]
+            st.dataframe(display_with, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum estado com parceiros.")
+
+    with col_tables_right:
+        st.markdown(f"❌ **Estados sem Parceiros ({len(states_without)})**")
+        if not states_without.empty:
+            display_without = states_without[["uf"]].copy()
+            display_without["Região"] = display_without["uf"].map(C.ESTADO_REGIAO)
+            display_without.columns = ["UF", "Região"]
+            st.dataframe(display_without, use_container_width=True, hide_index=True)
+        else:
+            st.info("Todos os estados têm parceiros!")
+
+
 def _render_regional_stacked_bar(dados_df: pd.DataFrame) -> None:
     """
     Renders a stacked bar chart of Captador vs Região showing how regionalized they are.
@@ -1423,9 +1585,10 @@ def _render_regional_stacked_bar(dados_df: pd.DataFrame) -> None:
 @st.cache_data(show_spinner=False, ttl=600)
 def _aggregate_dominant_captador_per_state(dados_filtered: pd.DataFrame) -> pd.DataFrame:
     """
-    Finds the captador with the most signed partners in each state.
+    Finds the captador with the most signed partners in each state (1st and 2nd place).
     Returns a DataFrame with all UF codes, the dominant captador,
-    the count of their partners, and the total partners in that state.
+    the count of their partners, the second place captador and count,
+    and the total partners in that state.
     """
     MAIN_CAPTADORES = ["Leila", "Thais", "Ana Beatriz", "Fernanda", "Lorena Oliveira", "Luiza Martins"]
     
@@ -1435,6 +1598,8 @@ def _aggregate_dominant_captador_per_state(dados_filtered: pd.DataFrame) -> pd.D
         "uf": all_states,
         "Captador Dominante": "Ninguém",
         "Parceiros do Líder": 0,
+        "Segundo Captador": "Ninguém",
+        "Parceiros do Segundo": 0,
         "Total de Parceiros": 0
     })
     
@@ -1469,15 +1634,24 @@ def _aggregate_dominant_captador_per_state(dados_filtered: pd.DataFrame) -> pd.D
     if counts.empty:
         return df_res
         
-    # Find dominant row (max Parceiros) per Clean_UF
-    dominant = counts.loc[counts.groupby("Clean_UF")["Parceiros"].idxmax()]
+    # Get top 2 per state (by partner count)
+    counts_sorted = counts.sort_values(["Clean_UF", "Parceiros"], ascending=[True, False])
+    top2 = counts_sorted.groupby("Clean_UF").head(2).reset_index(drop=True)
+    top2["rank"] = top2.groupby("Clean_UF").cumcount() + 1
     
-    dom_map = dict(zip(dominant["Clean_UF"], dominant["Captador"]))
-    cnt_map = dict(zip(dominant["Clean_UF"], dominant["Parceiros"]))
+    first = top2[top2["rank"] == 1]
+    second = top2[top2["rank"] == 2]
+    
+    dom_map = dict(zip(first["Clean_UF"], first["Captador"]))
+    cnt_map = dict(zip(first["Clean_UF"], first["Parceiros"]))
+    sec_cap_map = dict(zip(second["Clean_UF"], second["Captador"]))
+    sec_cnt_map = dict(zip(second["Clean_UF"], second["Parceiros"]))
     tot_map = total_per_state.to_dict()
     
     df_res["Captador Dominante"] = df_res["uf"].map(dom_map).fillna("Ninguém")
     df_res["Parceiros do Líder"] = df_res["uf"].map(cnt_map).fillna(0).astype(int)
+    df_res["Segundo Captador"] = df_res["uf"].map(sec_cap_map).fillna("Ninguém")
+    df_res["Parceiros do Segundo"] = df_res["uf"].map(sec_cnt_map).fillna(0).astype(int)
     df_res["Total de Parceiros"] = df_res["uf"].map(tot_map).fillna(0).astype(int)
     
     return df_res
@@ -2000,7 +2174,12 @@ def render(dados_filtered: pd.DataFrame, fat_filtered: pd.DataFrame, raw_dados: 
 
         st.divider()
 
-        # Row 2: Stacked Bar and Dispersion Table
+        # Row 2: Detalhamento de Cobertura por Captador
+        _render_captador_state_coverage(dados_filtered)
+
+        st.divider()
+
+        # Row 3: Stacked Bar and Dispersion Table
         col_geo3, col_geo4 = st.columns(2)
         with col_geo3:
             _render_regional_stacked_bar(dados_filtered)
