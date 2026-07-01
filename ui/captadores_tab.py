@@ -5,6 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 import unicodedata
+import os
+import json
 import constants as C
 
 
@@ -58,20 +60,24 @@ def _strip_accents(s: str) -> str:
 def _clean_partner_name(name: str) -> str:
     """
     Standardizes a partner name by removing CNPJ/CPF prefixes, hidden characters,
-    accents, extra spaces, and converting to uppercase.
+    accents, punctuation/symbols, and converting to uppercase.
     """
     if not isinstance(name, str):
         return ""
     name = name.replace('\u2060', '')
     name = name.strip().upper()
+    cleaned = _strip_accents(name)
     
-    # Remove prefix composed of digits, dots, dashes, slashes, and spaces at the start
-    cleaned = re.sub(r'^[0-9./\-\s]+', '', name)
-    cleaned = _strip_accents(cleaned)
+    # Replace non-alphanumeric (including punctuation) with space
+    cleaned = re.sub(r'[^A-Z0-9\s]', ' ', cleaned)
+    
+    # Remove prefix composed of digits and spaces at the start
+    cleaned = re.sub(r'^[0-9\s]+', '', cleaned)
     
     # Remove multiple spaces/newlines
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned.strip()
+
 
 
 def _find_best_captador(fat_partner: str, partner_map: pd.DataFrame) -> str:
@@ -158,13 +164,65 @@ def _find_best_captador(fat_partner: str, partner_map: pd.DataFrame) -> str:
     return None
 
 
+def _load_partner_overrides() -> dict:
+    """
+    Loads manual partner-captador overrides from a persistent JSON file.
+    """
+    path = "partner_captador_overrides.json"
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_partner_overrides(overrides: dict):
+    """
+    Saves manual partner-captador overrides to a persistent JSON file.
+    """
+    path = "partner_captador_overrides.json"
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(overrides, f, indent=4, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _get_unmatched_partners(fat_df: pd.DataFrame, partner_map: pd.DataFrame) -> list:
+    """
+    Finds all unique partner names in faturamento that cannot be automatically mapped
+    and do not have a manual override yet.
+    """
+    if fat_df.empty:
+        return []
+    
+    overrides = _load_partner_overrides()
+    unique_partners = fat_df[C.COL_INT_PARTNER].dropna().unique()
+    
+    unmatched = []
+    for p in unique_partners:
+        p_str = str(p).strip()
+        if not p_str or p_str.lower() == "nan" or p_str in overrides:
+            continue
+        
+        captador = _find_best_captador(p_str, partner_map)
+        if not captador:
+            unmatched.append(p_str)
+            
+    return sorted(unmatched)
+
+
 def _get_faturamento_captador_map(fat_df: pd.DataFrame, partner_map: pd.DataFrame) -> dict:
     """
     Creates a mapping dictionary of faturamento partner names to captador names.
-    Uses fuzzy/intelligent matching to resolve dirty or simplified names.
+    Uses manual overrides first, then falls back to fuzzy matching.
     """
-    if fat_df.empty or partner_map.empty:
+    if fat_df.empty:
         return {}
+    
+    overrides = _load_partner_overrides()
     
     unique_partners = fat_df[C.COL_INT_PARTNER].dropna().unique()
     mapping = {}
@@ -172,9 +230,17 @@ def _get_faturamento_captador_map(fat_df: pd.DataFrame, partner_map: pd.DataFram
         p_str = str(p).strip()
         if not p_str:
             continue
-        captador = _find_best_captador(p_str, partner_map)
-        mapping[p_str] = captador if captador else C.UI_LABEL_UNIDENTIFIED
+        
+        # 1. Check manual overrides first
+        if p_str in overrides:
+            mapping[p_str] = overrides[p_str]
+        else:
+            # 2. Fallback to fuzzy matching
+            captador = _find_best_captador(p_str, partner_map)
+            mapping[p_str] = captador if captador else C.UI_LABEL_UNIDENTIFIED
+            
     return mapping
+
 
 
 @st.cache_data(show_spinner=False, ttl=600)
@@ -1626,6 +1692,64 @@ def render(dados_filtered: pd.DataFrame, fat_filtered: pd.DataFrame, raw_dados: 
         key="captadores_view_select"
     )
 
+    partner_map = _aggregate_partner_captador_map(raw_dados)
+    unmatched_list = _get_unmatched_partners(fat_filtered, partner_map)
+    overrides = _load_partner_overrides()
+
+    if unmatched_list or overrides:
+        with st.expander("🔧 Vincular Parceiros não Identificados", expanded=False):
+            st.markdown(
+                "Alguns parceiros registrados na aba **Faturamento** não foram encontrados na aba **Dados** ou possuem grafias diferentes. "
+                "Associe-os manualmente a um Captador abaixo para atualizar todos os gráficos em tempo real:"
+            )
+            
+            # 1. New assignments
+            if unmatched_list:
+                st.subheader("Novas Pendências de Vínculo")
+                new_assignments = {}
+                for partner in unmatched_list:
+                    col_p, col_c = st.columns([2, 1])
+                    with col_p:
+                        st.write(f"• **{partner}**")
+                    with col_c:
+                        selected_cap = st.selectbox(
+                            "Captador",
+                            ["Não identificado", "Leila", "Thais", "Ana Beatriz", "Fernanda", "Lorena Oliveira", "Luiza Martins"],
+                            key=f"override_select_{partner}"
+                        )
+                        if selected_cap != "Não identificado":
+                            new_assignments[partner] = selected_cap
+                
+                if new_assignments:
+                    if st.button("Salvar Vínculos", key="btn_save_overrides"):
+                        overrides.update(new_assignments)
+                        _save_partner_overrides(overrides)
+                        st.cache_data.clear() # Clear cache so aggregations are recomputed
+                        st.success("Vínculos salvos com sucesso!")
+                        st.rerun()
+            
+            # 2. Saved overrides
+            if overrides:
+                st.subheader("Vínculos Salvos")
+                to_delete = []
+                for partner, cap in list(overrides.items()):
+                    col_p, col_c, col_btn = st.columns([2, 1, 1])
+                    with col_p:
+                        st.write(f"**{partner}**")
+                    with col_c:
+                        st.write(f"➔ {cap}")
+                    with col_btn:
+                        if st.button("Remover", key=f"delete_override_{partner}"):
+                            to_delete.append(partner)
+                
+                if to_delete:
+                    for p in to_delete:
+                        del overrides[p]
+                    _save_partner_overrides(overrides)
+                    st.cache_data.clear() # Clear cache so aggregations are recomputed
+                    st.success("Vínculo removido com sucesso!")
+                    st.rerun()
+
     st.divider()
 
     if view_option == "Visão Geral de Performance":
@@ -1636,7 +1760,6 @@ def render(dados_filtered: pd.DataFrame, fat_filtered: pd.DataFrame, raw_dados: 
         waiting_df = _aggregate_waiting_contracts(dados_filtered)
 
         # 3. Revenue mapping (based on raw_dados partner-captador mapping for static persistence)
-        partner_map = _aggregate_partner_captador_map(raw_dados)
         revenue_df = _aggregate_revenue_by_captador(fat_filtered, partner_map)
         ticket_df = _aggregate_ticket_medio_by_captador(fat_filtered, partner_map)
         contract_avg_df = _aggregate_revenue_per_contract(fat_filtered, partner_map)

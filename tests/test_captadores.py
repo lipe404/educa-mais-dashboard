@@ -1,6 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
+import os
+import json
 import constants as C
 from ui.captadores_tab import (
     _aggregate_partner_captador_map,
@@ -17,7 +19,9 @@ from ui.captadores_tab import (
     _aggregate_heatmap_data,
     _aggregate_geo_dispersion,
     _calculate_captador_commission_projection,
-    _aggregate_seasonality
+    _aggregate_seasonality,
+    _load_partner_overrides,
+    _get_faturamento_captador_map
 )
 
 class TestCaptadoresTab:
@@ -441,5 +445,57 @@ class TestCaptadoresTab:
         leila_q1 = res_quarterly[(res_quarterly["Captador"] == "Leila") & (res_quarterly["Nome Periodo"] == "T1")].iloc[0]
         # Jan & Feb are Q1 -> 2 unique partners
         assert leila_q1["Parceiros"] == 2
+
+    def test_partner_overrides(self):
+        import shutil
+        # Backup existing file if any
+        backup_path = "partner_captador_overrides.json.bak"
+        original_path = "partner_captador_overrides.json"
+        has_original = os.path.exists(original_path)
+        if has_original:
+            shutil.copyfile(original_path, backup_path)
+            
+        try:
+            # Create a test overrides JSON
+            test_overrides = {
+                "Edu Pro EAD": "Thais",
+                "POLO IESBRA EDUCAMAIS ( Orlene)": "Ana Beatriz"
+            }
+            with open(original_path, "w", encoding="utf-8") as f:
+                json.dump(test_overrides, f)
+                
+            # Verify _load_partner_overrides reads it
+            loaded = _load_partner_overrides()
+            assert loaded == test_overrides
+            
+            # Setup dummy faturamento and mapping
+            fat_data = {
+                C.COL_INT_PARTNER: ["Edu Pro EAD", "POLO IESBRA EDUCAMAIS ( Orlene)", "Unknown Partner"]
+            }
+            fat_df = pd.DataFrame(fat_data)
+            
+            # Dummy mapping (empty but holds column types)
+            map_data = {
+                "_partner": [],
+                "_captador": [],
+                "_cleaned_partner": []
+            }
+            map_df = pd.DataFrame(map_data)
+            
+            res_map = _get_faturamento_captador_map(fat_df, map_df)
+            
+            # Mappings should respect overrides
+            assert res_map["Edu Pro EAD"] == "Thais"
+            assert res_map["POLO IESBRA EDUCAMAIS ( Orlene)"] == "Ana Beatriz"
+            # Unidentified should return "Não identificado"
+            assert res_map["Unknown Partner"] == C.UI_LABEL_UNIDENTIFIED
+            
+        finally:
+            # Restore original overrides file
+            if os.path.exists(original_path):
+                os.remove(original_path)
+            if has_original:
+                shutil.move(backup_path, original_path)
+
 
 
