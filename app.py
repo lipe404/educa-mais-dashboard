@@ -514,7 +514,7 @@ with t5:
 with t6:
     partners_tab.render(fat_filtered, dados, KEY_API)
 with t7:
-    captadores_tab.render(dados_filtered, fat_filtered, KEY_API)
+    captadores_tab.render(dados_filtered, fat_filtered, dados, KEY_API)
 with t8:
     unit_analysis_tab.render(
         dados_filtered, opportunity_service.build_oportunidade_por_uf, KEY_API
