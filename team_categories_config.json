@@ -1,32 +1,32 @@
 {
     "gerente_expansao": {
         "name": "Gerente de Expansão",
-        "percentage": 3.496584462197522,
+        "percentage": 3.02,
         "type": "fixed"
     },
     "coordenador_suporte": {
         "name": "Coordenador/Suporte Administrativo",
-        "percentage": 3.010304503878661,
+        "percentage": 2.6,
         "type": "fixed"
     },
     "gestor_trafego": {
         "name": "Gestor de Tráfego",
-        "percentage": 1.9914322102581912,
+        "percentage": 1.72,
         "type": "fixed"
     },
     "designer": {
         "name": "Designer",
-        "percentage": 0.9957161051290956,
+        "percentage": 0.86,
         "type": "fixed"
     },
     "captador": {
         "name": "Captador",
-        "percentage": 0.9957161051290956,
+        "percentage": 0.86,
         "type": "partner_based"
     },
     "suporte_performance": {
         "name": "Suporte de Performance",
-        "percentage": 3.010304503878661,
+        "percentage": 2.6,
         "type": "partner_based"
     }
 }

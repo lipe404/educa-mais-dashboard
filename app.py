@@ -23,6 +23,7 @@ from ui import (
     students_tab,
     commissions_tab,
     bolsas_tab,
+    captadores_tab,
 )
 
 # Setup Logging
@@ -430,23 +431,28 @@ st.markdown(
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='9' cy='7' r='4'%3E%3C/circle%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87'%3E%3C/path%3E%3Cpath d='M16 3.13a4 4 0 0 1 0 7.75'%3E%3C/path%3E%3C/svg%3E");
         }
 
-        /* 7. Análise Unitária - Monitor/Dashboard */
+        /* 7. Captadores - User Plus (pink) */
         div[data-testid="stTabs"] button:nth-of-type(7) > div > p::before {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff2d95' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='8.5' cy='7' r='4'%3E%3C/circle%3E%3Cline x1='20' y1='8' x2='20' y2='14'%3E%3C/line%3E%3Cline x1='23' y1='11' x2='17' y2='11'%3E%3C/line%3E%3C/svg%3E");
+        }
+
+        /* 8. Análise Unitária - Monitor/Dashboard (blue) */
+        div[data-testid="stTabs"] button:nth-of-type(8) > div > p::before {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='20' height='14' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='8' y1='21' x2='16' y2='21'%3E%3C/line%3E%3Cline x1='12' y1='17' x2='12' y2='21'%3E%3C/line%3E%3C/svg%3E");
         }
 
-        /* 8. Alunos - Graduation Cap */
-        div[data-testid="stTabs"] button:nth-of-type(8) > div > p::before {
+        /* 9. Alunos - Graduation Cap (blue) */
+        div[data-testid="stTabs"] button:nth-of-type(9) > div > p::before {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10v6M2 10l10-5 10 5-10 5z'%3E%3C/path%3E%3Cpath d='M6 12v5c3 3 9 3 12 0v-5'%3E%3C/path%3E%3C/svg%3E");
         }
 
-        /* 9. Comissões - Calculator */
-        div[data-testid="stTabs"] button:nth-of-type(9) > div > p::before {
+        /* 10. Comissões - Calculator (blue) */
+        div[data-testid="stTabs"] button:nth-of-type(10) > div > p::before {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%232d9fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='2' width='16' height='20' rx='2'%3E%3C/rect%3E%3Cline x1='8' y1='6' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='16' y1='14' x2='16' y2='14'%3E%3C/line%3E%3Cline x1='12' y1='14' x2='12' y2='14'%3E%3C/line%3E%3Cline x1='8' y1='14' x2='8' y2='14'%3E%3C/line%3E%3Cline x1='16' y1='18' x2='16' y2='18'%3E%3C/line%3E%3Cline x1='12' y1='18' x2='12' y2='18'%3E%3C/line%3E%3Cline x1='8' y1='18' x2='8' y2='18'%3E%3C/line%3E%3C/svg%3E");
         }
 
-        /* 10. Bolsas - Ticket icon (pink) */
-        div[data-testid="stTabs"] button:nth-of-type(10) > div > p::before {
+        /* 11. Bolsas - Ticket icon (pink) */
+        div[data-testid="stTabs"] button:nth-of-type(11) > div > p::before {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ff2d95' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z'%3E%3C/path%3E%3Cline x1='9' y1='12' x2='15' y2='12'%3E%3C/line%3E%3C/svg%3E");
         }
     </style>
@@ -456,7 +462,7 @@ st.markdown(
 
 geo_service = GeocodingService()
 
-t1, t2, t3, t4, t5, t6, t7, t8, t9, t10 = st.tabs(
+t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11 = st.tabs(
     [
         C.TAB_NAME_CONTRACTS,
         C.TAB_NAME_MAP,
@@ -464,6 +470,7 @@ t1, t2, t3, t4, t5, t6, t7, t8, t9, t10 = st.tabs(
         C.TAB_NAME_FORECAST,
         C.TAB_NAME_OPPORTUNITY,
         C.TAB_NAME_PARTNERS,
+        C.TAB_NAME_CAPTADORES,
         C.TAB_NAME_UNIT_ANALYSIS,
         C.TAB_NAME_STUDENTS,
         C.TAB_NAME_COMMISSIONS,
@@ -507,10 +514,12 @@ with t5:
 with t6:
     partners_tab.render(fat_filtered, dados, KEY_API)
 with t7:
+    captadores_tab.render(dados_filtered, fat_filtered, KEY_API)
+with t8:
     unit_analysis_tab.render(
         dados_filtered, opportunity_service.build_oportunidade_por_uf, KEY_API
     )
-with t8:
+with t9:
     students_tab.render(
         alunos,
         fat_filtered,
@@ -518,10 +527,10 @@ with t8:
         KEY_API,
         DEFAULT_SHEET_ID,
     )
-with t9:
+with t10:
     # Pass faturamento dataframe because it has the financial data
     commissions_tab.render(faturamento, KEY_API)
-with t10:
+with t11:
     bolsas_tab.render(
         controle=bolsas_controle_filtered if not bolsas_controle_filtered.empty else bolsas_controle,
         quantidade=bolsas_quantidade,
