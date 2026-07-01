@@ -229,8 +229,8 @@ class CommissionEngine:
             total_partner_based_commission_value += partner_commission
 
         # 4. Normalization
-        # target team commission is 13% of remainder after tax
-        target_team_commission = remaining_after_tax * 0.13
+        # target team commission is 11.66% of remainder after tax
+        target_team_commission = remaining_after_tax * 0.1166
         available_for_fixed = target_team_commission - total_partner_based_commission_value
         
         if available_for_fixed < 0:
