@@ -11,6 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 import constants as C
 from services.commission import CommissionEngine, TEAM_CATEGORIES
 import os
+import plotly.graph_objects as go
 
 DB_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
@@ -125,6 +126,174 @@ def on_real_change(key, tax_pct, partner_pct):
         _save_team_categories(st.session_state["team_categories"])
         st.session_state[f"pct_{key}"] = new_nominal
         st.session_state[f"real_pct_{key}"] = new_real
+
+
+def _render_member_breakdown_section(result, summary, team_categories, is_simulation=False):
+    title = "👤 Detalhamento de Formação de Comissão por Membro" + (" (Simulação)" if is_simulation else "")
+    st.subheader(title)
+    st.markdown("Veja abaixo a composição detalhada e o cálculo cumulativo passo a passo para cada membro da equipe:")
+    
+    normalization_factor = result.get("normalization_factor", 1.0)
+    
+    for t_member in result["team"]:
+        m_name = t_member["name"]
+        m_roles = t_member["roles"]
+        m_fixed = t_member["fixed_commission"]
+        m_var = t_member["partner_commission"]
+        m_total = t_member["total_commission"]
+        
+        # Expandable card for member
+        with st.expander(f"**{m_name}** — Comissão Total: **R$ {m_total:,.2f}**", expanded=False):
+            # Show roles names
+            role_names = [team_categories.get(r, {"name": r})["name"] for r in m_roles]
+            st.markdown(f"**Cargos:** {', '.join(role_names)}")
+            
+            # Columns for totals
+            tc1, tc2, tc3 = st.columns(3)
+            tc1.metric("Comissão Fixa (Pool)", f"R$ {m_fixed:,.2f}")
+            tc2.metric("Comissão Variável (Parceiros)", f"R$ {m_var:,.2f}")
+            tc3.metric("Comissão Final", f"R$ {m_total:,.2f}")
+            
+            st.markdown("---")
+            st.markdown("#### 🧮 Cálculo Cumulativo Passo a Passo")
+            
+            cumulative_steps = []
+            
+            # 1. Fixed Component calculation
+            fixed_roles = [r for r in m_roles if team_categories.get(r, {}).get("type") == "fixed"]
+            if fixed_roles:
+                st.markdown("**1. Comissão Fixa (Rateio do Pool):**")
+                st.markdown("Os cargos fixos recebem uma cota proporcional do Pool da Equipe (11.66% da base pós-imposto).")
+                
+                base_val = summary['remaining_after_tax']
+                
+                for r in fixed_roles:
+                    cat = team_categories[r]
+                    r_name = cat["name"]
+                    r_pct = cat["percentage"]
+                    
+                    # Theoretical fixed value
+                    theo_val = base_val * (r_pct / 100.0)
+                    # Normalized value
+                    norm_val = theo_val * normalization_factor
+                    
+                    st.markdown(
+                        f"- **{r_name} ({r_pct:.2f}% nominal)**:\n"
+                        f"  - Cálculo Teórico: $R\\$ {base_val:,.2f} \\times {r_pct:.2f}\\% = R\\$ {theo_val:,.2f}$\n"
+                        f"  - Ajuste do Pool (Normalização: {normalization_factor:.6f}): $R\\$ {theo_val:,.2f} \\times {normalization_factor:.6f} = \\mathbf{{R\\$ {norm_val:,.2f}}}$"
+                    )
+                cumulative_steps.append(f"Fixo (R$ {m_fixed:,.2f})")
+            
+            # 2. Partner-Based Component calculation
+            m_breakdown = [b for b in result.get("partner_breakdown", []) if b["member_name"] == m_name]
+            if m_breakdown:
+                st.markdown("**2. Comissão Variável (Parceiros):**")
+                
+                # Count number of captações (Captador) and suportes (Suporte de Performance)
+                captacoes = [b for b in m_breakdown if b["role_key"] == "captador"]
+                suportes = [b for b in m_breakdown if b["role_key"] == "suporte_performance"]
+                
+                st.markdown(
+                    f"Este membro está associado como **Captador de {len(captacoes)} parceiro(s)** e "
+                    f"**Suporte de {len(suportes)} parceiro(s)**."
+                )
+                
+                # Display table or detailed list
+                st.markdown("Detalhamento por parceiro associado:")
+                
+                # Create dataframe to display details nicely
+                part_df = pd.DataFrame(m_breakdown)
+                disp_part_df = part_df[["partner_name", "role_name", "partner_revenue", "nominal_percentage", "partner_split", "commission_value"]].copy()
+                disp_part_df.columns = ["Parceiro", "Cargo", "Faturamento do Parceiro", "% Nominal", "% Parceiro", "Comissão Gerada"]
+                
+                st.dataframe(
+                    disp_part_df.style.format({
+                        "Faturamento do Parceiro": "R$ {:,.2f}",
+                        "Comissão Gerada": "R$ {:,.2f}",
+                        "% Nominal": "{:.2f}%",
+                        "% Parceiro": "{:.1f}%"
+                    }),
+                    use_container_width=True
+                )
+                
+                # List formulas in bullet points
+                for b in m_breakdown:
+                    p_name = b["partner_name"]
+                    r_name = b["role_name"]
+                    p_rev = b["partner_revenue"]
+                    nom_pct = b["nominal_percentage"]
+                    split = b["partner_split"]
+                    val = b["commission_value"]
+                    
+                    st.markdown(
+                        f"- **{p_name}** ({r_name}):\n"
+                        f"  - Fórmula: $\\text{{Faturamento}} \\times \\frac{{\\text{{Nominal\\%}}}}{{100}} \\times (1 - \\frac{{\\text{{Split\\%}}}}{{100}}) \\times (1 - \\text{{Imposto}})$\n"
+                        f"  - Valores: $R\\$ {p_rev:,.2f} \\times {nom_pct:.2f}\\% \\times (1 - {split:.1f}\\%) = \\mathbf{{R\\$ {val:,.2f}}}$"
+                    )
+                    cumulative_steps.append(f"{p_name} ({r_name}): R$ {val:,.2f}")
+            
+            # 3. Visual Earning Composition Chart
+            st.markdown("**3. Composição Visual de Ganhos:**")
+            chart_data = []
+            if m_fixed > 0:
+                chart_data.append({"Fonte": "Fixo (Pool)", "Valor (R$)": m_fixed})
+            for b in m_breakdown:
+                chart_data.append({"Fonte": f"{b['partner_name']} ({b['role_name']})", "Valor (R$)": b["commission_value"]})
+            
+            if chart_data:
+                chart_data = sorted(chart_data, key=lambda x: x["Valor (R$)"], reverse=True)
+                
+                fig = go.Figure(go.Bar(
+                    x=[item["Valor (R$)"] for item in chart_data],
+                    y=[item["Fonte"] for item in chart_data],
+                    orientation='h',
+                    text=[f"R$ {item['Valor (R$)']:,.2f}" for item in chart_data],
+                    textposition='auto',
+                    marker=dict(
+                        color='#10b981' if not is_simulation else '#3b82f6',
+                        line=dict(color='#047857' if not is_simulation else '#1d4ed8', width=1)
+                    ),
+                    hovertemplate="<b>%{y}</b><br>Valor: R$ %{x:,.2f}<extra></extra>"
+                ))
+                
+                chart_height = max(150, len(chart_data) * 40)
+                
+                fig.update_layout(
+                    yaxis=dict(
+                        autorange="reversed",
+                        gridcolor="rgba(0,0,0,0)",
+                        tickfont=dict(size=11)
+                    ),
+                    xaxis=dict(
+                        title="Valor da Comissão (R$)",
+                        gridcolor="#334155",
+                        tickformat="R$ ,.2f"
+                    ),
+                    height=chart_height,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e2e8f0")
+                )
+                
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                
+                sources_summary = []
+                if m_fixed > 0:
+                    sources_summary.append(f"Fixo: **R$ {m_fixed:,.2f}**")
+                if len(m_breakdown) > 0:
+                    sources_summary.append(f"Parceiros ({len(m_breakdown)}): **R$ {m_var:,.2f}**")
+                
+                summary_str = " + ".join(sources_summary)
+                st.markdown(
+                    f"<div style='background-color: rgba(30, 41, 59, 0.5); padding: 12px; border-radius: 8px; border: 1px solid #334155; margin-top: 10px;'>"
+                    f"  <span style='font-size: 14px; color: #94a3b8;'>Cálculo Cumulativo Simplificado:</span><br>"
+                    f"  <span style='font-size: 16px; color: #f8fafc;'>{summary_str} = <b>R$ {m_total:,.2f}</b></span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown("Membro sem comissões geradas para o período.")
 
 
 def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_pct: float = 50.0):
@@ -797,6 +966,94 @@ def render(dados_df: pd.DataFrame, access_key: str):
                     use_container_width=True
                 )
                 
+            # 3.5. Detailed breakdown of partner-based commissions
+            st.subheader("Detalhamento de Comissões por Parceiro")
+            breakdown_data = result.get("partner_breakdown", [])
+            if breakdown_data:
+                breakdown_df = pd.DataFrame(breakdown_data)
+                display_breakdown = breakdown_df[[
+                    "member_name", "role_name", "partner_name", "partner_revenue", "nominal_percentage", "partner_split", "commission_value"
+                ]].copy()
+                display_breakdown.columns = ["Membro", "Cargo", "Parceiro", "Faturamento do Parceiro", "% Nominal", "% Parceiro", "Comissão Gerada"]
+                
+                total_rev = display_breakdown["Faturamento do Parceiro"].sum()
+                total_comm = display_breakdown["Comissão Gerada"].sum()
+                
+                total_row_b = pd.DataFrame([{
+                    "Membro": "TOTAL",
+                    "Cargo": "-",
+                    "Parceiro": "-",
+                    "Faturamento do Parceiro": total_rev,
+                    "% Nominal": "-",
+                    "% Parceiro": "-",
+                    "Comissão Gerada": total_comm
+                }])
+                
+                display_breakdown_final = pd.concat([display_breakdown, total_row_b], ignore_index=True)
+                
+                st.dataframe(
+                    display_breakdown_final.style.format({
+                        "Faturamento do Parceiro": "R$ {:,.2f}",
+                        "Comissão Gerada": "R$ {:,.2f}",
+                        "% Nominal": lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else str(x),
+                        "% Parceiro": lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else str(x)
+                    }),
+                    use_container_width=True
+                )
+            else:
+                st.info("Nenhuma comissão variável (baseada em parceiro) gerada neste mês.")
+                
+            # 3.8. Flowchart of commissions formation
+            with st.expander(":material/schema: Visualizar Fluxograma de Formação das Comissões", expanded=True):
+                st.markdown("O diagrama abaixo ilustra o fluxo de cálculo passo a passo, desde o faturamento bruto até a comissão líquida de cada membro:")
+                dot_code = """
+                digraph G {
+                    rankdir=TB;
+                    bgcolor="transparent";
+                    node [shape=box, style="filled,rounded", fontname="sans-serif", color="#2d3142", fillcolor="#1e293b", fontcolor="#e2e8f0", fontsize=10];
+                    edge [fontname="sans-serif", color="#475569", fontcolor="#94a3b8", fontsize=9];
+
+                    bruto [label="Faturamento Bruto (100%)\\nTotal das vendas dos parceiros", fillcolor="#0f172a", fontcolor="#ffffff", style="filled,rounded,bold", penwidth=2];
+                    parceiro [label="Comissão do Parceiro (50%)\\nFaturamento × 50.0%\\n(Retido pelo Parceiro)", fillcolor="#334155"];
+                    base_equipe [label="Base Líquida da Equipe (50%)\\nFaturamento restante", fillcolor="#1e293b", style="filled,rounded,bold"];
+                    
+                    bruto -> parceiro [label=" 50%"];
+                    bruto -> base_equipe [label=" 50%"];
+
+                    imposto [label="Imposto (0%)\\nDefinido na Dashboard", fillcolor="#334155"];
+                    base_pos_imposto [label="Base Pós-Imposto\\nBase de referência para comissões", fillcolor="#1e1b4b", style="filled,rounded,bold"];
+
+                    base_equipe -> imposto [label=" Dedução"];
+                    imposto -> base_pos_imposto [label=" Líquido"];
+
+                    pool [label="Pool Total da Equipe\\nFixo em 11.66% da Base", fillcolor="#064e3b", style="filled,rounded,bold"];
+                    base_pos_imposto -> pool [label=" 11.66%"];
+
+                    var_calc [label="Comissão Variável (Parceiros)\\nCaptador (1.0%) e Suporte (3.0%)\\nFaturamento × Nominal% × 50%", fillcolor="#14532d"];
+                    base_pos_imposto -> var_calc [label=" Cálculo Direto"];
+
+                    pool_restante [label="Saldo do Pool para Cargos Fixos\\nPool Total - Comissão Variável", fillcolor="#7f1d1d"];
+                    pool -> pool_restante [label=" Saldo"];
+                    var_calc -> pool_restante [label=" Subtrai"];
+
+                    cargos_fixos [label="Cargos Fixos (Pool)\\nGerente (3.5%), Coordenador (3.0%)\\nTráfego (2.0%), Designer (1.0%)", fillcolor="#701a75"];
+                    base_pos_imposto -> cargos_fixos [label=" Cálculo Teórico"];
+
+                    normalizacao [label="Normalização / Rateio\\nSe a soma dos Fixos > Saldo do Pool,\\nos valores são ajustados", fillcolor="#7c2d12", style="filled,rounded,bold"];
+                    cargos_fixos -> normalizacao;
+                    pool_restante -> normalizacao [label=" Limite do Pool"];
+
+                    membro_total [label="Comissão Final do Membro\\nComissão Fixa (Ajustada) + Comissão Variável", fillcolor="#1e3a8a", style="filled,rounded,bold", penwidth=2];
+                    normalizacao -> membro_total [label=" Fixo Final"];
+                    var_calc -> membro_total [label=" Variável Final"];
+                }
+                """
+                st.graphviz_chart(dot_code)
+                
+            st.write("")
+            _render_member_breakdown_section(result, summary, team_categories, is_simulation=False)
+            st.write("")
+                
             # 4. Export Reports
             st.subheader("Exportar Relatórios")
             col_pdf, col_xls_team, col_xls_partners = st.columns(3)
@@ -988,5 +1245,86 @@ def render(dados_df: pd.DataFrame, access_key: str):
                         }),
                         use_container_width=True
                     )
+                    
+                    st.write("")
+                    st.subheader("Detalhamento de Comissões por Parceiro (Simulação)")
+                    sim_breakdown = sim_result.get("partner_breakdown", [])
+                    if sim_breakdown:
+                        sim_breakdown_df = pd.DataFrame(sim_breakdown)
+                        sim_disp_breakdown = sim_breakdown_df[[
+                            "member_name", "role_name", "partner_name", "partner_revenue", "nominal_percentage", "partner_split", "commission_value"
+                        ]].copy()
+                        sim_disp_breakdown.columns = ["Membro", "Cargo", "Parceiro", "Faturamento do Parceiro", "% Nominal", "% Parceiro", "Comissão Gerada"]
+                        
+                        s_rev = sim_disp_breakdown["Faturamento do Parceiro"].sum()
+                        s_comm = sim_disp_breakdown["Comissão Gerada"].sum()
+                        
+                        s_row_b = pd.DataFrame([{
+                            "Membro": "TOTAL", "Cargo": "-", "Parceiro": "-",
+                            "Faturamento do Parceiro": s_rev, "% Nominal": "-", "% Parceiro": "-", "Comissão Gerada": s_comm
+                        }])
+                        
+                        sim_disp_breakdown_final = pd.concat([sim_disp_breakdown, s_row_b], ignore_index=True)
+                        st.dataframe(
+                            sim_disp_breakdown_final.style.format({
+                                "Faturamento do Parceiro": "R$ {:,.2f}",
+                                "Comissão Gerada": "R$ {:,.2f}",
+                                "% Nominal": lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else str(x),
+                                "% Parceiro": lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else str(x)
+                            }),
+                            use_container_width=True
+                        )
+                        
+                        st.write("")
+                        with st.expander(":material/schema: Visualizar Fluxograma de Formação das Comissões (Simulação)", expanded=True):
+                            st.markdown("O diagrama abaixo ilustra o fluxo de cálculo passo a passo para a simulação:")
+                            dot_code_sim = """
+                            digraph G {
+                                rankdir=TB;
+                                bgcolor="transparent";
+                                node [shape=box, style="filled,rounded", fontname="sans-serif", color="#2d3142", fillcolor="#1e293b", fontcolor="#e2e8f0", fontsize=10];
+                                edge [fontname="sans-serif", color="#475569", fontcolor="#94a3b8", fontsize=9];
+
+                                bruto [label="Faturamento Bruto (100%)\\nTotal das vendas dos parceiros", fillcolor="#0f172a", fontcolor="#ffffff", style="filled,rounded,bold", penwidth=2];
+                                parceiro [label="Comissão do Parceiro (50%)\\nFaturamento × 50.0%\\n(Retido pelo Parceiro)", fillcolor="#334155"];
+                                base_equipe [label="Base Líquida da Equipe (50%)\\nFaturamento restante", fillcolor="#1e293b", style="filled,rounded,bold"];
+                                
+                                bruto -> parceiro [label=" 50%"];
+                                bruto -> base_equipe [label=" 50%"];
+
+                                imposto [label="Imposto (0%)\\nDefinido na Dashboard", fillcolor="#334155"];
+                                base_pos_imposto [label="Base Pós-Imposto\\nBase de referência para comissões", fillcolor="#1e1b4b", style="filled,rounded,bold"];
+
+                                base_equipe -> imposto [label=" Dedução"];
+                                imposto -> base_pos_imposto [label=" Líquido"];
+
+                                pool [label="Pool Total da Equipe\\nFixo em 11.66% da Base", fillcolor="#064e3b", style="filled,rounded,bold"];
+                                base_pos_imposto -> pool [label=" 11.66%"];
+
+                                var_calc [label="Comissão Variável (Parceiros)\\nCaptador (1.0%) e Suporte (3.0%)\\nFaturamento × Nominal% × 50%", fillcolor="#14532d"];
+                                base_pos_imposto -> var_calc [label=" Cálculo Direto"];
+
+                                pool_restante [label="Saldo do Pool para Cargos Fixos\\nPool Total - Comissão Variável", fillcolor="#7f1d1d"];
+                                pool -> pool_restante [label=" Saldo"];
+                                var_calc -> pool_restante [label=" Subtrai"];
+
+                                cargos_fixos [label="Cargos Fixos (Pool)\\nGerente (3.5%), Coordenador (3.0%)\\nTráfego (2.0%), Designer (1.0%)", fillcolor="#701a75"];
+                                base_pos_imposto -> cargos_fixos [label=" Cálculo Teórico"];
+
+                                normalizacao [label="Normalização / Rateio\\nSe a soma dos Fixos > Saldo do Pool,\\nos valores são ajustados", fillcolor="#7c2d12", style="filled,rounded,bold"];
+                                cargos_fixos -> normalizacao;
+                                pool_restante -> normalizacao [label=" Limite do Pool"];
+
+                                membro_total [label="Comissão Final do Membro\\nComissão Fixa (Ajustada) + Comissão Variável", fillcolor="#1e3a8a", style="filled,rounded,bold", penwidth=2];
+                                normalizacao -> membro_total [label=" Fixo Final"];
+                                var_calc -> membro_total [label=" Variável Final"];
+                            }
+                            """
+                            st.graphviz_chart(dot_code_sim)
+                        
+                        st.write("")
+                        _render_member_breakdown_section(sim_result, sim_summary, team_categories, is_simulation=True)
+                    else:
+                        st.info("Nenhuma comissão variável (baseada em parceiro) gerada nesta simulação.")
                 else:
                     st.info("Nenhum membro configurado para simulação.")

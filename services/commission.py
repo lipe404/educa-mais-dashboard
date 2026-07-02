@@ -177,6 +177,7 @@ class CommissionEngine:
         team_calculated = []
         sum_fixed_pre_norm = 0.0
         total_partner_based_commission_value = 0.0
+        partner_breakdown = []
 
         # Helper map for assignments
         # partner_id -> {'captador_id': x, 'suporte_id': y}
@@ -213,7 +214,18 @@ class CommissionEngine:
                         assigned_member_id = assignment.get(role_id_key) or assignment.get(role)
                         if assigned_member_id == member_id:
                             partner_split = p_data.get("commission_percentage", 50.0) / 100.0
-                            partner_commission += p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - partner_split) * (1.0 - tax_rate)
+                            val = p_revenue * (cat_info["percentage"] / 100.0) * (1.0 - partner_split) * (1.0 - tax_rate)
+                            partner_commission += val
+                            partner_breakdown.append({
+                                "member_name": member["name"],
+                                "role_key": role,
+                                "role_name": cat_info["name"],
+                                "partner_name": p_data["name"],
+                                "partner_revenue": p_revenue,
+                                "nominal_percentage": cat_info["percentage"],
+                                "partner_split": p_data.get("commission_percentage", 50.0),
+                                "commission_value": val
+                            })
 
             team_calculated.append({
                 "member_id": member_id,
@@ -278,5 +290,6 @@ class CommissionEngine:
         return {
             "summary": summary,
             "partners": partners_calculated,
-            "team": team_calculated
+            "team": team_calculated,
+            "partner_breakdown": partner_breakdown
         }
