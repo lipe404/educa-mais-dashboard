@@ -36,7 +36,11 @@ st.set_page_config(
     page_title=C.APP_TITLE, page_icon="icon-blue-to-pink.ico", layout="wide"
 )
 
-# Injetar JS para evitar indexação por motores de busca (robots noindex)
+# Injeta a tag meta para os robôs de busca no body
+st.html('<meta name="robots" content="noindex, nofollow">')
+st.html('<meta name="googlebot" content="noindex">')
+
+# Injetar JS para evitar indexação por motores de busca (robots noindex) no head da página pai
 import streamlit.components.v1 as components
 components.html(
     """
