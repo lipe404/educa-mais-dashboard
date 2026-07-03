@@ -35,6 +35,46 @@ logger = logging.getLogger(__name__)
 st.set_page_config(
     page_title=C.APP_TITLE, page_icon="icon-blue-to-pink.ico", layout="wide"
 )
+
+# Injetar JS para evitar indexação por motores de busca (robots noindex)
+import streamlit.components.v1 as components
+components.html(
+    """
+    <script>
+        try {
+            var parentDoc = window.parent.document;
+            
+            // 1. Injetar meta robots noindex, nofollow
+            var metaRobots = parentDoc.querySelector('meta[name="robots"]');
+            if (!metaRobots) {
+                metaRobots = parentDoc.createElement('meta');
+                metaRobots.name = 'robots';
+                metaRobots.content = 'noindex, nofollow';
+                parentDoc.head.appendChild(metaRobots);
+            } else {
+                metaRobots.content = 'noindex, nofollow';
+            }
+            
+            // 2. Injetar meta googlebot noindex
+            var metaGoogle = parentDoc.querySelector('meta[name="googlebot"]');
+            if (!metaGoogle) {
+                metaGoogle = parentDoc.createElement('meta');
+                metaGoogle.name = 'googlebot';
+                metaGoogle.content = 'noindex';
+                parentDoc.head.appendChild(metaGoogle);
+            } else {
+                metaGoogle.content = 'noindex';
+            }
+            
+            console.log('SEO Guard: successfully injected noindex to parent document.');
+        } catch (e) {
+            console.error('SEO Guard: failed to inject noindex to parent document:', e);
+        }
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 load_dotenv()
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 KEY_API = os.getenv("KEY_API")
