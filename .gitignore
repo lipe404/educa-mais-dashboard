@@ -1,6 +1,9 @@
 .env
 # Colocar tudo dentro da pasta __pycache__ e ignorar
 __pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
 
 # Colocar tudo dentro da pasta docs e ignorar
 docs/
