@@ -2,6 +2,7 @@ import sqlite3
 import time
 import random
 import logging
+from datetime import datetime, timezone
 from geopy.geocoders import Nominatim
 from geopy.exc import (
     GeocoderTimedOut,
@@ -21,14 +22,16 @@ class GeocodingService:
     Service for geocoding addresses and caching results in a SQLite database.
     """
 
-    def __init__(self, db_path=C.GEO_DB_PATH):
+    def __init__(self, db_path=C.GEO_DB_PATH, negative_ttl=86400):
         """
         Initialize the GeocodingService.
 
         Args:
             db_path (str, optional): Path to the SQLite cache database. Defaults to C.GEO_DB_PATH.
+            negative_ttl (int, optional): Time-to-live for negative cache entries in seconds. Defaults to 86400 (24 hours).
         """
         self.db_path = db_path
+        self.negative_ttl = negative_ttl
         self._init_db()
         self.geolocator = Nominatim(user_agent=C.GEO_USER_AGENT)
 
@@ -50,6 +53,50 @@ class GeocodingService:
             # Garantir índice na coluna key para performance (embora PK já crie índice implícito,
             # isso garante redundância caso o esquema mude)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_key ON cache (key)")
+
+    def _parse_timestamp(self, val) -> float:
+        """
+        Parses a timestamp value from the database into a float unix timestamp.
+        Supports both datetime string format and numeric epoch timestamp.
+        """
+        if val is None:
+            return 0.0
+        if isinstance(val, (int, float)):
+            return float(val)
+        val_str = str(val).strip()
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+            try:
+                # SQLite CURRENT_TIMESTAMP is UTC
+                dt = datetime.strptime(val_str, fmt).replace(tzinfo=timezone.utc)
+                return dt.timestamp()
+            except ValueError:
+                continue
+        try:
+            return float(val_str)
+        except ValueError:
+            return 0.0
+
+    def cleanup_expired_negative_cache(self) -> int:
+        """
+        Deletes expired negative cache entries from the database.
+
+        Returns:
+            int: The number of deleted entries.
+        """
+        now_epoch = time.time()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("SELECT key, timestamp FROM cache WHERE lat IS NULL OR lon IS NULL")
+            rows = cursor.fetchall()
+            keys_to_delete = []
+            for key, ts in rows:
+                ts_epoch = self._parse_timestamp(ts)
+                if now_epoch - ts_epoch > self.negative_ttl:
+                    keys_to_delete.append(key)
+
+            if keys_to_delete:
+                conn.executemany("DELETE FROM cache WHERE key = ?", [(k,) for k in keys_to_delete])
+                conn.commit()
+            return len(keys_to_delete)
 
     def _geocode_with_retry(self, query, max_retries=3, initial_delay=1.5):
         """
@@ -110,14 +157,23 @@ class GeocodingService:
 
         # Check cache
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("SELECT lat, lon FROM cache WHERE key = ?", (key,))
+            cursor = conn.execute("SELECT lat, lon, timestamp FROM cache WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row:
-                # If lat/lon are None in DB, it means we tried before and failed (negative cache)
-                # But here we store actual None as NULL.
-                # If we want to retry failed ones occasionally, we'd check timestamp.
-                # For now, simplistic permanent cache.
-                return row[0], row[1]
+                lat = row[0]
+                lon = row[1]
+                ts = row[2] if len(row) >= 3 else None
+                if lat is None or lon is None:
+                    ts_epoch = self._parse_timestamp(ts)
+                    if time.time() - ts_epoch > self.negative_ttl:
+                        # Expired negative cache, proceed to fetch from API
+                        pass
+                    else:
+                        # Still valid negative cache
+                        return None, None
+                else:
+                    # Positive cache (never expires)
+                    return lat, lon
 
         # Fetch from API
         query = f"{city}, {state}, {C.GEO_COUNTRY}"
@@ -132,7 +188,7 @@ class GeocodingService:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO cache (key, lat, lon) VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO cache (key, lat, lon, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
                     (key, lat, lon),
                 )
         except Exception as e:
@@ -165,10 +221,23 @@ class GeocodingService:
 
         # Check cache
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute("SELECT lat, lon FROM cache WHERE key = ?", (key,))
+            cursor = conn.execute("SELECT lat, lon, timestamp FROM cache WHERE key = ?", (key,))
             row = cursor.fetchone()
             if row:
-                return row[0], row[1]
+                lat = row[0]
+                lon = row[1]
+                ts = row[2] if len(row) >= 3 else None
+                if lat is None or lon is None:
+                    ts_epoch = self._parse_timestamp(ts)
+                    if time.time() - ts_epoch > self.negative_ttl:
+                        # Expired negative cache, proceed to fetch from API
+                        pass
+                    else:
+                        # Still valid negative cache
+                        return None, None
+                else:
+                    # Positive cache (never expires)
+                    return lat, lon
 
         # Fetch from API
         # Using structured query for postalcode
@@ -184,7 +253,7 @@ class GeocodingService:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO cache (key, lat, lon) VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO cache (key, lat, lon, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
                     (key, lat, lon),
                 )
         except Exception as e:
