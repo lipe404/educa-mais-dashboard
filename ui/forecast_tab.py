@@ -193,6 +193,39 @@ def _render_backtest_results(bt_results: Dict[str, Any], y_col: str, y_label: st
         st.plotly_chart(fig_bt, width="stretch")
 
 
+def _render_forecast_mode_controls(key_prefix: str):
+    mode_col, seed_col, value_col = st.columns([1.4, 1, 1])
+    with mode_col:
+        forecast_mode = st.radio(
+            "Tipo de previsao",
+            [C.FORECAST_MODE_ADJUSTED, C.FORECAST_MODE_RAW],
+            horizontal=True,
+            key=f"forecast_mode_{key_prefix}",
+        )
+
+    seed_disabled = forecast_mode == C.FORECAST_MODE_RAW
+    with seed_col:
+        use_seed = st.checkbox(
+            "Fixar seed do ruido",
+            value=False,
+            disabled=seed_disabled,
+            key=f"forecast_seed_toggle_{key_prefix}",
+        )
+
+    with value_col:
+        seed_value = st.number_input(
+            "Seed do ruido",
+            min_value=0,
+            value=42,
+            step=1,
+            disabled=seed_disabled or not use_seed,
+            key=f"forecast_seed_{key_prefix}",
+        )
+
+    random_seed = int(seed_value) if use_seed and not seed_disabled else None
+    return forecast_mode, random_seed
+
+
 def _render_forecast_results(
     final_df, 
     total_predicted, 
@@ -203,7 +236,8 @@ def _render_forecast_results(
     y_col, 
     y_label, 
     title, 
-    is_currency=False
+    is_currency=False,
+    forecast_mode=None,
 ):
     """
     Renders the forecast results including key metrics and a line chart.
@@ -245,7 +279,7 @@ def _render_forecast_results(
         x=x_col,
         y=y_col,
         color="Type",
-        title=f"{title} - {algo}",
+        title=f"{title} - {algo}" + (f" - {forecast_mode}" if forecast_mode else ""),
         color_discrete_map={
             C.UI_LABEL_HISTORY: C.COLOR_PRIMARY,
             C.UI_LABEL_FORECAST: C.COLOR_FORECAST,
@@ -290,6 +324,8 @@ def _render_contracts_tab(
             ],
             key="forecast_horizon_contracts",
         )
+    forecast_mode, random_seed = _render_forecast_mode_controls("contracts")
+
 
     # Backtesting Button
     run_bt = st.button("🧪 Rodar Backtest (Validar Precisão)", key="bt_contracts")
@@ -318,7 +354,7 @@ def _render_contracts_tab(
         try:
             with st.spinner("Rodando backtest..."):
                 bt_results = run_backtest(
-                    df_input, C.COL_INT_DT, C.UI_LABEL_CONTRACTS, algo, test_days=30
+                    df_input, C.COL_INT_DT, C.UI_LABEL_CONTRACTS, algo, test_days=30, forecast_mode=forecast_mode, random_seed=random_seed
                 )
             _render_backtest_results(bt_results, C.COL_INT_DT, C.UI_LABEL_CONTRACTS, is_currency=False)
 
@@ -329,7 +365,7 @@ def _render_contracts_tab(
 
     try:
         final_df = generate_forecast(
-            df_input, C.COL_INT_DT, C.UI_LABEL_CONTRACTS, algo, days
+            df_input, C.COL_INT_DT, C.UI_LABEL_CONTRACTS, algo, days, forecast_mode=forecast_mode, random_seed=random_seed
         )
         future_mask = final_df["Type"] == C.UI_LABEL_FORECAST
         total_predicted = int(final_df[future_mask][C.UI_LABEL_CONTRACTS].sum())
@@ -346,7 +382,8 @@ def _render_contracts_tab(
             C.UI_LABEL_CONTRACTS, 
             C.UI_LABEL_CONTRACTS, 
             C.UI_LABEL_FORECAST_CONTRACTS_TITLE, 
-            is_currency=False
+            is_currency=False,
+            forecast_mode=forecast_mode,
         )
 
         st.divider()
@@ -404,6 +441,8 @@ def _render_financial_tab(
             ],
             key="forecast_horizon_faturamento",
         )
+    forecast_mode_f, random_seed_f = _render_forecast_mode_controls("faturamento")
+
 
     # Backtesting Button
     run_bt_f = st.button(
@@ -437,6 +476,8 @@ def _render_financial_tab(
                     C.COL_INT_VALOR,
                     algo_f,
                     test_days=30,
+                    forecast_mode=forecast_mode_f,
+                    random_seed=random_seed_f,
                 )
             _render_backtest_results(bt_results, C.COL_INT_DATA, C.COL_INT_VALOR, is_currency=True)
 
@@ -447,7 +488,7 @@ def _render_financial_tab(
 
     try:
         final_df_f = generate_forecast(
-            df_input_f, C.COL_INT_DATA, C.COL_INT_VALOR, algo_f, days_f
+            df_input_f, C.COL_INT_DATA, C.COL_INT_VALOR, algo_f, days_f, forecast_mode=forecast_mode_f, random_seed=random_seed_f
         )
         future_mask_f = final_df_f["Type"] == C.UI_LABEL_FORECAST
         total_predicted_f = float(
@@ -466,7 +507,8 @@ def _render_financial_tab(
             C.COL_INT_VALOR, 
             C.COL_INT_VALOR, 
             C.UI_LABEL_FORECAST_REVENUE_TITLE, 
-            is_currency=True
+            is_currency=True,
+            forecast_mode=forecast_mode_f,
         )
 
         st.divider()

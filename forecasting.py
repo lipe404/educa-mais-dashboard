@@ -3,6 +3,7 @@ import numpy as np
 from datetime import timedelta, date
 import logging
 import math
+from typing import Optional
 import constants as C
 
 try:
@@ -63,212 +64,215 @@ def _create_features(df: pd.DataFrame, date_col: str, value_col: str, lags: list
     return df
 
 
-def generate_forecast(
+def _prepare_daily_series(df: pd.DataFrame, date_col: str, value_col: str) -> pd.DataFrame:
+    """Aggregate input rows into a continuous daily time series."""
+    base = df[[date_col, value_col]].copy()
+    base[date_col] = pd.to_datetime(base[date_col], errors="coerce")
+    base[value_col] = pd.to_numeric(base[value_col], errors="coerce").fillna(0)
+    base = base.dropna(subset=[date_col])
+
+    if base.empty:
+        raise ValueError("Dados insuficientes para gerar previsao.")
+
+    daily = base.groupby(base[date_col].dt.date)[value_col].sum().reset_index()
+    daily[date_col] = pd.to_datetime(daily[date_col])
+    daily = daily.sort_values(date_col)
+
+    idx = pd.date_range(daily[date_col].min(), daily[date_col].max())
+    daily = daily.set_index(date_col).reindex(idx, fill_value=0).reset_index()
+    return daily.rename(columns={"index": date_col})
+
+
+def _build_forecast_frame(
+    daily: pd.DataFrame,
+    future_dates: list,
+    forecast_values,
+    date_col: str,
+    value_col: str,
+) -> pd.DataFrame:
+    """Combine historical daily data and future forecast values in the UI shape."""
+    forecast_df = pd.DataFrame(
+        {
+            date_col: future_dates,
+            value_col: np.asarray(forecast_values, dtype=float),
+            C.COL_FORECAST_TYPE: C.UI_LABEL_FORECAST,
+        }
+    )
+
+    history_df = daily.copy()
+    history_df[C.COL_FORECAST_TYPE] = C.UI_LABEL_HISTORY
+    return pd.concat([history_df, forecast_df], ignore_index=True)
+
+
+def _run_model_forecast(
+    daily: pd.DataFrame,
+    date_col: str,
+    value_col: str,
+    algorithm: str,
+    full_horizon_days: int,
+) -> np.ndarray:
+    """Return only the raw values predicted by the selected model."""
+    last_date = daily[date_col].max()
+
+    if algorithm == C.ALGORITHM_PROPHET:
+        if not PROPHET_AVAILABLE:
+            raise ImportError(C.ERR_MSG_PROPHET_NOT_INSTALLED)
+
+        p_df = daily.rename(columns={date_col: "ds", value_col: "y"})
+        model = Prophet(daily_seasonality=True, yearly_seasonality=False)
+        model.fit(p_df)
+
+        future = model.make_future_dataframe(periods=full_horizon_days)
+        forecast = model.predict(future)
+        return forecast.tail(full_horizon_days)["yhat"].to_numpy(dtype=float)
+
+    if algorithm == C.ALGORITHM_HOLT_WINTERS:
+        if not STATSMODELS_AVAILABLE:
+            raise ImportError(C.ERR_MSG_STATSMODELS_NOT_INSTALLED)
+
+        series = daily[value_col].astype(float)
+        model = ExponentialSmoothing(
+            series, trend="add", seasonal=None, initialization_method="estimated"
+        )
+        fit = model.fit()
+        return np.asarray(fit.forecast(full_horizon_days).values, dtype=float)
+
+    if algorithm == C.ALGORITHM_XGBOOST:
+        if not XGBOOST_AVAILABLE:
+            raise ImportError("Biblioteca xgboost nao instalada.")
+
+        train_df = _create_features(daily, date_col, value_col).dropna()
+        features = [c for c in train_df.columns if c not in [date_col, value_col, C.COL_FORECAST_TYPE]]
+        X_train = train_df[features]
+        y_train = train_df[value_col]
+
+        model = xgb.XGBRegressor(
+            objective="reg:squarederror", n_estimators=1000, learning_rate=0.05
+        )
+        model.fit(X_train, y_train)
+
+        current_history = daily.copy()
+        preds = []
+        for i in range(full_horizon_days):
+            next_date = last_date + timedelta(days=i + 1)
+            new_row = pd.DataFrame({date_col: [next_date], value_col: [0]})
+            temp_df = pd.concat([current_history, new_row], ignore_index=True)
+            df_with_features = _create_features(temp_df, date_col, value_col)
+            row_to_predict = df_with_features.iloc[[-1]][features]
+
+            pred_val = max(0, model.predict(row_to_predict)[0])
+            preds.append(pred_val)
+
+            temp_df.iloc[-1, temp_df.columns.get_loc(value_col)] = pred_val
+            current_history = temp_df
+
+        return np.asarray(preds, dtype=float)
+
+    avg_val = daily[value_col].mean()
+    return np.asarray([avg_val] * full_horizon_days, dtype=float)
+
+
+def apply_commercial_postprocessing(
+    forecast_values,
+    daily_history: pd.DataFrame,
+    value_col: str,
+    random_seed: Optional[int] = None,
+) -> np.ndarray:
+    """
+    Apply business adjustments over raw model output.
+
+    Adjustments are intentionally kept separate from model prediction:
+    optimistic lift, sustainability floor, and optional deterministic noise.
+    """
+    forecast_values = np.asarray(forecast_values, dtype=float)
+    if len(forecast_values) == 0:
+        return forecast_values
+
+    recent_avg = daily_history.tail(30)[value_col].mean()
+    if pd.isna(recent_avg):
+        recent_avg = 0
+
+    first_forecast = forecast_values[0]
+    bias_percentage = 0.0
+    if first_forecast < recent_avg and first_forecast > 0:
+        diff = (recent_avg - first_forecast) / first_forecast
+        bias_percentage = min(diff, 0.20)
+
+    adjusted_forecast = forecast_values * (1 + bias_percentage)
+
+    floor = recent_avg * 0.4
+    adjusted_forecast = np.maximum(adjusted_forecast, floor)
+
+    hist_std = daily_history[value_col].std()
+    if pd.isna(hist_std) or hist_std == 0:
+        hist_std = recent_avg * 0.1
+
+    if random_seed is None:
+        noise = np.random.normal(0, hist_std * 0.3, size=len(adjusted_forecast))
+    else:
+        rng = np.random.default_rng(int(random_seed))
+        noise = rng.normal(0, hist_std * 0.3, size=len(adjusted_forecast))
+
+    return np.maximum(adjusted_forecast + noise, 0)
+
+
+def generate_raw_model_forecast(
     df: pd.DataFrame,
     date_col: str,
     value_col: str,
     algorithm: str,
     full_horizon_days: int,
 ) -> pd.DataFrame:
-    """
-    Generates a forecast DataFrame appended to the historical data using Prophet or Holt-Winters.
-
-    This function applies advanced post-processing to the forecast, including:
-    1.  **Optimistic Bias**: Lifts the forecast curve if the initial predicted values are lower
-        than the recent historical average (last 30 days), ensuring the forecast doesn't
-        start with an unrealistic drop.
-    2.  **Sustainability Floor**: Enforces a minimum value (40% of recent average) to prevent
-        the trend from crashing to zero in long horizons.
-    3.  **Organic Noise**: Adds random Gaussian noise based on historical volatility (30% of std dev)
-        to simulate natural day-to-day variations and avoid artificially smooth lines.
-
-    Args:
-        df (pd.DataFrame): The input dataframe containing historical data.
-        date_col (str): The name of the column containing date values.
-        value_col (str): The name of the column containing the target numeric values to forecast.
-        algorithm (str): The algorithm to use. Options: 'Prophet' or 'Holt-Winters'.
-        full_horizon_days (int): The number of days to forecast into the future.
-
-    Returns:
-        pd.DataFrame: A new DataFrame containing both historical data and the generated forecast.
-                      It includes a 'Type' column distinguishing 'Histórico' from 'Previsão'.
-                      For 'Previsão' rows, the 'value_col' contains the predicted values (adjusted).
-
-    Raises:
-        ImportError: If the selected algorithm library (prophet or statsmodels) is not installed.
-    """
-    # Prepare Base Data (Daily Aggregation)
-    daily = df.groupby(df[date_col].dt.date)[value_col].sum().reset_index()
-    daily[date_col] = pd.to_datetime(daily[date_col])
-    daily = daily.sort_values(date_col)
-
-    # Fill missing days with 0 to have a continuous time series
-    idx = pd.date_range(daily[date_col].min(), daily[date_col].max())
-    daily = daily.set_index(date_col).reindex(idx, fill_value=0).reset_index()
-    daily = daily.rename(columns={"index": date_col})
-
-    # Generate Future Dates
+    """Generate a forecast using only raw model output, with no commercial adjustments."""
+    daily = _prepare_daily_series(df, date_col, value_col)
     last_date = daily[date_col].max()
-    future_dates = [
-        last_date + timedelta(days=x) for x in range(1, full_horizon_days + 1)
-    ]
-    future_df = pd.DataFrame({date_col: future_dates})
+    future_dates = [last_date + timedelta(days=x) for x in range(1, full_horizon_days + 1)]
+    raw_values = _run_model_forecast(daily, date_col, value_col, algorithm, full_horizon_days)
+    return _build_forecast_frame(daily, future_dates, raw_values, date_col, value_col)
 
-    forecast_values = []
 
-    # ---------------------------------------------------------
-    # ALGORITHMS
-    # ---------------------------------------------------------
+def generate_forecast(
+    df: pd.DataFrame,
+    date_col: str,
+    value_col: str,
+    algorithm: str,
+    full_horizon_days: int,
+    forecast_mode: str = C.FORECAST_MODE_ADJUSTED,
+    random_seed: Optional[int] = None,
+) -> pd.DataFrame:
+    """
+    Generate a forecast DataFrame appended to historical daily data.
 
-    if algorithm == C.ALGORITHM_PROPHET:
-        if not PROPHET_AVAILABLE:
-            raise ImportError(C.ERR_MSG_PROPHET_NOT_INSTALLED)
+    Raw model prediction and commercial post-processing are separate steps. The
+    default remains the adjusted commercial forecast to preserve existing UI
+    behavior. Use C.FORECAST_MODE_RAW to inspect the model output directly.
+    """
+    daily = _prepare_daily_series(df, date_col, value_col)
+    last_date = daily[date_col].max()
+    future_dates = [last_date + timedelta(days=x) for x in range(1, full_horizon_days + 1)]
 
-        # Prepare Data for Prophet (ds, y)
-        p_df = daily.rename(columns={date_col: "ds", value_col: "y"})
-
-        m = Prophet(daily_seasonality=True, yearly_seasonality=False)
-        m.fit(p_df)
-
-        future = m.make_future_dataframe(periods=full_horizon_days)
-        forecast = m.predict(future)
-
-        # Extract only future part
-        forecast_values = forecast.tail(full_horizon_days)["yhat"].values
-
-    elif algorithm == C.ALGORITHM_HOLT_WINTERS:
-        if not STATSMODELS_AVAILABLE:
-            raise ImportError(C.ERR_MSG_STATSMODELS_NOT_INSTALLED)
-
-        # Ensure numeric type
-        series = daily[value_col].astype(float)
-
-        # Add small noise to avoid zero errors if needed, but usually not strict for add model
-        # ExponentialSmoothing
-        # Use simple 'add' trend/seasonal for robustness on small data
-        model = ExponentialSmoothing(
-            series, trend="add", seasonal=None, initialization_method="estimated"
-        )
-        fit = model.fit()
-        forecast_values = fit.forecast(full_horizon_days).values
-
-    elif algorithm == C.ALGORITHM_XGBOOST:
-        if not XGBOOST_AVAILABLE:
-            raise ImportError("Biblioteca xgboost não instalada.")
-
-        # Prepare features for training
-        # We need a copy to not mess up the original 'daily' yet
-        train_df = _create_features(daily, date_col, value_col)
-        
-        # Drop rows with NaN (due to lags) for training
-        train_df = train_df.dropna()
-        
-        features = [c for c in train_df.columns if c not in [date_col, value_col, "Type"]]
-        X_train = train_df[features]
-        y_train = train_df[value_col]
-        
-        model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=1000, learning_rate=0.05)
-        model.fit(X_train, y_train)
-        
-        # Recursive Forecasting
-        # Start with the full daily history to compute lags for the first future day
-        current_history = daily.copy()
-        
-        preds = []
-        for i in range(full_horizon_days):
-            next_date = last_date + timedelta(days=i + 1)
-            
-            # Append a placeholder row for the next date
-            # We use 0 as value initially, but it doesn't matter as we don't use it for prediction features of ITSELF
-            # But we DO need it to calculate lags/rolling for THIS row based on PREVIOUS rows.
-            new_row = pd.DataFrame({date_col: [next_date], value_col: [0]})
-            temp_df = pd.concat([current_history, new_row], ignore_index=True)
-            
-            # Re-compute features for the whole series (or just the tail efficiently)
-            # Re-computing whole series is safer for rolling means consistency
-            df_with_features = _create_features(temp_df, date_col, value_col)
-            
-            # The row to predict is the last one
-            row_to_predict = df_with_features.iloc[[-1]][features]
-            
-            pred_val = model.predict(row_to_predict)[0]
-            # Ensure non-negative
-            pred_val = max(0, pred_val)
-            preds.append(pred_val)
-            
-            # Update the placeholder value in current_history with the predicted value
-            # so next iteration uses this prediction for lags
-            temp_df.iloc[-1, temp_df.columns.get_loc(value_col)] = pred_val
-            current_history = temp_df
-            
-        forecast_values = np.array(preds)
-
+    raw_values = _run_model_forecast(daily, date_col, value_col, algorithm, full_horizon_days)
+    if forecast_mode == C.FORECAST_MODE_RAW:
+        forecast_values = raw_values
     else:
-        # Default fallback (Naive average)
-        avg_val = daily[value_col].mean()
-        forecast_values = [avg_val] * full_horizon_days
+        forecast_values = apply_commercial_postprocessing(
+            raw_values,
+            daily,
+            value_col,
+            random_seed=random_seed,
+        )
 
-    # ---------------------------------------------------------
-    # POST-PROCESSING RULES
-    # ---------------------------------------------------------
-
-    # 1. Optimistic Bias:
-    # If the forecast starts lower than the recent average (last 30 days),
-    # we lift it slightly to assume growth, not immediate crash.
-    recent_avg = daily.tail(30)[value_col].mean()
-    if pd.isna(recent_avg):
-        recent_avg = 0
-
-    first_forecast = forecast_values[0] if len(forecast_values) > 0 else 0
-
-    bias_percentage = 0.0
-    if first_forecast < recent_avg and first_forecast > 0:
-        # Calculate how much lower it is
-        diff = (recent_avg - first_forecast) / first_forecast
-        # Cap bias at 20% to avoid explosion
-        bias_percentage = min(diff, 0.20)
-
-    # Apply bias
-    adjusted_forecast = [v * (1 + bias_percentage) for v in forecast_values]
-
-    # 2. Sustainability Floor:
-    # Ensure no value drops below 40% of the recent average (unless recent average is 0)
-    floor = recent_avg * 0.4
-    adjusted_forecast = [max(v, floor) for v in adjusted_forecast]
-
-    # 3. Organic Noise:
-    # Add random variation based on historical std dev
-    hist_std = daily[value_col].std()
-    if pd.isna(hist_std) or hist_std == 0:
-        hist_std = recent_avg * 0.1  # Default 10% if no std
-
-    # Generate noise for each day
-    # Use fixed seed for reproducibility within same call if needed, but random is better for "organic" feel
-    noise = np.random.normal(0, hist_std * 0.3, size=len(adjusted_forecast))
-
-    final_values = []
-    for val, n in zip(adjusted_forecast, noise):
-        final_val = val + n
-        # Ensure non-negative
-        final_values.append(max(0, final_val))
-
-    # Combine into DataFrame
-    forecast_df = pd.DataFrame(
-        {
-            date_col: future_dates,
-            value_col: final_values,
-            "Type": C.UI_LABEL_FORECAST,
-        }
-    )
-
-    daily["Type"] = C.UI_LABEL_HISTORY
-    final_df = pd.concat([daily, forecast_df], ignore_index=True)
-
-    return final_df
+    return _build_forecast_frame(daily, future_dates, forecast_values, date_col, value_col)
 
 
 def run_backtest(
-    df: pd.DataFrame, date_col: str, value_col: str, algorithm: str, test_days: int = 30
+    df: pd.DataFrame,
+    date_col: str,
+    value_col: str,
+    algorithm: str,
+    test_days: int = 30,
+    forecast_mode: str = C.FORECAST_MODE_ADJUSTED,
+    random_seed: Optional[int] = None,
 ) -> dict:
     """
     Runs a backtest by splitting data into train/test, training the model,
@@ -280,6 +284,8 @@ def run_backtest(
         value_col (str): The name of the column containing the target numeric values.
         algorithm (str): The algorithm to use for forecasting (e.g., 'Prophet', 'Holt-Winters').
         test_days (int, optional): The number of days to hold out for testing. Defaults to 30.
+        forecast_mode (str, optional): Raw model forecast or commercially adjusted forecast.
+        random_seed (int, optional): Seed for deterministic commercial noise.
 
     Returns:
         dict: A dictionary containing performance metrics:
@@ -319,7 +325,13 @@ def run_backtest(
     # That's fine, re-aggregating aggregated data is idempotent (sum of sums).
 
     forecast_result = generate_forecast(
-        train_df, date_col, value_col, algorithm, test_days
+        train_df,
+        date_col,
+        value_col,
+        algorithm,
+        test_days,
+        forecast_mode=forecast_mode,
+        random_seed=random_seed,
     )
 
     # Extract forecast part

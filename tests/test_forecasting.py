@@ -52,6 +52,57 @@ class TestForecasting:
         assert future_forecast.mean() > 55.0
         assert future_forecast.mean() < 65.0
 
+    @patch("forecasting.Prophet")
+    def test_raw_forecast_skips_commercial_postprocessing(self, mock_prophet_class):
+        dates = pd.date_range(end=pd.Timestamp.today(), periods=60)
+        df = pd.DataFrame({"date": dates, "value": [100] * 60})
+
+        model = MagicMock()
+        mock_prophet_class.return_value = model
+        future_dates = pd.date_range(start=dates[-1] + pd.Timedelta(days=1), periods=7)
+        model.predict.return_value = pd.DataFrame({"ds": future_dates, "yhat": [50.0] * 7})
+        model.make_future_dataframe.return_value = pd.DataFrame({"ds": future_dates})
+
+        with patch("forecasting.PROPHET_AVAILABLE", True):
+            forecast_df = generate_forecast(
+                df=df,
+                date_col="date",
+                value_col="value",
+                algorithm=C.ALGORITHM_PROPHET,
+                full_horizon_days=7,
+                forecast_mode=C.FORECAST_MODE_RAW,
+            )
+
+        future_forecast = forecast_df[forecast_df["Type"] == C.UI_LABEL_FORECAST]["value"]
+        assert np.allclose(future_forecast.to_numpy(), np.array([50.0] * 7))
+
+    def test_adjusted_forecast_seed_is_deterministic(self):
+        dates = pd.date_range(start="2023-01-01", periods=45)
+        values = np.linspace(80, 140, 45)
+        df = pd.DataFrame({"date": dates, "value": values})
+
+        forecast_a = generate_forecast(
+            df,
+            "date",
+            "value",
+            "UNKNOWN_ALGO",
+            10,
+            forecast_mode=C.FORECAST_MODE_ADJUSTED,
+            random_seed=123,
+        )
+        forecast_b = generate_forecast(
+            df,
+            "date",
+            "value",
+            "UNKNOWN_ALGO",
+            10,
+            forecast_mode=C.FORECAST_MODE_ADJUSTED,
+            random_seed=123,
+        )
+
+        values_a = forecast_a[forecast_a["Type"] == C.UI_LABEL_FORECAST]["value"].to_numpy()
+        values_b = forecast_b[forecast_b["Type"] == C.UI_LABEL_FORECAST]["value"].to_numpy()
+        assert np.allclose(values_a, values_b)
     def test_forecast_structure(self):
         dates = pd.date_range(start="2023-01-01", periods=10)
         df = pd.DataFrame({"date": dates, "value": np.random.rand(10) * 100})
