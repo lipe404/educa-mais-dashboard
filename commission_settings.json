@@ -1,0 +1,39 @@
+{
+    "version": 1,
+    "default_partner_pct": 50.0,
+    "tax_pct": 30.0,
+    "team_categories": {
+        "gerente_expansao": {
+            "name": "Gerente de Expansão",
+            "percentage": 3.496569468267581,
+            "type": "fixed"
+        },
+        "coordenador_suporte": {
+            "name": "Coordenador/Suporte Administrativo",
+            "percentage": 3.0102915951972555,
+            "type": "fixed"
+        },
+        "gestor_trafego": {
+            "name": "Gestor de Tráfego",
+            "percentage": 1.9914236706689536,
+            "type": "fixed"
+        },
+        "designer": {
+            "name": "Designer",
+            "percentage": 0.9957118353344768,
+            "type": "fixed"
+        },
+        "captador": {
+            "name": "Captador",
+            "percentage": 0.9957118353344768,
+            "type": "partner_based"
+        },
+        "suporte_performance": {
+            "name": "Suporte de Performance",
+            "percentage": 3.0102915951972555,
+            "type": "partner_based"
+        }
+    },
+    "team_members": [],
+    "assignments": []
+}

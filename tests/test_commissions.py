@@ -1,5 +1,37 @@
+import sqlite3
+
 import pytest
+
 from services.commission import CommissionEngine
+
+
+def test_load_data_from_db_can_skip_legacy_team_configuration(tmp_path):
+    db_path = tmp_path / "commission.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE partners ("
+            "id INTEGER, name TEXT, commission_percentage REAL, active INTEGER)"
+        )
+        connection.execute(
+            "INSERT INTO partners VALUES (?, ?, ?, ?)",
+            (1, "Parceiro Teste", 42.0, 1),
+        )
+
+    loaded = CommissionEngine.load_data_from_db(
+        db_path, include_team_configuration=False
+    )
+
+    assert loaded == {
+        "partners": {
+            "Parceiro Teste": {
+                "id": 1,
+                "name": "Parceiro Teste",
+                "percentage": 42.0,
+            }
+        },
+        "team_members": [],
+        "assignments": [],
+    }
 
 def test_calculate_commissions_zero_tax():
     # Setup test data: one partner with 10000 faturamento at 50% commission
@@ -127,4 +159,3 @@ def test_calculate_commissions_variable_tax():
     assert summary["total_fixed_commission"] == pytest.approx(105.0)
     assert summary["total_team_commission"] == pytest.approx(140.0)
     assert summary["final_remaining_value"] == pytest.approx(3360.0)
-

@@ -197,15 +197,17 @@ selected_contract_type = st.sidebar.radio(
 )
 
 # Alíquota de Imposto (Global)
-global_tax_pct = st.sidebar.number_input(
+commissions_tab.initialize_commission_session_state()
+st.sidebar.number_input(
     "Alíquota de Imposto (%)",
     min_value=0.0,
     max_value=100.0,
-    value=30.0,
     step=1.0,
-    help="Alíquota de imposto aplicada sobre os 50% restantes da comissão."
+    key="global_tax_pct_input",
+    on_change=commissions_tab.on_tax_pct_change,
+    args=("global_tax_pct_input",),
+    help="Alíquota de imposto aplicada sobre os 50% restantes da comissão.",
 )
-st.session_state["global_tax_pct"] = global_tax_pct
 
 # Geographic Filters
 # Combine dados and bolsas for geographic filter options

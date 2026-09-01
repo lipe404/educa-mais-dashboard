@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-import json
+from copy import deepcopy
 from datetime import datetime
 import io
+from pathlib import Path
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -10,36 +11,83 @@ from reportlab.lib.styles import getSampleStyleSheet
 
 import constants as C
 from services.commission import CommissionEngine, TEAM_CATEGORIES
-import os
+from services.commission_settings import (
+    CommissionSettingsError,
+    DEFAULT_PARTNER_PCT,
+    DEFAULT_TAX_PCT,
+    load_commission_settings,
+    save_commission_settings,
+)
 import plotly.graph_objects as go
 
-DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "auto-comissao",
-    "instance",
-    "commission_system.db",
-)
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH = BASE_DIR / "auto-comissao" / "instance" / "commission_system.db"
+COMMISSION_SETTINGS_STATE_KEY = "commission_settings"
 
-CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "team_categories_config.json"
-)
 
-def _load_team_categories():
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            st.error(f"Erro ao carregar categorias: {e}")
-    return dict(TEAM_CATEGORIES)
+def _load_commission_settings():
+    """Load the persistent source of truth once for a Streamlit session."""
 
-def _save_team_categories(categories):
+    return load_commission_settings()
+
+
+def initialize_commission_session_state() -> None:
+    """Populate in-memory state from JSON before commission widgets are built."""
+
+    if st.session_state.get("_commission_settings_loaded"):
+        return
+
+    settings = _load_commission_settings()
+    tax_pct = float(settings["tax_pct"])
+    st.session_state[COMMISSION_SETTINGS_STATE_KEY] = deepcopy(settings)
+    st.session_state["default_partner_pct"] = float(settings["default_partner_pct"])
+    st.session_state["global_tax_pct"] = tax_pct
+    st.session_state["global_tax_pct_input"] = tax_pct
+    st.session_state["com_tax_pct"] = tax_pct
+    st.session_state["team_categories"] = deepcopy(settings["team_categories"])
+    st.session_state["team_members"] = deepcopy(settings["team_members"])
+    st.session_state["assignments"] = deepcopy(settings["assignments"])
+    st.session_state["_commission_settings_loaded"] = True
+
+
+def _save_commission_settings() -> bool:
+    """Persist a complete snapshot of the current commission configuration."""
+
+    settings = deepcopy(st.session_state.get(COMMISSION_SETTINGS_STATE_KEY, {}))
+    settings.update(
+        {
+            "default_partner_pct": st.session_state.get(
+                "default_partner_pct", DEFAULT_PARTNER_PCT
+            ),
+            "tax_pct": st.session_state.get("global_tax_pct", DEFAULT_TAX_PCT),
+            "team_categories": deepcopy(st.session_state.get("team_categories", {})),
+            "team_members": deepcopy(st.session_state.get("team_members", [])),
+            "assignments": deepcopy(st.session_state.get("assignments", [])),
+        }
+    )
     try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(categories, f, indent=4, ensure_ascii=False)
-    except Exception as e:
-        st.error(f"Erro ao salvar categorias: {e}")
+        st.session_state[COMMISSION_SETTINGS_STATE_KEY] = save_commission_settings(
+            settings
+        )
+        return True
+    except CommissionSettingsError as exc:
+        st.error(str(exc))
+        return False
+
+
+def on_default_partner_pct_change() -> None:
+    _save_commission_settings()
+
+
+def on_tax_pct_change(widget_key: str) -> None:
+    """Synchronize the two tax widgets and persist their canonical value."""
+
+    tax_pct = float(st.session_state[widget_key])
+    st.session_state["global_tax_pct"] = tax_pct
+    for other_widget_key in ("global_tax_pct_input", "com_tax_pct"):
+        if other_widget_key != widget_key:
+            st.session_state[other_widget_key] = tax_pct
+    _save_commission_settings()
 
 
 def _check_authentication(access_key: str) -> bool:
@@ -60,20 +108,6 @@ def _check_authentication(access_key: str) -> bool:
         return False
     return True
 
-
-# Default Team Config (for first run)
-DEFAULT_TEAM_CONFIG = [
-    {
-        "id": 1,
-        "name": "Membro Exemplo 1",
-        "roles": ["gerente_expansao"]
-    },
-    {
-        "id": 2,
-        "name": "Membro Exemplo 2",
-        "roles": ["captador"]
-    }
-]
 
 def _get_available_months(df: pd.DataFrame) -> list:
     if df.empty or C.COL_INT_DATA not in df.columns:
@@ -109,7 +143,7 @@ def on_nominal_change(key, tax_pct, partner_pct):
     if widget_key in st.session_state:
         new_pct = st.session_state[widget_key]
         st.session_state["team_categories"][key]["percentage"] = new_pct
-        _save_team_categories(st.session_state["team_categories"])
+        _save_commission_settings()
         
         # Keep real percentage in sync
         categories = st.session_state["team_categories"]
@@ -123,7 +157,7 @@ def on_real_change(key, tax_pct, partner_pct):
         new_nominal = real_to_nominal(key, new_real, categories, tax_pct, partner_pct)
         
         st.session_state["team_categories"][key]["percentage"] = new_nominal
-        _save_team_categories(st.session_state["team_categories"])
+        _save_commission_settings()
         st.session_state[f"pct_{key}"] = new_nominal
         st.session_state[f"real_pct_{key}"] = new_real
 
@@ -298,13 +332,7 @@ def _render_member_breakdown_section(result, summary, team_categories, is_simula
 
 def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_pct: float = 50.0):
     with st.expander("Gestão de Equipe e Configurações", expanded=True, icon=":material/groups:"):
-        # Initialize Session State
-        if "team_members" not in st.session_state:
-            st.session_state["team_members"] = []
-        if "assignments" not in st.session_state:
-            st.session_state["assignments"] = []
-        if "team_categories" not in st.session_state:
-            st.session_state["team_categories"] = _load_team_categories()
+        initialize_commission_session_state()
 
         tab_membros, tab_cargos = st.tabs([":material/person: Membros da Equipe", ":material/settings: Cargos e Porcentagens"])
         
@@ -327,16 +355,25 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_p
                     
                     if st.button("Adicionar Membro", use_container_width=True, icon=":material/add:"):
                         if new_name and selected_roles_keys:
-                            new_id = 100  # Simple ID gen
-                            existing_ids = [m.get("id", 0) for m in st.session_state["team_members"]]
-                            if existing_ids:
-                                new_id = max(existing_ids) + 1
+                            existing_ids = {
+                                m.get("id") for m in st.session_state["team_members"]
+                            }
+                            numeric_ids = [
+                                member_id
+                                for member_id in existing_ids
+                                if isinstance(member_id, int)
+                                and not isinstance(member_id, bool)
+                            ]
+                            new_id = max(numeric_ids, default=99) + 1
+                            while new_id in existing_ids:
+                                new_id += 1
                                 
                             st.session_state["team_members"].append({
                                 "id": new_id,
                                 "name": new_name,
                                 "roles": selected_roles_keys
                             })
+                            _save_commission_settings()
                             st.rerun()
                         else:
                             st.error("Preencha nome e selecione pelo menos um cargo.")
@@ -424,6 +461,7 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_p
                         if edit_name != member["name"] or set(edit_roles) != set(member["roles"]):
                             st.session_state["team_members"][idx]["name"] = edit_name
                             st.session_state["team_members"][idx]["roles"] = edit_roles
+                            _save_commission_settings()
                             st.rerun()
 
                         st.divider()
@@ -513,6 +551,7 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_p
                                     final_assigns.append(assign)
                                     
                             st.session_state["assignments"] = final_assigns
+                            _save_commission_settings()
                             st.rerun()
 
                         st.markdown("---")
@@ -522,6 +561,7 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_p
                 if members_to_remove:
                     for idx in sorted(members_to_remove, reverse=True):
                         del st.session_state["team_members"][idx]
+                    _save_commission_settings()
                     st.rerun()
 
         with tab_cargos:
@@ -579,7 +619,7 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_p
                                 "type": new_role_type
                             }
                             st.session_state["team_categories"] = categories
-                            _save_team_categories(categories)
+                            _save_commission_settings()
                             st.success(f"Cargo '{new_role_name}' adicionado!")
                             st.rerun()
                         else:
@@ -669,7 +709,7 @@ def _render_team_config(all_partners_list: list, tax_pct: float = 0.0, partner_p
                         if f"real_pct_{k}" in st.session_state:
                             del st.session_state[f"real_pct_{k}"]
                     st.session_state["team_categories"] = categories
-                    _save_team_categories(categories)
+                    _save_commission_settings()
                     st.rerun()
 
 
@@ -768,6 +808,7 @@ def _generate_pdf(report_data: dict, month_str: str) -> bytes:
     return buffer.getvalue()
 
 def render(dados_df: pd.DataFrame, access_key: str):
+    initialize_commission_session_state()
     st.header("Cálculo de Comissões")
     
     if not _check_authentication(access_key):
@@ -775,16 +816,10 @@ def render(dados_df: pd.DataFrame, access_key: str):
         
     # Initialize DB Data early
     if "db_partners" not in st.session_state:
-        db_data = CommissionEngine.load_data_from_db(DB_PATH)
-        if db_data["partners"]:
-            st.session_state["db_partners"] = db_data["partners"]
-        if "team_members" not in st.session_state:
-            st.session_state["team_members"] = db_data.get("team_members", [])
-        if "assignments" not in st.session_state:
-            st.session_state["assignments"] = db_data.get("assignments", [])
-
-    if "team_categories" not in st.session_state:
-        st.session_state["team_categories"] = _load_team_categories()
+        db_data = CommissionEngine.load_data_from_db(
+            DB_PATH, include_team_configuration=False
+        )
+        st.session_state["db_partners"] = db_data.get("partners", {})
         
     st.divider()
 
@@ -813,15 +848,25 @@ def render(dados_df: pd.DataFrame, access_key: str):
             st.info("Nenhum dado financeiro para o mês selecionado.")
             return
 
-        # Retrieve global tax rate
-        global_tax_pct = st.session_state.get("global_tax_pct", 0.0)
-
         # Prepare Partners Data from DataFrame
         col_pct1, col_pct2 = st.columns(2)
-        default_partner_pct = col_pct1.number_input("Porcentagem Padrão Parceiros (%)", value=50.0, step=5.0)
-        tax_pct = col_pct2.number_input("Alíquota de Imposto (%)", value=global_tax_pct, step=1.0, key="com_tax_pct")
-        # Keep global in sync if modified locally
-        st.session_state["global_tax_pct"] = tax_pct
+        default_partner_pct = col_pct1.number_input(
+            "Porcentagem Padrão Parceiros (%)",
+            min_value=0.0,
+            max_value=100.0,
+            step=5.0,
+            key="default_partner_pct",
+            on_change=on_default_partner_pct_change,
+        )
+        tax_pct = col_pct2.number_input(
+            "Alíquota de Imposto (%)",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            key="com_tax_pct",
+            on_change=on_tax_pct_change,
+            args=("com_tax_pct",),
+        )
         
         # Grouping
         partner_groups = df_filtered.groupby(C.COL_INT_PARTNER)[C.COL_INT_VALOR].sum().reset_index()

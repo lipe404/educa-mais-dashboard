@@ -44,9 +44,14 @@ class CommissionEngine:
     """
 
     @staticmethod
-    def load_data_from_db(db_path: str) -> Dict[str, Any]:
+    def load_data_from_db(
+        db_path: str, include_team_configuration: bool = True
+    ) -> Dict[str, Any]:
         """
-        Loads team members, partners, and assignments from the SQLite database.
+        Load partner data and, optionally, legacy team configuration from SQLite.
+
+        The commissions UI disables ``include_team_configuration`` because its
+        team settings are persisted exclusively in commission_settings.json.
         """
         if not os.path.exists(db_path):
             return {"partners": {}, "team_members": [], "assignments": []}
@@ -69,44 +74,45 @@ class CommissionEngine:
         except Exception as e:
             print(f"Error loading partners: {e}")
 
-        # 2. Load Team Members
-        # Schema assumption: table 'expansion_team_members' (id, name, categories, active)
         team_members = []
-        try:
-            cursor.execute("SELECT id, name, categories FROM expansion_team_members WHERE active = 1")
-            for row in cursor.fetchall():
-                try:
-                    roles = json.loads(row["categories"])
-                except:
-                    roles = []
-                
-                team_members.append({
-                    "id": row["id"],
-                    "name": row["name"],
-                    "roles": roles
-                })
-        except Exception as e:
-            print(f"Error loading team members: {e}")
-            
-        # 3. Load Assignments
-        # Schema assumption: table 'member_partner_assignments' (member_id, partner_id, category)
         assignments_map = {} # partner_id -> {partner_id, captador_id, suporte_id}
-        try:
-            cursor.execute("SELECT member_id, partner_id, category FROM member_partner_assignments")
-            for row in cursor.fetchall():
-                p_id = row["partner_id"]
-                m_id = row["member_id"]
-                cat = row["category"] # 'captador' or 'suporte_performance'
-                
-                if p_id not in assignments_map:
-                    assignments_map[p_id] = {"partner_id": p_id}
-                
-                if cat == "captador":
-                    assignments_map[p_id]["captador_id"] = m_id
-                elif cat == "suporte_performance":
-                    assignments_map[p_id]["suporte_id"] = m_id
-        except Exception as e:
-            print(f"Error loading assignments: {e}")
+        if include_team_configuration:
+            # 2. Load Team Members
+            # Schema: expansion_team_members (id, name, categories, active)
+            try:
+                cursor.execute("SELECT id, name, categories FROM expansion_team_members WHERE active = 1")
+                for row in cursor.fetchall():
+                    try:
+                        roles = json.loads(row["categories"])
+                    except (TypeError, json.JSONDecodeError):
+                        roles = []
+
+                    team_members.append({
+                        "id": row["id"],
+                        "name": row["name"],
+                        "roles": roles
+                    })
+            except Exception as e:
+                print(f"Error loading team members: {e}")
+
+            # 3. Load Assignments
+            # Schema: member_partner_assignments (member_id, partner_id, category)
+            try:
+                cursor.execute("SELECT member_id, partner_id, category FROM member_partner_assignments")
+                for row in cursor.fetchall():
+                    p_id = row["partner_id"]
+                    m_id = row["member_id"]
+                    cat = row["category"] # 'captador' or 'suporte_performance'
+
+                    if p_id not in assignments_map:
+                        assignments_map[p_id] = {"partner_id": p_id}
+
+                    if cat == "captador":
+                        assignments_map[p_id]["captador_id"] = m_id
+                    elif cat == "suporte_performance":
+                        assignments_map[p_id]["suporte_id"] = m_id
+            except Exception as e:
+                print(f"Error loading assignments: {e}")
             
         conn.close()
         
