@@ -24,6 +24,7 @@ from ui import (
     commissions_tab,
     bolsas_tab,
     captadores_tab,
+    comercial_tab,
 )
 
 # Setup Logging
@@ -275,7 +276,11 @@ def _get_filtered_frames():
     key = _filtered_cache_key()
     cached = cache.get(key)
     if cached is not None:
-        return cached
+        # Guard against stale cache entries from before the 5-tuple upgrade
+        if isinstance(cached, tuple) and len(cached) == 5:
+            return cached
+        # Evict the stale entry and recompute
+        cache.pop(key, None)
 
     # --- Filter DADOS (Técnico / Pós) ---
     mask_dados = (dados[C.COL_INT_DT].dt.date >= start_date) & (
@@ -333,7 +338,9 @@ def _get_filtered_frames():
             dados_filtered = pd.concat([dados_filtered, bolsas_filtered], ignore_index=True, sort=False)
 
     # --- Filter FATURAMENTO ---
-    mask_fat_base = pd.Series(True, index=faturamento.index)
+    # Exclude COMERCIAL TEC from the standard faturamento (it is shown separately)
+    _comercial_mask = faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_COMERCIAL_TEC
+    mask_fat_base = ~_comercial_mask
 
     if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
         mask_fat_base &= (
@@ -359,7 +366,21 @@ def _get_filtered_frames():
     fat_filtered = faturamento[mask_fat].copy()
     fat_filtered_base = faturamento[mask_fat_base].copy()
 
-    value = (dados_filtered, fat_filtered, fat_filtered_base)
+    # --- Build COMERCIAL TEC filtered DataFrames ---
+    _com_mask_base = faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_COMERCIAL_TEC
+    _com_mask_date = (
+        _com_mask_base
+        & (faturamento[C.COL_INT_DATA].dt.date >= start_date)
+        & (faturamento[C.COL_INT_DATA].dt.date <= end_date)
+    )
+    if selected_year:
+        _com_mask_date &= faturamento[C.COL_INT_DATA].dt.year == selected_year
+    if selected_month:
+        _com_mask_date &= faturamento[C.COL_INT_DATA].dt.month == selected_month
+    fat_comercial_filtered = faturamento[_com_mask_date].copy()
+    fat_comercial_base = faturamento[_com_mask_base].copy()
+
+    value = (dados_filtered, fat_filtered, fat_filtered_base, fat_comercial_filtered, fat_comercial_base)
     cache[key] = value
 
     while len(cache) > 6:
@@ -368,7 +389,7 @@ def _get_filtered_frames():
     return value
 
 
-dados_filtered, fat_filtered, fat_filtered_base = _get_filtered_frames()
+dados_filtered, fat_filtered, fat_filtered_base, fat_comercial_filtered, fat_comercial_base = _get_filtered_frames()
 
 # --- Filter bolsas_controle by date/year/month ---
 # Commission calculation always uses faturamento (normal) only — bolsas are excluded.
@@ -396,6 +417,14 @@ bolsas_controle_filtered = _filter_bolsas_controle()
 # --- Sidebar Metrics ---
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Métricas")
+
+# 0. Comercial Interno — Este Mês
+if not fat_comercial_filtered.empty and C.COL_INT_DATA in fat_comercial_filtered.columns:
+    from datetime import date as _date
+    _start_of_month = _date.today().replace(day=1)
+    _com_mes_df = fat_comercial_filtered[fat_comercial_filtered[C.COL_INT_DATA].dt.date >= _start_of_month]
+    _com_mes_val = float(_com_mes_df[C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in _com_mes_df.columns else 0.0
+    st.sidebar.metric("🏪 Comercial Interno (mês)", f"R$ {_com_mes_val:,.2f}")
 
 # 1. Ticket Médio
 total_rev = fat_filtered[C.COL_INT_VALOR].sum()
@@ -508,7 +537,7 @@ st.markdown(
 
 geo_service = GeocodingService()
 
-t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11 = st.tabs(
+t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12 = st.tabs(
     [
         C.TAB_NAME_CONTRACTS,
         C.TAB_NAME_MAP,
@@ -521,6 +550,7 @@ t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11 = st.tabs(
         C.TAB_NAME_STUDENTS,
         C.TAB_NAME_COMMISSIONS,
         C.TAB_NAME_BOLSAS,
+        C.TAB_NAME_COMERCIAL,
     ]
 )
 
@@ -540,6 +570,7 @@ with t3:
         end_date,
         selected_month,
         bolsas_controle_df=bolsas_controle_filtered,
+        comercial_df=fat_comercial_filtered,
     )
 with t4:
     forecast_tab.render(
@@ -583,5 +614,12 @@ with t11:
         start_date=start_date,
         end_date=end_date,
         selected_year=selected_year,
+        selected_month=selected_month,
+    )
+with t12:
+    comercial_tab.render(
+        df=fat_comercial_filtered,
+        full_df=fat_comercial_base,
+        end_date=end_date,
         selected_month=selected_month,
     )

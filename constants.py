@@ -285,6 +285,7 @@ CONTRACT_TYPE_UI_BOLSAS = "Bolsas"
 # Internal Financial Types
 FINANCIAL_TYPE_TECNICO = "TECNICO"
 FINANCIAL_TYPE_POS = "POS"
+FINANCIAL_TYPE_COMERCIAL_TEC = "COMERCIAL TEC"
 
 # Tab Names
 TAB_NAME_CONTRACTS = "Contratos"
@@ -298,6 +299,7 @@ TAB_NAME_UNIT_ANALYSIS = "Análise Unitária"
 TAB_NAME_COMMISSIONS = "Cálculo de Comissões"
 TAB_NAME_BOLSAS = "Bolsas"
 TAB_NAME_CAPTADORES = "Captadores"
+TAB_NAME_COMERCIAL = "Comercial Interno"
 
 # Contracts Tab UI
 UI_LABEL_CONTRACTS_SIGNED = "Contratos assinados"

@@ -783,9 +783,10 @@ def _calculate_kpis(df: pd.DataFrame) -> dict:
     }
 
 
-def _render_kpis(kpis: dict, bolsas_controle_df: pd.DataFrame = None):
+def _render_kpis(kpis: dict, bolsas_controle_df: pd.DataFrame = None, comercial_df: pd.DataFrame = None):
     """Renders KPI metrics. Commission always uses normal faturamento only.
-    If bolsas_controle_df is provided, an extra bolsas summary row is shown."""
+    If bolsas_controle_df is provided, an extra bolsas summary row is shown.
+    If comercial_df is provided, an extra Comercial Interno summary row is shown."""
     new_k1, new_k2, new_k3 = st.columns(3)
     new_k1.metric(C.UI_LABEL_REVENUE_TODAY, f"R$ {kpis['fat_hoje']:,.2f}")
     new_k2.metric(C.UI_LABEL_REVENUE_WEEK, f"R$ {kpis['fat_semana']:,.2f}")
@@ -832,6 +833,34 @@ def _render_kpis(kpis: dict, bolsas_controle_df: pd.DataFrame = None):
         b2.metric("💰 Bolsas — Hoje", f"R$ {bolsas_hoje:,.2f}")
         b3.metric("💰 Bolsas — Esta Semana", f"R$ {bolsas_semana:,.2f}")
         b4.metric("🎫 Cotas Adquiridas", f"{total_cotas:,}")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- Comercial Interno summary (shown separately, after Bolsas) ---
+    if comercial_df is not None and not comercial_df.empty and C.COL_INT_DATA in comercial_df.columns:
+        st.markdown("---")
+        st.markdown(
+            "<p style='color:#ff8c00;font-weight:700;font-size:0.9rem;margin-bottom:6px;'>"
+            "🏪 Faturamento Comercial Interno (separado — sem comissão de parceiro)</p>",
+            unsafe_allow_html=True,
+        )
+        today_c = date.today()
+        start_of_week_c = today_c - datetime.timedelta(days=today_c.weekday())
+        start_of_month_c = today_c.replace(day=1)
+        tmp_c = comercial_df.dropna(subset=[C.COL_INT_DATA])
+        com_total = float(tmp_c[C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
+        com_hoje = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date == today_c][C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
+        com_semana = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date >= start_of_week_c][C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
+        com_mes = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date >= start_of_month_c][C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
+        com_count = len(tmp_c)
+        com_ticket = com_total / com_count if com_count > 0 else 0.0
+
+        cm1, cm2, cm3, cm4, cm5 = st.columns(5)
+        cm1.metric("🏪 Comercial — Total", f"R$ {com_total:,.2f}")
+        cm2.metric("🏪 Comercial — Hoje", f"R$ {com_hoje:,.2f}")
+        cm3.metric("🏪 Comercial — Esta Semana", f"R$ {com_semana:,.2f}")
+        cm4.metric("🏪 Comercial — Este Mês", f"R$ {com_mes:,.2f}")
+        cm5.metric("🏪 Ticket Médio", f"R$ {com_ticket:,.2f}")
+        st.caption(f"📋 {com_count} transações no período | Acesse a aba **Comercial Interno** para análise detalhada")
         st.markdown("<br>", unsafe_allow_html=True)
 
 
@@ -1636,6 +1665,7 @@ def render(
     end_date: date,
     selected_month: int | None,
     bolsas_controle_df: pd.DataFrame = None,
+    comercial_df: pd.DataFrame = None,
 ):
     # --- Pre-compute month context (needed for banner before KPIs section) ---
     now = date.today()
@@ -1684,7 +1714,7 @@ def render(
         _render_celebration_banner(sound_b64, _monthly_vals)
 
     # Render KPIs below banner
-    _render_kpis(kpis, bolsas_controle_df=bolsas_controle_df)
+    _render_kpis(kpis, bolsas_controle_df=bolsas_controle_df, comercial_df=comercial_df)
 
 
     with st.expander("Ver Detalhes do Resultado (Sankey)", expanded=False):
