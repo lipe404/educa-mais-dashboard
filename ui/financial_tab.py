@@ -784,14 +784,62 @@ def _calculate_kpis(df: pd.DataFrame) -> dict:
 
 
 def _render_kpis(kpis: dict, bolsas_controle_df: pd.DataFrame = None, comercial_df: pd.DataFrame = None):
-    """Renders KPI metrics. Commission always uses normal faturamento only.
-    If bolsas_controle_df is provided, an extra bolsas summary row is shown.
-    If comercial_df is provided, an extra Comercial Interno summary row is shown."""
-    new_k1, new_k2, new_k3 = st.columns(3)
-    new_k1.metric(C.UI_LABEL_REVENUE_TODAY, f"R$ {kpis['fat_hoje']:,.2f}")
-    new_k2.metric(C.UI_LABEL_REVENUE_WEEK, f"R$ {kpis['fat_semana']:,.2f}")
-    new_k3.metric(C.UI_LABEL_REVENUE_MONTH, f"R$ {kpis['fat_mes']:,.2f}")
+    """Renders KPI metrics with separated blocks.
 
+    Top row: Hoje | Semana | Este Mês (total all) | Faturamento Parceiros (period)
+    Block 1: Parceiros — breakdown with commission/tax/net
+    Block 2: Bolsas (if data present)
+    Block 3: Comercial Interno (if data present)
+    Block 4: Total Geral (sum of all)
+    """
+    today = date.today()
+    start_of_week = today - datetime.timedelta(days=today.weekday())
+    start_of_month = today.replace(day=1)
+
+    # --- Calculate Bolsas time KPIs ---
+    bolsas_hoje = bolsas_semana = bolsas_mes = total_bolsas = 0.0
+    total_cotas = 0
+    if bolsas_controle_df is not None and not bolsas_controle_df.empty:
+        total_bolsas = float(bolsas_controle_df[C.COL_INT_BOLSA_VALOR].sum()) if C.COL_INT_BOLSA_VALOR in bolsas_controle_df.columns else 0.0
+        if C.COL_INT_BOLSA_DATA in bolsas_controle_df.columns:
+            tmp_b = bolsas_controle_df.dropna(subset=[C.COL_INT_BOLSA_DATA])
+            bolsas_hoje = float(tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date == today][C.COL_INT_BOLSA_VALOR].sum())
+            bolsas_semana = float(tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date >= start_of_week][C.COL_INT_BOLSA_VALOR].sum())
+            bolsas_mes = float(tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date >= start_of_month][C.COL_INT_BOLSA_VALOR].sum())
+        if C.COL_INT_BOLSA_COTAS in bolsas_controle_df.columns:
+            total_cotas = int(bolsas_controle_df[C.COL_INT_BOLSA_COTAS].sum())
+
+    # --- Calculate Comercial Interno time KPIs ---
+    com_hoje = com_semana = com_mes = com_total = 0.0
+    com_count = 0
+    if comercial_df is not None and not comercial_df.empty and C.COL_INT_DATA in comercial_df.columns:
+        tmp_c = comercial_df.dropna(subset=[C.COL_INT_DATA])
+        if C.COL_INT_VALOR in tmp_c.columns:
+            com_total = float(tmp_c[C.COL_INT_VALOR].sum())
+            com_hoje = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date == today][C.COL_INT_VALOR].sum())
+            com_semana = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date >= start_of_week][C.COL_INT_VALOR].sum())
+            com_mes = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date >= start_of_month][C.COL_INT_VALOR].sum())
+        com_count = len(tmp_c)
+
+    # --- Top 4 KPIs: totals across ALL sources ---
+    fat_hoje_total = kpis['fat_hoje'] + bolsas_hoje + com_hoje
+    fat_semana_total = kpis['fat_semana'] + bolsas_semana + com_semana
+    fat_mes_total = kpis['fat_mes'] + bolsas_mes + com_mes
+
+    top1, top2, top3, top4 = st.columns(4)
+    top1.metric(C.UI_LABEL_REVENUE_TODAY, f"R$ {fat_hoje_total:,.2f}")
+    top2.metric(C.UI_LABEL_REVENUE_WEEK, f"R$ {fat_semana_total:,.2f}")
+    top3.metric(C.UI_LABEL_REVENUE_MONTH, f"R$ {fat_mes_total:,.2f}")
+    top4.metric("Faturamento Parceiros", f"R$ {kpis['fat_mes']:,.2f}",
+                help="Faturamento de parceiros (Técnico + Pós) no mês atual, sem bolsas e sem Comercial Interno")
+
+    # === BLOCO 1 — Parceiros (Técnico + Pós) ===
+    st.markdown("---")
+    st.markdown(
+        "<p style='color:#2d9fff;font-weight:700;font-size:0.95rem;margin-bottom:6px;'>"
+        "🤝 Faturamento de Parceiros (Técnico + Pós-Graduação)</p>",
+        unsafe_allow_html=True,
+    )
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric(C.UI_LABEL_TOTAL_REVENUE, f"R$ {kpis['total']:,.2f}")
     c2.metric(C.UI_LABEL_PARTNER_COMMISSION, f"R$ {kpis['parceiros']:,.2f}")
@@ -802,66 +850,50 @@ def _render_kpis(kpis: dict, bolsas_controle_df: pd.DataFrame = None, comercial_
     )
     c5.metric(C.UI_LABEL_NET_REVENUE, f"R$ {kpis['liquido']:,.2f}")
 
-    # --- Bolsas summary (shown separately below normal KPIs) ---
+    # === BLOCO 2 — Bolsas ===
     if bolsas_controle_df is not None and not bolsas_controle_df.empty:
         st.markdown("---")
         st.markdown(
-            "<p style='color:#ff2d95;font-weight:700;font-size:0.9rem;margin-bottom:6px;'>'"
-            "🎫 Faturamento de Bolsas (separado — sem cálculo de comissão)</p>",
+            "<p style='color:#ff2d95;font-weight:700;font-size:0.95rem;margin-bottom:6px;'>"
+            "🎫 Faturamento de Bolsas (sem comissão de parceiro)</p>",
             unsafe_allow_html=True,
         )
-        total_bolsas = bolsas_controle_df[C.COL_INT_BOLSA_VALOR].sum()
-        today = date.today()
-        start_of_week = today - datetime.timedelta(days=today.weekday())
-        start_of_month = today.replace(day=1)
-
-        bolsas_hoje = 0.0
-        bolsas_semana = 0.0
-        bolsas_mes = 0.0
-        total_cotas = 0
-
-        if C.COL_INT_BOLSA_DATA in bolsas_controle_df.columns:
-            tmp_b = bolsas_controle_df.dropna(subset=[C.COL_INT_BOLSA_DATA])
-            bolsas_hoje = tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date == today][C.COL_INT_BOLSA_VALOR].sum()
-            bolsas_semana = tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date >= start_of_week][C.COL_INT_BOLSA_VALOR].sum()
-            bolsas_mes = tmp_b[tmp_b[C.COL_INT_BOLSA_DATA].dt.date >= start_of_month][C.COL_INT_BOLSA_VALOR].sum()
-        if C.COL_INT_BOLSA_COTAS in bolsas_controle_df.columns:
-            total_cotas = int(bolsas_controle_df[C.COL_INT_BOLSA_COTAS].sum())
-
         b1, b2, b3, b4 = st.columns(4)
         b1.metric("💰 Bolsas — Total", f"R$ {total_bolsas:,.2f}")
         b2.metric("💰 Bolsas — Hoje", f"R$ {bolsas_hoje:,.2f}")
         b3.metric("💰 Bolsas — Esta Semana", f"R$ {bolsas_semana:,.2f}")
         b4.metric("🎫 Cotas Adquiridas", f"{total_cotas:,}")
-        st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- Comercial Interno summary (shown separately, after Bolsas) ---
-    if comercial_df is not None and not comercial_df.empty and C.COL_INT_DATA in comercial_df.columns:
+    # === BLOCO 3 — Comercial Interno ===
+    if com_total > 0 or com_count > 0:
         st.markdown("---")
         st.markdown(
-            "<p style='color:#ff8c00;font-weight:700;font-size:0.9rem;margin-bottom:6px;'>"
-            "🏪 Faturamento Comercial Interno (separado — sem comissão de parceiro)</p>",
+            "<p style='color:#ff8c00;font-weight:700;font-size:0.95rem;margin-bottom:6px;'>"
+            "🏪 Faturamento Comercial Interno (sem comissão de parceiro)</p>",
             unsafe_allow_html=True,
         )
-        today_c = date.today()
-        start_of_week_c = today_c - datetime.timedelta(days=today_c.weekday())
-        start_of_month_c = today_c.replace(day=1)
-        tmp_c = comercial_df.dropna(subset=[C.COL_INT_DATA])
-        com_total = float(tmp_c[C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
-        com_hoje = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date == today_c][C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
-        com_semana = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date >= start_of_week_c][C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
-        com_mes = float(tmp_c[tmp_c[C.COL_INT_DATA].dt.date >= start_of_month_c][C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in tmp_c.columns else 0.0
-        com_count = len(tmp_c)
         com_ticket = com_total / com_count if com_count > 0 else 0.0
-
         cm1, cm2, cm3, cm4, cm5 = st.columns(5)
         cm1.metric("🏪 Comercial — Total", f"R$ {com_total:,.2f}")
         cm2.metric("🏪 Comercial — Hoje", f"R$ {com_hoje:,.2f}")
         cm3.metric("🏪 Comercial — Esta Semana", f"R$ {com_semana:,.2f}")
         cm4.metric("🏪 Comercial — Este Mês", f"R$ {com_mes:,.2f}")
         cm5.metric("🏪 Ticket Médio", f"R$ {com_ticket:,.2f}")
-        st.caption(f"📋 {com_count} transações no período | Acesse a aba **Comercial Interno** para análise detalhada")
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.caption(f"📋 {com_count} transações | Análise detalhada na aba **Comercial Interno**")
+
+    # === BLOCO 4 — Total Geral ===
+    grand_total = kpis['total'] + total_bolsas + com_total
+    if (bolsas_controle_df is not None and not bolsas_controle_df.empty) or com_total > 0:
+        st.markdown("---")
+        st.markdown(
+            "<p style='color:#00cc96;font-weight:700;font-size:0.95rem;margin-bottom:6px;'>"
+            "📊 Total Geral (Parceiros + Bolsas + Comercial Interno)</p>",
+            unsafe_allow_html=True,
+        )
+        g1, g2, g3 = st.columns(3)
+        g1.metric("💹 Total Geral", f"R$ {grand_total:,.2f}")
+        g2.metric("💹 Total Este Mês", f"R$ {fat_mes_total:,.2f}")
+        g3.metric("💹 Total Hoje", f"R$ {fat_hoje_total:,.2f}")
 
 
 

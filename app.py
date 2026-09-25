@@ -192,6 +192,7 @@ contract_type_options = [
     C.CONTRACT_TYPE_UI_TECNICO,
     C.CONTRACT_TYPE_UI_POS,
     C.CONTRACT_TYPE_UI_BOLSAS,
+    C.CONTRACT_TYPE_UI_COMERCIAL,
 ]
 selected_contract_type = st.sidebar.radio(
     C.UI_LABEL_CONTRACT_TYPE, contract_type_options
@@ -301,6 +302,9 @@ def _get_filtered_frames():
     elif selected_contract_type == C.CONTRACT_TYPE_UI_BOLSAS:
         # Only bolsas — dados won't contribute anything; use empty mask
         mask_dados &= pd.Series(False, index=dados.index)
+    elif selected_contract_type == C.CONTRACT_TYPE_UI_COMERCIAL:
+        # Comercial Interno has no contract entries — use empty mask
+        mask_dados &= pd.Series(False, index=dados.index)
 
     if selected_regions:
         mask_dados &= dados[C.COL_INT_REGION].isin(selected_regions)
@@ -350,6 +354,9 @@ def _get_filtered_frames():
         mask_fat_base &= faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_POS
     elif selected_contract_type == C.CONTRACT_TYPE_UI_BOLSAS:
         # Bolsas have no separate faturamento sheet — return empty
+        mask_fat_base &= pd.Series(False, index=faturamento.index)
+    elif selected_contract_type == C.CONTRACT_TYPE_UI_COMERCIAL:
+        # Comercial Interno is shown separately — suppress normal faturamento
         mask_fat_base &= pd.Series(False, index=faturamento.index)
 
     mask_fat = (
@@ -406,8 +413,8 @@ def _filter_bolsas_controle():
         ctrl = ctrl[ctrl[C.COL_INT_BOLSA_DATA].dt.year == selected_year]
     if selected_month:
         ctrl = ctrl[ctrl[C.COL_INT_BOLSA_DATA].dt.month == selected_month]
-    # When filtering by Técnico or Pós: don't show bolsas in faturamento tab
-    if selected_contract_type in (C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS):
+    # When filtering by Técnico, Pós, or Comercial: don't show bolsas in faturamento tab
+    if selected_contract_type in (C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS, C.CONTRACT_TYPE_UI_COMERCIAL):
         return pd.DataFrame()
     return ctrl
 

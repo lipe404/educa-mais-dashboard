@@ -281,6 +281,7 @@ UI_LABEL_DATE_RANGE = "Intervalo de datas"
 CONTRACT_TYPE_UI_TECNICO = "Técnico"
 CONTRACT_TYPE_UI_POS = "Pós-Graduação"
 CONTRACT_TYPE_UI_BOLSAS = "Bolsas"
+CONTRACT_TYPE_UI_COMERCIAL = "Comercial Interno"
 
 # Internal Financial Types
 FINANCIAL_TYPE_TECNICO = "TECNICO"
