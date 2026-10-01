@@ -29,7 +29,7 @@ def _filter_from_date(df: pd.DataFrame, col: str, from_date: date) -> pd.DataFra
 # KPI section
 # ---------------------------------------------------------------------------
 
-def _render_comercial_kpis(df: pd.DataFrame) -> None:
+def _render_comercial_kpis(df: pd.DataFrame, commercial_label: str) -> None:
     today = date.today()
     start_of_week = today - datetime.timedelta(days=today.weekday())
     start_of_month = today.replace(day=1)
@@ -49,7 +49,7 @@ def _render_comercial_kpis(df: pd.DataFrame) -> None:
 
     st.markdown(
         "<p style='color:#ff8c00;font-weight:700;font-size:1rem;margin-bottom:4px;'>"
-        "🏪 Comercial Interno — Vendas Diretas (sem comissão de parceiro)</p>",
+        f"{commercial_label} — Vendas Diretas (sem comissão de parceiro)</p>",
         unsafe_allow_html=True,
     )
 
@@ -59,16 +59,16 @@ def _render_comercial_kpis(df: pd.DataFrame) -> None:
     k3.metric("Esta Semana", f"R$ {semana:,.2f}")
     k4.metric("Este Mês", f"R$ {mes:,.2f}")
     k5.metric("Ticket Médio", f"R$ {ticket:,.2f}")
-    st.caption(f"📋 {count} transações no período")
+    st.caption(f"{count} transações no período")
 
 
 # ---------------------------------------------------------------------------
 # Daily chart
 # ---------------------------------------------------------------------------
 
-def _render_daily_chart(df: pd.DataFrame) -> None:
+def _render_daily_chart(df: pd.DataFrame, commercial_label: str) -> None:
     if df.empty or C.COL_INT_DATA not in df.columns:
-        st.info("Sem dados de faturamento Comercial Interno para o período selecionado.")
+        st.info(f"Sem dados de faturamento {commercial_label} para o período selecionado.")
         return
 
     tmp = df.dropna(subset=[C.COL_INT_DATA]).copy()
@@ -83,7 +83,7 @@ def _render_daily_chart(df: pd.DataFrame) -> None:
         daily,
         x="Data",
         y="Valor",
-        title="Faturamento Diário — Comercial Interno",
+        title=f"Faturamento Diário — {commercial_label}",
         color_discrete_sequence=["#ff8c00"],
     )
     fig.update_yaxes(tickprefix="R$ ", tickformat=",.2f")
@@ -95,7 +95,7 @@ def _render_daily_chart(df: pd.DataFrame) -> None:
 # Monthly chart
 # ---------------------------------------------------------------------------
 
-def _render_monthly_chart(df: pd.DataFrame) -> None:
+def _render_monthly_chart(df: pd.DataFrame, commercial_label: str) -> None:
     if df.empty or C.COL_INT_DATA not in df.columns:
         return
 
@@ -114,10 +114,10 @@ def _render_monthly_chart(df: pd.DataFrame) -> None:
 
     if show_ranking:
         monthly = monthly.sort_values(C.COL_INT_VALOR, ascending=False)
-        title = "🏆 Ranking de Faturamento por Mês — Comercial Interno"
+        title = f"Ranking de Faturamento por Mês — {commercial_label}"
     else:
         monthly = monthly.sort_values(["_ano", "_mes"])
-        title = "Faturamento por Mês — Comercial Interno"
+        title = f"Faturamento por Mês — {commercial_label}"
 
     fig = px.bar(
         monthly,
@@ -230,6 +230,9 @@ def _render_transaction_table(df: pd.DataFrame) -> None:
     if C.COL_INT_PARTNER in df.columns:
         cols_display.append(C.COL_INT_PARTNER)
         col_labels[C.COL_INT_PARTNER] = "Vendedor / Parceiro"
+    if C.COL_INT_FINANCIAL_TYPE in df.columns:
+        cols_display.append(C.COL_INT_FINANCIAL_TYPE)
+        col_labels[C.COL_INT_FINANCIAL_TYPE] = "Tipo"
     if C.COL_INT_STUDENT_NAME in df.columns:
         cols_display.append(C.COL_INT_STUDENT_NAME)
         col_labels[C.COL_INT_STUDENT_NAME] = "Nome do Aluno"
@@ -262,18 +265,19 @@ def render(
     full_df: pd.DataFrame,
     end_date: date,
     selected_month: int | None,
+    commercial_label: str = "Comercial Técnico + Comercial Pós",
 ) -> None:
     """
-    Renders the Comercial Interno tab.
+    Render the direct commercial sales tab.
 
     Parameters
     ----------
-    df        : faturamento filtered for the selected period (COMERCIAL TEC only)
-    full_df   : full faturamento history (COMERCIAL TEC only, no date filter)
+    df        : selected direct commercial faturamento for the current period
+    full_df   : selected direct commercial faturamento history
     end_date  : the end date of the current filter (used to determine focus month)
     selected_month : explicitly selected month (or None)
     """
-    st.markdown("## 🏪 Comercial Interno")
+    st.markdown(f"## {commercial_label}")
     st.markdown(
         "Vendas realizadas diretamente pela equipe interna, sem intermediação de parceiros. "
         "Este faturamento **não entra nos cálculos de comissão de parceiros**."
@@ -289,22 +293,22 @@ def render(
     )
 
     # --- 1. KPIs ---
-    _render_comercial_kpis(df)
+    _render_comercial_kpis(df, commercial_label)
     st.divider()
 
     # --- 2. Tabs within the page ---
     tab_daily, tab_monthly, tab_compare, tab_table = st.tabs([
-        "📅 Faturamento Diário",
-        "📊 Por Mês",
-        "🔀 Comparativo",
-        "📋 Transações",
+        "Faturamento Diário",
+        "Por Mês",
+        "Comparativo",
+        "Transações",
     ])
 
     with tab_daily:
-        _render_daily_chart(df)
+        _render_daily_chart(df, commercial_label)
 
     with tab_monthly:
-        _render_monthly_chart(df)
+        _render_monthly_chart(df, commercial_label)
 
     with tab_compare:
         if full_df.empty or C.COL_INT_DATA not in full_df.columns:

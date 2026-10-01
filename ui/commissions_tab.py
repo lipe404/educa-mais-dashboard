@@ -163,7 +163,7 @@ def on_real_change(key, tax_pct, partner_pct):
 
 
 def _render_member_breakdown_section(result, summary, team_categories, is_simulation=False):
-    title = "👤 Detalhamento de Formação de Comissão por Membro" + (" (Simulação)" if is_simulation else "")
+    title = "Detalhamento de Formação de Comissão por Membro" + (" (Simulação)" if is_simulation else "")
     st.subheader(title)
     st.markdown("Veja abaixo a composição detalhada e o cálculo cumulativo passo a passo para cada membro da equipe:")
     
@@ -189,7 +189,7 @@ def _render_member_breakdown_section(result, summary, team_categories, is_simula
             tc3.metric("Comissão Final", f"R$ {m_total:,.2f}")
             
             st.markdown("---")
-            st.markdown("#### 🧮 Cálculo Cumulativo Passo a Passo")
+            st.markdown("#### Cálculo Cumulativo Passo a Passo")
             
             cumulative_steps = []
             

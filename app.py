@@ -108,9 +108,9 @@ timestamps = [
 ]
 if timestamps:
     last_updated = min(timestamps)
-    st.sidebar.markdown(f"🕒 **Atualizado:** {last_updated.strftime('%d/%m/%Y %H:%M')}")
+    st.sidebar.markdown(f"**Atualizado:** {last_updated.strftime('%d/%m/%Y %H:%M')}")
 else:
-    st.sidebar.markdown("🕒 **Atualizado:** -")
+    st.sidebar.markdown("**Atualizado:** -")
 
 if st.sidebar.button(C.UI_LABEL_RELOAD_DATA):
     st.cache_data.clear()
@@ -192,10 +192,15 @@ contract_type_options = [
     C.CONTRACT_TYPE_UI_TECNICO,
     C.CONTRACT_TYPE_UI_POS,
     C.CONTRACT_TYPE_UI_BOLSAS,
-    C.CONTRACT_TYPE_UI_COMERCIAL,
+    C.CONTRACT_TYPE_UI_COMERCIAL_TEC,
+    C.CONTRACT_TYPE_UI_COMERCIAL_POS,
 ]
 selected_contract_type = st.sidebar.radio(
     C.UI_LABEL_CONTRACT_TYPE, contract_type_options
+)
+commercial_contract_filters = (
+    C.CONTRACT_TYPE_UI_COMERCIAL_TEC,
+    C.CONTRACT_TYPE_UI_COMERCIAL_POS,
 )
 
 # Alíquota de Imposto (Global)
@@ -277,8 +282,8 @@ def _get_filtered_frames():
     key = _filtered_cache_key()
     cached = cache.get(key)
     if cached is not None:
-        # Guard against stale cache entries from before the 5-tuple upgrade
-        if isinstance(cached, tuple) and len(cached) == 5:
+        # Guard against stale cache entries from before the 7-tuple upgrade
+        if isinstance(cached, tuple) and len(cached) == 7:
             return cached
         # Evict the stale entry and recompute
         cache.pop(key, None)
@@ -302,8 +307,8 @@ def _get_filtered_frames():
     elif selected_contract_type == C.CONTRACT_TYPE_UI_BOLSAS:
         # Only bolsas — dados won't contribute anything; use empty mask
         mask_dados &= pd.Series(False, index=dados.index)
-    elif selected_contract_type == C.CONTRACT_TYPE_UI_COMERCIAL:
-        # Comercial Interno has no contract entries — use empty mask
+    elif selected_contract_type in commercial_contract_filters:
+        # Commercial sales have no contract entries in DADOS.
         mask_dados &= pd.Series(False, index=dados.index)
 
     if selected_regions:
@@ -342,8 +347,10 @@ def _get_filtered_frames():
             dados_filtered = pd.concat([dados_filtered, bolsas_filtered], ignore_index=True, sort=False)
 
     # --- Filter FATURAMENTO ---
-    # Exclude COMERCIAL TEC from the standard faturamento (it is shown separately)
-    _comercial_mask = faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_COMERCIAL_TEC
+    # Direct commercial sales are shown separately and have no partner commission.
+    _comercial_mask = faturamento[C.COL_INT_FINANCIAL_TYPE].isin(
+        C.FINANCIAL_TYPES_DIRECT_COMMERCIAL
+    )
     mask_fat_base = ~_comercial_mask
 
     if selected_contract_type == C.CONTRACT_TYPE_UI_TECNICO:
@@ -355,8 +362,8 @@ def _get_filtered_frames():
     elif selected_contract_type == C.CONTRACT_TYPE_UI_BOLSAS:
         # Bolsas have no separate faturamento sheet — return empty
         mask_fat_base &= pd.Series(False, index=faturamento.index)
-    elif selected_contract_type == C.CONTRACT_TYPE_UI_COMERCIAL:
-        # Comercial Interno is shown separately — suppress normal faturamento
+    elif selected_contract_type in commercial_contract_filters:
+        # Commercial sales are shown separately — suppress partner faturamento.
         mask_fat_base &= pd.Series(False, index=faturamento.index)
 
     mask_fat = (
@@ -373,21 +380,43 @@ def _get_filtered_frames():
     fat_filtered = faturamento[mask_fat].copy()
     fat_filtered_base = faturamento[mask_fat_base].copy()
 
-    # --- Build COMERCIAL TEC filtered DataFrames ---
-    _com_mask_base = faturamento[C.COL_INT_FINANCIAL_TYPE] == C.FINANCIAL_TYPE_COMERCIAL_TEC
-    _com_mask_date = (
-        _com_mask_base
-        & (faturamento[C.COL_INT_DATA].dt.date >= start_date)
-        & (faturamento[C.COL_INT_DATA].dt.date <= end_date)
-    )
-    if selected_year:
-        _com_mask_date &= faturamento[C.COL_INT_DATA].dt.year == selected_year
-    if selected_month:
-        _com_mask_date &= faturamento[C.COL_INT_DATA].dt.month == selected_month
-    fat_comercial_filtered = faturamento[_com_mask_date].copy()
-    fat_comercial_base = faturamento[_com_mask_base].copy()
+    def _build_commercial_frames(financial_type, ui_filter):
+        if selected_contract_type not in (C.UI_LABEL_ALL, ui_filter):
+            empty = faturamento.iloc[0:0].copy()
+            return empty, empty.copy()
 
-    value = (dados_filtered, fat_filtered, fat_filtered_base, fat_comercial_filtered, fat_comercial_base)
+        type_mask = (
+            faturamento[C.COL_INT_FINANCIAL_TYPE] == financial_type
+        )
+        date_mask = (
+            type_mask
+            & (faturamento[C.COL_INT_DATA].dt.date >= start_date)
+            & (faturamento[C.COL_INT_DATA].dt.date <= end_date)
+        )
+        if selected_year:
+            date_mask &= faturamento[C.COL_INT_DATA].dt.year == selected_year
+        if selected_month:
+            date_mask &= faturamento[C.COL_INT_DATA].dt.month == selected_month
+        return faturamento[date_mask].copy(), faturamento[type_mask].copy()
+
+    fat_comercial_tec_filtered, fat_comercial_tec_base = _build_commercial_frames(
+        C.FINANCIAL_TYPE_COMERCIAL_TEC,
+        C.CONTRACT_TYPE_UI_COMERCIAL_TEC,
+    )
+    fat_comercial_pos_filtered, fat_comercial_pos_base = _build_commercial_frames(
+        C.FINANCIAL_TYPE_COMERCIAL_POS,
+        C.CONTRACT_TYPE_UI_COMERCIAL_POS,
+    )
+
+    value = (
+        dados_filtered,
+        fat_filtered,
+        fat_filtered_base,
+        fat_comercial_tec_filtered,
+        fat_comercial_tec_base,
+        fat_comercial_pos_filtered,
+        fat_comercial_pos_base,
+    )
     cache[key] = value
 
     while len(cache) > 6:
@@ -396,7 +425,35 @@ def _get_filtered_frames():
     return value
 
 
-dados_filtered, fat_filtered, fat_filtered_base, fat_comercial_filtered, fat_comercial_base = _get_filtered_frames()
+(
+    dados_filtered,
+    fat_filtered,
+    fat_filtered_base,
+    fat_comercial_tec_filtered,
+    fat_comercial_tec_base,
+    fat_comercial_pos_filtered,
+    fat_comercial_pos_base,
+) = _get_filtered_frames()
+
+fat_comercial_filtered = pd.concat(
+    [fat_comercial_tec_filtered, fat_comercial_pos_filtered],
+    ignore_index=True,
+)
+fat_comercial_base = pd.concat(
+    [fat_comercial_tec_base, fat_comercial_pos_base],
+    ignore_index=True,
+)
+partner_commission_faturamento = faturamento[
+    ~faturamento[C.COL_INT_FINANCIAL_TYPE].isin(
+        C.FINANCIAL_TYPES_DIRECT_COMMERCIAL
+    )
+].copy()
+if selected_contract_type == C.CONTRACT_TYPE_UI_COMERCIAL_TEC:
+    commercial_view_label = C.CONTRACT_TYPE_UI_COMERCIAL_TEC
+elif selected_contract_type == C.CONTRACT_TYPE_UI_COMERCIAL_POS:
+    commercial_view_label = C.CONTRACT_TYPE_UI_COMERCIAL_POS
+else:
+    commercial_view_label = "Comercial Técnico + Comercial Pós"
 
 # --- Filter bolsas_controle by date/year/month ---
 # Commission calculation always uses faturamento (normal) only — bolsas are excluded.
@@ -413,8 +470,12 @@ def _filter_bolsas_controle():
         ctrl = ctrl[ctrl[C.COL_INT_BOLSA_DATA].dt.year == selected_year]
     if selected_month:
         ctrl = ctrl[ctrl[C.COL_INT_BOLSA_DATA].dt.month == selected_month]
-    # When filtering by Técnico, Pós, or Comercial: don't show bolsas in faturamento tab
-    if selected_contract_type in (C.CONTRACT_TYPE_UI_TECNICO, C.CONTRACT_TYPE_UI_POS, C.CONTRACT_TYPE_UI_COMERCIAL):
+    # Other contract types do not show the independent bolsas block.
+    if selected_contract_type in (
+        C.CONTRACT_TYPE_UI_TECNICO,
+        C.CONTRACT_TYPE_UI_POS,
+        *commercial_contract_filters,
+    ):
         return pd.DataFrame()
     return ctrl
 
@@ -425,13 +486,20 @@ bolsas_controle_filtered = _filter_bolsas_controle()
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Métricas")
 
-# 0. Comercial Interno — Este Mês
-if not fat_comercial_filtered.empty and C.COL_INT_DATA in fat_comercial_filtered.columns:
+# 0. Direct commercial sales — current month
+for _commercial_label, _commercial_df in (
+    (C.CONTRACT_TYPE_UI_COMERCIAL_TEC, fat_comercial_tec_filtered),
+    (C.CONTRACT_TYPE_UI_COMERCIAL_POS, fat_comercial_pos_filtered),
+):
+    if _commercial_df.empty or C.COL_INT_DATA not in _commercial_df.columns:
+        continue
     from datetime import date as _date
     _start_of_month = _date.today().replace(day=1)
-    _com_mes_df = fat_comercial_filtered[fat_comercial_filtered[C.COL_INT_DATA].dt.date >= _start_of_month]
+    _com_mes_df = _commercial_df[
+        _commercial_df[C.COL_INT_DATA].dt.date >= _start_of_month
+    ]
     _com_mes_val = float(_com_mes_df[C.COL_INT_VALOR].sum()) if C.COL_INT_VALOR in _com_mes_df.columns else 0.0
-    st.sidebar.metric("🏪 Comercial Interno (mês)", f"R$ {_com_mes_val:,.2f}")
+    st.sidebar.metric(f"{_commercial_label} (mês)", f"R$ {_com_mes_val:,.2f}")
 
 # 1. Ticket Médio
 total_rev = fat_filtered[C.COL_INT_VALOR].sum()
@@ -577,7 +645,8 @@ with t3:
         end_date,
         selected_month,
         bolsas_controle_df=bolsas_controle_filtered,
-        comercial_df=fat_comercial_filtered,
+        comercial_tec_df=fat_comercial_tec_filtered,
+        comercial_pos_df=fat_comercial_pos_filtered,
     )
 with t4:
     forecast_tab.render(
@@ -612,8 +681,7 @@ with t9:
         DEFAULT_SHEET_ID,
     )
 with t10:
-    # Pass faturamento dataframe because it has the financial data
-    commissions_tab.render(faturamento, KEY_API)
+    commissions_tab.render(partner_commission_faturamento, KEY_API)
 with t11:
     bolsas_tab.render(
         controle=bolsas_controle_filtered if not bolsas_controle_filtered.empty else bolsas_controle,
@@ -629,4 +697,5 @@ with t12:
         full_df=fat_comercial_base,
         end_date=end_date,
         selected_month=selected_month,
+        commercial_label=commercial_view_label,
     )

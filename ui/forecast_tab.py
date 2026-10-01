@@ -328,7 +328,7 @@ def _render_contracts_tab(
 
 
     # Backtesting Button
-    run_bt = st.button("🧪 Rodar Backtest (Validar Precisão)", key="bt_contracts")
+    run_bt = st.button("Rodar Backtest (Validar Precisão)", key="bt_contracts")
 
     horizon_map = {
         C.UI_LABEL_HORIZON_1W: 7,
@@ -350,7 +350,7 @@ def _render_contracts_tab(
     # --- Backtesting Logic ---
     if run_bt:
         st.divider()
-        st.markdown("### 🧪 Resultados do Backtest (Últimos 30 dias)")
+        st.markdown("### Resultados do Backtest (Últimos 30 dias)")
         try:
             with st.spinner("Rodando backtest..."):
                 bt_results = run_backtest(
@@ -446,7 +446,7 @@ def _render_financial_tab(
 
     # Backtesting Button
     run_bt_f = st.button(
-        "🧪 Rodar Backtest (Validar Precisão)", key="bt_faturamento"
+        "Rodar Backtest (Validar Precisão)", key="bt_faturamento"
     )
 
     horizon_map = {
@@ -467,7 +467,7 @@ def _render_financial_tab(
     # --- Backtesting Logic ---
     if run_bt_f:
         st.divider()
-        st.markdown("### 🧪 Resultados do Backtest (Últimos 30 dias)")
+        st.markdown("### Resultados do Backtest (Últimos 30 dias)")
         try:
             with st.spinner("Rodando backtest..."):
                 bt_results = run_backtest(

@@ -894,7 +894,7 @@ def _render_students_geo_map(geo_df: pd.DataFrame) -> None:
         state = row[C.COL_INT_ALUNOS_STATE]
         count = row["alunos"]
 
-        status_text.text(f"🔍 Geocodificando: {city} / {state} ({i + 1}/{total_pairs})")
+        status_text.text(f"Geocodificando: {city} / {state} ({i + 1}/{total_pairs})")
         lat, lon = geo_service.get_coords(city, state)
 
         if lat is not None and lon is not None:
@@ -927,7 +927,7 @@ def _render_students_geo_map(geo_df: pd.DataFrame) -> None:
     failed = total_pairs - geocoded
 
     if failed > 0:
-        st.caption(f"⚠️ {failed} cidade(s) não pôde(ram) ser geocodificada(s) e não aparecerão no mapa.")
+        st.caption(f"{failed} cidade(s) não pôde(ram) ser geocodificada(s) e não aparecerão no mapa.")
 
     fig_map = px.scatter_mapbox(
         map_df,
@@ -995,7 +995,7 @@ def _render_analysis_tab(
         geo_df = _prepare_geo_df(students_df)
 
     st.markdown("---")
-    st.markdown("### 📍 Distribuição Geográfica dos Alunos")
+    st.markdown("### Distribuição Geográfica dos Alunos")
     st.caption(
         "Dados baseados nas colunas CIDADE (col. J) e ESTADO (col. K) da planilha ALUNOS."
     )

@@ -1,4 +1,4 @@
-# 📊 Como Funciona o Cálculo de Comissões
+# Como Funciona o Cálculo de Comissões
 
 > Baseado no arquivo [`commission.py`](file:///c:/Users/toled/Documents/GitHub/educa-mais-dashboard/services/commission.py)
 
@@ -8,7 +8,7 @@
 
 Existem dois **tipos de cargos**: `fixed` (fixo) e `partner_based` (baseado em parceiro). O cálculo é **100% linear e independente** (alterar um cargo não afeta as comissões dos demais).
 
-### 🔵 Cargos Fixos — recebem sobre o faturamento líquido da empresa
+### Cargos Fixos — recebem sobre o faturamento líquido da empresa
 Calculados diretamente sobre o faturamento líquido restante após a retirada da parte do parceiro (50%) e do imposto (30%).
 
 | Cargo | % Nominal da base líquida | % Real Efetiva (do faturamento bruto) |
@@ -18,7 +18,7 @@ Calculados diretamente sobre o faturamento líquido restante após a retirada da
 | Gestor de Tráfego | 0.63% | ~**0.22%** |
 | Designer | 0.63% | ~**0.22%** |
 
-### 🟠 Cargos Baseados em Parceiro — recebem sobre cada parceiro específico
+### Cargos Baseados em Parceiro — recebem sobre cada parceiro específico
 Calculados diretamente sobre a receita bruta do parceiro correspondente com a dedução do imposto (30%).
 
 | Cargo | % Nominal sobre o parceiro | % Real Efetiva (do faturamento bruto) |

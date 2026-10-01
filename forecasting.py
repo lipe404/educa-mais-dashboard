@@ -435,16 +435,13 @@ def generate_smart_insights(
 
     # Trend
     if trend_pct > 5:
-        emoji = "🚀"
         trend_desc = C.INSIGHT_GROWTH
     elif trend_pct < -5:
-        emoji = "⚠️"
         trend_desc = C.INSIGHT_SLOWDOWN
     else:
-        emoji = "⚖️"
         trend_desc = C.INSIGHT_STABLE
 
-    text += f"{C.MSG_RECENT_TREND} {trend_desc} ({trend_pct:+.1f}%) {emoji}\n\n"
+    text += f"{C.MSG_RECENT_TREND} {trend_desc} ({trend_pct:+.1f}%)\n\n"
 
     text += C.MSG_FORECAST_NEXT_DAYS.format(horizon_days=horizon_days)
 

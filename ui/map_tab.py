@@ -983,7 +983,7 @@ def _render_city_search(signed_unique: pd.DataFrame) -> None:
         if not matches.empty:
             found_states = matches[C.COL_INT_STATE].unique().tolist()
             st.success(
-                f"✅ A cidade '{search_city}' possui polo parceiro! (Estado(s): {', '.join(found_states)})"
+                f"A cidade '{search_city}' possui polo parceiro! (Estado(s): {', '.join(found_states)})"
             )
         else:
             # Optional: Partial match suggestion
@@ -995,11 +995,11 @@ def _render_city_search(signed_unique: pd.DataFrame) -> None:
                     partial_matches[C.COL_INT_CITY].unique().tolist()[:5]
                 )  # Limit to 5
                 st.warning(
-                    f"❌ Cidade exata não encontrada. Você quis dizer: {', '.join(suggestions)}?"
+                    f"Cidade exata não encontrada. Você quis dizer: {', '.join(suggestions)}?"
                 )
             else:
                 st.error(
-                    f"❌ A cidade '{search_city}' não possui polo parceiro registrado."
+                    f"A cidade '{search_city}' não possui polo parceiro registrado."
                 )
     st.divider()
 

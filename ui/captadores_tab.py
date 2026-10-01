@@ -1512,7 +1512,7 @@ def _render_captador_state_coverage(dados_df: pd.DataFrame) -> None:
 
     col_tables_left, col_tables_right = st.columns(2)
     with col_tables_left:
-        st.markdown(f"✅ **Estados com Parceiros ({len(states_with)})**")
+        st.markdown(f"**Estados com Parceiros ({len(states_with)})**")
         if not states_with.empty:
             display_with = states_with[["uf", "Parceiros"]].copy()
             display_with["Região"] = display_with["uf"].map(C.ESTADO_REGIAO)
@@ -1522,7 +1522,7 @@ def _render_captador_state_coverage(dados_df: pd.DataFrame) -> None:
             st.info("Nenhum estado com parceiros.")
 
     with col_tables_right:
-        st.markdown(f"❌ **Estados sem Parceiros ({len(states_without)})**")
+        st.markdown(f"**Estados sem Parceiros ({len(states_without)})**")
         if not states_without.empty:
             display_without = states_without[["uf"]].copy()
             display_without["Região"] = display_without["uf"].map(C.ESTADO_REGIAO)
@@ -1953,7 +1953,7 @@ def render(dados_filtered: pd.DataFrame, fat_filtered: pd.DataFrame, raw_dados: 
     overrides = _load_partner_overrides()
 
     if unmatched_list or overrides:
-        with st.expander("🔧 Vincular Parceiros não Identificados", expanded=False):
+        with st.expander("Vincular Parceiros não Identificados", expanded=False):
             st.markdown(
                 "Alguns parceiros registrados na aba **Faturamento** não foram encontrados na aba **Dados** ou possuem grafias diferentes. "
                 "Associe-os manualmente a um Captador abaixo para atualizar todos os gráficos em tempo real:"
@@ -1993,7 +1993,7 @@ def render(dados_filtered: pd.DataFrame, fat_filtered: pd.DataFrame, raw_dados: 
                     with col_p:
                         st.write(f"**{partner}**")
                     with col_c:
-                        st.write(f"➔ {cap}")
+                        st.write(cap)
                     with col_btn:
                         if st.button("Remover", key=f"delete_override_{partner}"):
                             to_delete.append(partner)

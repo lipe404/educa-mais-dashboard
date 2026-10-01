@@ -185,7 +185,7 @@ class TestForecasting:
             unit_label="contratos",
         )
 
-        assert "🚀" in insight  # Growth emoji
+        assert C.INSIGHT_GROWTH in insight
         assert "Previsão para os próximos 5 dias" in insight
         assert "110" not in insight  # It shows totals/averages
         assert "Média diária" in insight
@@ -205,7 +205,7 @@ class TestForecasting:
         # Base data
         dates = pd.date_range(end=pd.Timestamp.today(), periods=20)
 
-        # Scenario 1: Negative Trend (Warning emoji)
+        # Scenario 1: Negative Trend
         # Recent avg (last 7) < Previous avg (prev 7)
         values_down = np.linspace(100, 10, 20)
         df_down = pd.DataFrame({"date": dates, "value": values_down})
@@ -217,10 +217,10 @@ class TestForecasting:
         )
 
         insight = generate_smart_insights(df_down, "date", "value", forecast_down)
-        assert "⚠️" in insight
+        assert C.INSIGHT_SLOWDOWN in insight
         assert C.INSIGHT_NEGATIVE in insight
 
-        # Scenario 2: Stable Trend (Balance emoji)
+        # Scenario 2: Stable Trend
         values_stable = np.ones(20) * 100
         df_stable = pd.DataFrame({"date": dates, "value": values_stable})
 
@@ -230,7 +230,7 @@ class TestForecasting:
         )
 
         insight = generate_smart_insights(df_stable, "date", "value", forecast_stable)
-        assert "⚖️" in insight
+        assert C.INSIGHT_STABLE in insight
         assert C.INSIGHT_NEUTRAL in insight
 
     @patch("forecasting.Prophet")

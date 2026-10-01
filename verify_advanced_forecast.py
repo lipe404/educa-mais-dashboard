@@ -14,16 +14,16 @@ def test_advanced_forecast():
     try:
         from prophet import Prophet
 
-        print("✅ Prophet is installed.")
+        print("Prophet is installed.")
     except ImportError:
-        print("❌ Prophet NOT installed.")
+        print("Prophet NOT installed.")
 
     try:
         from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-        print("✅ Statsmodels is installed.")
+        print("Statsmodels is installed.")
     except ImportError:
-        print("❌ Statsmodels NOT installed.")
+        print("Statsmodels NOT installed.")
 
     # Create seasonal data (sine wave)
     dates = pd.date_range(start="2023-01-01", periods=100)
@@ -42,11 +42,11 @@ def test_advanced_forecast():
                 forecast[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST
             ]
             if len(future) == 14:
-                print("✅ Prophet generated 14 days forecast.")
+                print("Prophet generated 14 days forecast.")
             else:
-                print(f"❌ Prophet generated {len(future)} days (Expected 14).")
+                print(f"Prophet generated {len(future)} days (Expected 14).")
         except Exception as e:
-            print(f"❌ Prophet Error: {e}")
+            print(f"Prophet Error: {e}")
     else:
         print("Skipping Prophet test (not available).")
 
@@ -61,11 +61,11 @@ def test_advanced_forecast():
                 forecast[C.COL_FORECAST_TYPE] == C.LABEL_FORECAST_TYPE_FORECAST
             ]
             if len(future) == 14:
-                print("✅ Holt-Winters generated 14 days forecast.")
+                print("Holt-Winters generated 14 days forecast.")
             else:
-                print(f"❌ Holt-Winters generated {len(future)} days (Expected 14).")
+                print(f"Holt-Winters generated {len(future)} days (Expected 14).")
         except Exception as e:
-            print(f"❌ Holt-Winters Error: {e}")
+            print(f"Holt-Winters Error: {e}")
 
     # Test Insights
     print("\nTesting Insights...")
@@ -73,9 +73,9 @@ def test_advanced_forecast():
     dummy_forecast[C.COL_FORECAST_TYPE] = C.LABEL_FORECAST_TYPE_FORECAST
     insights = forecasting.generate_smart_insights(df, "Date", "Value", dummy_forecast)
     if "Análise Inteligente" in insights:
-        print("✅ Insights generated.")
+        print("Insights generated.")
     else:
-        print("❌ Insights failed.")
+        print("Insights failed.")
 
 
 if __name__ == "__main__":

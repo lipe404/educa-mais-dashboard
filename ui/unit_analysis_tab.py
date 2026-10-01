@@ -153,7 +153,7 @@ def render(
         "Utilize nossa IA para cruzar dados geográficos, demográficos e de contratos para gerar insights personalizados."
     )
 
-    if st.button("✨ Gerar Análise Unitária (IA)"):
+    if st.button("Gerar Análise Unitária (IA)"):
         _run_ai_analysis(city, state, dados_df, build_oportunidade_por_uf, GeocodingService())
 
 

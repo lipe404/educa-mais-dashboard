@@ -281,12 +281,18 @@ UI_LABEL_DATE_RANGE = "Intervalo de datas"
 CONTRACT_TYPE_UI_TECNICO = "Técnico"
 CONTRACT_TYPE_UI_POS = "Pós-Graduação"
 CONTRACT_TYPE_UI_BOLSAS = "Bolsas"
-CONTRACT_TYPE_UI_COMERCIAL = "Comercial Interno"
+CONTRACT_TYPE_UI_COMERCIAL_TEC = "Comercial Técnico"
+CONTRACT_TYPE_UI_COMERCIAL_POS = "Comercial Pós"
 
 # Internal Financial Types
 FINANCIAL_TYPE_TECNICO = "TECNICO"
 FINANCIAL_TYPE_POS = "POS"
 FINANCIAL_TYPE_COMERCIAL_TEC = "COMERCIAL TEC"
+FINANCIAL_TYPE_COMERCIAL_POS = "COMERCIAL POS"
+FINANCIAL_TYPES_DIRECT_COMMERCIAL = (
+    FINANCIAL_TYPE_COMERCIAL_TEC,
+    FINANCIAL_TYPE_COMERCIAL_POS,
+)
 
 # Tab Names
 TAB_NAME_CONTRACTS = "Contratos"
@@ -300,7 +306,7 @@ TAB_NAME_UNIT_ANALYSIS = "Análise Unitária"
 TAB_NAME_COMMISSIONS = "Cálculo de Comissões"
 TAB_NAME_BOLSAS = "Bolsas"
 TAB_NAME_CAPTADORES = "Captadores"
-TAB_NAME_COMERCIAL = "Comercial Interno"
+TAB_NAME_COMERCIAL = "Comercial"
 
 # Contracts Tab UI
 UI_LABEL_CONTRACTS_SIGNED = "Contratos assinados"
@@ -420,7 +426,7 @@ UI_LABEL_ANALYZE_POTENTIAL = "Analisar Potencial do Curso"
 UI_LABEL_ANALYZING_MARKET = (
     "Analisando mercado e gerando insights para {course} ({area})..."
 )
-UI_LABEL_AI_ANALYSIS_TITLE = "#### 🤖 Análise de Proximidade e Contexto (IA)"
+UI_LABEL_AI_ANALYSIS_TITLE = "#### Análise de Proximidade e Contexto (IA)"
 UI_LABEL_TOP_SUGGESTED_CITIES = "#### Top Cidades Sugeridas"
 UI_LABEL_COL_POPULATION = "População"
 UI_LABEL_COL_TOTAL_COMPANIES = "Empresas Totais"
@@ -484,7 +490,7 @@ LABEL_FORECAST_TYPE_FORECAST = "Previsão"
 LABEL_FORECAST_TYPE_HISTORY = "Histórico"
 COL_FORECAST_TYPE = "Type"
 MSG_INSUFFICIENT_DATA = "Dados insuficientes para análise detalhada (mínimo 2 semanas)."
-MSG_SMART_ANALYSIS_TITLE = "### 🧠 Análise Inteligente\n\n"
+MSG_SMART_ANALYSIS_TITLE = "### Análise Inteligente\n\n"
 MSG_RECENT_TREND = "**Tendência Recente (7 dias):**"
 MSG_FORECAST_NEXT_DAYS = "**Previsão para os próximos {horizon_days} dias:**\n"
 MSG_ESTIMATED_TOTAL = "**Total estimado:**"
